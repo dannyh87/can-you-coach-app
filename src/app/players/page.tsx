@@ -1,14 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import PlayerCard from '@/components/PlayerCard'
 
 
 type Rating = {
@@ -40,6 +33,11 @@ export default function PlayersPage() {
     ])
 
     setName('')
+  }
+
+  const deletePlayer = (index: number) => {
+    const updatedPlayers = players.filter((_, i) => i !== index)
+    setPlayers(updatedPlayers)
   }
 
   const addRating = (index: number) => {
@@ -141,37 +139,16 @@ export default function PlayersPage() {
       </div>
 
       <ul className="space-y-4">
-        {players.map((player, index) => (
-          <li key={index} className="p-4 border rounded">
-            <div className="flex items-center justify-between">
-              <span>
-                {player.name} ({player.ratings.length} sessions) — Avg:{' '}
-                {getAverageRating(player)}
-              </span>
-
-              <button
-                onClick={() => addRating(index)}
-                className="text-sm text-blue-500"
-              >
-                Add Rating
-              </button>
-            </div>
-
-            {player.ratings.length > 0 && (
-              <div className="mt-4 h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={getChartData(player)}>
-                    <XAxis dataKey="session" />
-                    <YAxis domain={[0, 10]} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="average" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
+  {players.map((player, index) => (
+    <PlayerCard
+      key={index}
+      player={player}
+      index={index}
+      addRating={addRating}
+      deletePlayer={deletePlayer}
+    />
+  ))}
+</ul>
     </div>
   )
 }
