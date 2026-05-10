@@ -54,6 +54,38 @@ export default function PlayerCard({
     return (total / (player.ratings.length * 5)).toFixed(1)
   }
 
+  const getBestAttribute = () => {
+    if (player.ratings.length === 0) return 'No data'
+  
+    const totals = {
+      technical: 0,
+      tactical: 0,
+      physical: 0,
+      mental: 0,
+      coachability: 0,
+    }
+  
+    player.ratings.forEach((rating) => {
+      totals.technical += rating.technical
+      totals.tactical += rating.tactical
+      totals.physical += rating.physical
+      totals.mental += rating.mental
+      totals.coachability += rating.coachability
+    })
+  
+    let bestKey = 'technical'
+    let bestValue = totals.technical
+  
+    Object.entries(totals).forEach(([key, value]) => {
+      if (value > bestValue) {
+        bestKey = key
+        bestValue = value
+      }
+    })
+  
+    return bestKey.charAt(0).toUpperCase() + bestKey.slice(1)
+  }
+
   const getChartData = () => {
     return player.ratings.map((rating, index) => {
       const avg =
@@ -75,7 +107,16 @@ export default function PlayerCard({
     <li className="p-4 border rounded">
       <div className="flex items-center justify-between">
       <Link href={`/players/${index}`} className="font-medium hover:underline">
-  {player.name} ({player.ratings.length} sessions) — Avg: {getAverageRating()}
+      <div>
+  <div>
+    {player.name} ({player.ratings.length} sessions) — Avg:{' '}
+    {getAverageRating()}
+  </div>
+
+  <div className="text-sm text-gray-500">
+    Best Attribute: {getBestAttribute()}
+  </div>
+</div>
 </Link>
 
         <div className="flex items-center gap-2">
@@ -96,17 +137,59 @@ export default function PlayerCard({
       </div>
 
       {player.ratings.length > 0 && (
-        <div className="mt-4 h-40">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={getChartData()}>
-              <XAxis dataKey="session" />
-              <YAxis domain={[0, 10]} />
-              <Tooltip />
-              <Line type="monotone" dataKey="average" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+  <div>
+    <div className="mt-4 h-40">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={getChartData()}>
+          <XAxis dataKey="session" />
+          <YAxis domain={[0, 10]} />
+          <Tooltip />
+          <Line type="monotone" dataKey="average" />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Session</th>
+            <th className="text-left p-2">Tech</th>
+            <th className="text-left p-2">Tactical</th>
+            <th className="text-left p-2">Physical</th>
+            <th className="text-left p-2">Mental</th>
+            <th className="text-left p-2">Coachability</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {player.ratings.map((rating, i) => (
+            <tr key={i} className="border-b">
+              <td className="p-2">{i + 1}</td>
+
+              <td
+                className={`p-2 ${
+                  rating.technical >= 7
+                    ? 'text-green-600'
+                    : rating.technical <= 4
+                    ? 'text-red-600'
+                    : ''
+                }`}
+              >
+                {rating.technical}
+              </td>
+
+              <td className="p-2">{rating.tactical}</td>
+              <td className="p-2">{rating.physical}</td>
+              <td className="p-2">{rating.mental}</td>
+              <td className="p-2">{rating.coachability}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
     </li>
   )
 }
