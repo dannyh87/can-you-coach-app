@@ -11,6 +11,11 @@ const setupLinks = [
     title: 'Teams',
     description: 'Create teams inside clubs before adding players.',
   },
+  {
+    href: '/players',
+    title: 'Players',
+    description: 'Add, edit, archive and restore players inside teams.',
+  },
 ]
 
 export default function Home() {
@@ -20,12 +25,12 @@ export default function Home() {
         <p className="mb-2 text-sm font-medium text-blue-600">Can You Coach</p>
         <h1 className="text-4xl font-bold tracking-tight">Club setup</h1>
         <p className="mt-3 text-gray-600">
-          Start by creating a club, then add teams. Player management and fitness
-          testing will be added in later phases.
+          Start by creating a club, then add teams and players. Fitness testing
+          will be added in later phases.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-3">
         {setupLinks.map((link) => (
           <Link
             key={link.href}
