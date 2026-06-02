@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  email             String             @unique
+  passwordHash      String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  clubs             Club[]
+  fitnessTestTypes  FitnessTestType[]
+}
+
+model Club {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  location  String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teams     Team[]
+}
+
+model Team {
+  id                  String               @id @default(cuid())
+  clubId              String
+  name                String
+  ageGroup            String
+  season              String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  club                Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  players             Player[]
+  fitnessTestSessions FitnessTestSession[]
+}
+
+model Player {
+  id                 String              @id @default(cuid())
+  teamId             String
+  firstName          String
+  surname            String
+  squadNumber        Int?
+  preferredPosition  String?
+  dateOfBirth        DateTime?
+  joinedClubDate     DateTime?
+  isActive           Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fitnessTestResults FitnessTestResult[]
+}
+
+model FitnessTestType {
+  id                  String               @id @default(cuid())
+  userId              String?
+  name                String
+  description         String?
+  resultUnit          String
+  higherIsBetter      Boolean
+  isDefault           Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  user                User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fitnessTestSessions FitnessTestSession[]
+
+  @@unique([userId, name])
+}
+
+model FitnessTestSession {
+  id                String              @id @default(cuid())
+  teamId            String
+  fitnessTestTypeId String
+  date              DateTime
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  team              Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fitnessTestType   FitnessTestType     @relation(fields: [fitnessTestTypeId], references: [id], onDelete: Restrict)
+  results           FitnessTestResult[]
+}
+
+model FitnessTestResult {
+  id                   String             @id @default(cuid())
+  fitnessTestSessionId String
+  playerId             String
+  resultValue          Float?
+  resultText           String?
+  status               FitnessResultStatus @default(COMPLETED)
+  notes                String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  fitnessTestSession   FitnessTestSession @relation(fields: [fitnessTestSessionId], references: [id], onDelete: Cascade)
+  player               Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([fitnessTestSessionId, playerId])
+}
+
+enum FitnessResultStatus {
+  COMPLETED
+  DID_NOT_START
+  INJURED
+  ABSENT
+  DROPPED_OUT
+}
