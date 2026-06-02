@@ -18,7 +18,12 @@ type Player = {
 }
 
 export default function PlayersPage() {
-  const [players, setPlayers] = useState<Player[]>([])
+  const [players, setPlayers] = useState<Player[]>(() => {
+    if (typeof window === 'undefined') return []
+
+    const saved = localStorage.getItem('players')
+    return saved ? JSON.parse(saved) : []
+  })
   const [name, setName] = useState('')
 
   const addPlayer = () => {
@@ -54,64 +59,6 @@ export default function PlayersPage() {
 
     setPlayers(updatedPlayers)
   }
-
-  const getAverageRating = (player: Player) => {
-    if (player.ratings.length === 0) return 0
-
-    const totals = player.ratings.reduce(
-      (acc, rating) => {
-        acc.technical += rating.technical
-        acc.tactical += rating.tactical
-        acc.physical += rating.physical
-        acc.mental += rating.mental
-        acc.coachability += rating.coachability
-        return acc
-      },
-      {
-        technical: 0,
-        tactical: 0,
-        physical: 0,
-        mental: 0,
-        coachability: 0,
-      }
-    )
-
-    const numRatings = player.ratings.length
-
-    const avg =
-      (totals.technical +
-        totals.tactical +
-        totals.physical +
-        totals.mental +
-        totals.coachability) /
-      (numRatings * 5)
-
-    return avg.toFixed(1)
-  }
-
-  const getChartData = (player: Player) => {
-    return player.ratings.map((rating, index) => {
-      const avg =
-        (rating.technical +
-          rating.tactical +
-          rating.physical +
-          rating.mental +
-          rating.coachability) /
-        5
-
-      return {
-        session: index + 1,
-        average: Number(avg.toFixed(1)),
-      }
-    })
-  }
-
-  useEffect(() => {
-    const saved = localStorage.getItem('players')
-    if (saved) {
-      setPlayers(JSON.parse(saved))
-    }
-  }, [])
 
   useEffect(() => {
     localStorage.setItem('players', JSON.stringify(players))

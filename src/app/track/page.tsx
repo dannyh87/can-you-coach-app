@@ -34,8 +34,18 @@ const actions = [
 
 export default function TrackPage() {
   const [selectedPlayer, setSelectedPlayer] = useState(players[0])
-  const [events, setEvents] = useState<ActionEvent[]>([])
-  const [match, setMatch] = useState<Match | null>(null)
+  const [events, setEvents] = useState<ActionEvent[]>(() => {
+    if (typeof window === 'undefined') return []
+
+    const savedEvents = localStorage.getItem('actionEvents')
+    return savedEvents ? JSON.parse(savedEvents) : []
+  })
+  const [match, setMatch] = useState<Match | null>(() => {
+    if (typeof window === 'undefined') return null
+
+    const savedMatch = localStorage.getItem('currentMatch')
+    return savedMatch ? JSON.parse(savedMatch) : null
+  })
 
   const [opposition, setOpposition] = useState('')
   const [venue, setVenue] = useState<Venue>('home')
@@ -56,19 +66,6 @@ export default function TrackPage() {
     Oliver: true,
     Harry: true,
   })
-
-  useEffect(() => {
-    const savedEvents = localStorage.getItem('actionEvents')
-    const savedMatch = localStorage.getItem('currentMatch')
-
-    if (savedEvents) {
-      setEvents(JSON.parse(savedEvents))
-    }
-
-    if (savedMatch) {
-      setMatch(JSON.parse(savedMatch))
-    }
-  }, [])
 
   useEffect(() => {
     localStorage.setItem('actionEvents', JSON.stringify(events))

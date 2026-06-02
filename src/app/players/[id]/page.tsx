@@ -1,7 +1,7 @@
-'use  client'
+'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
 
 import {
@@ -30,7 +30,15 @@ export default function PlayerPage() {
   const params = useParams()
   const id = Number(params.id)
 
-  const [player, setPlayer] = useState<Player | null>(null)
+  const [player, setPlayer] = useState<Player | null>(() => {
+    if (typeof window === 'undefined') return null
+
+    const saved = localStorage.getItem('players')
+    if (!saved) return null
+
+    const players: Player[] = JSON.parse(saved)
+    return players[id]
+  })
 
   const [newRating, setNewRating] = useState<Rating>({
     technical: 5,
@@ -39,15 +47,6 @@ export default function PlayerPage() {
     mental: 5,
     coachability: 5,
   })
-
-  useEffect(() => {
-    const saved = localStorage.getItem('players')
-
-    if (saved) {
-      const players: Player[] = JSON.parse(saved)
-      setPlayer(players[id])
-    }
-  }, [id])
 
   if (!player) {
     return <div className="p-6">Loading...</div>
