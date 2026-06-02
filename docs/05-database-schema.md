@@ -6,7 +6,41 @@ This document defines the intended MVP data model.
 
 The AI coding agent should use this document when creating the Prisma schema.
 
-The database must support custom fitness tests and custom match events.
+The database must support:
+
+* Clubs
+* Teams
+* Players
+* Custom fitness tests
+* Custom match event types
+* Historical fitness test results
+* Match tracking
+
+---
+
+# Core Hierarchy
+
+The system should use this structure:
+
+```text
+User
+  └── Club
+        └── Team
+              └── Player
+```
+
+This allows one user to manage more than one club, and each club to contain multiple teams.
+
+Example:
+
+```text
+Brereton Social FC
+  ├── First Team
+  ├── Reserves
+  ├── Ladies
+  ├── Under 18s
+  └── Juniors
+```
 
 ---
 
@@ -24,23 +58,60 @@ Fields:
 * createdAt
 * updatedAt
 
-A user can own multiple teams.
+A user can own multiple clubs.
 
 ---
 
-## Team
+## Club
 
-Represents a football team or squad.
+Represents a club or organisation.
+
+Examples:
+
+* Brereton Social FC
+* Lichfield Juniors
+* Tamworth Academy
 
 Fields:
 
 * id
 * userId
 * name
+* location
+* notes
+* createdAt
+* updatedAt
+
+A club belongs to one user.
+
+A club has many teams.
+
+---
+
+## Team
+
+Represents a team or squad within a club.
+
+Examples:
+
+* First Team
+* Reserves
+* Ladies
+* Under 18s
+* Under 12 Girls
+* Under 9s
+
+Fields:
+
+* id
+* clubId
+* name
 * ageGroup
 * season
 * createdAt
 * updatedAt
+
+A team belongs to one club.
 
 A team has many players.
 
@@ -58,11 +129,17 @@ Fields:
 * surname
 * squadNumber
 * preferredPosition
+* dateOfBirth
+* joinedClubDate
 * isActive
 * createdAt
 * updatedAt
 
-A player belongs to one team.
+A player belongs to one team in the MVP.
+
+`dateOfBirth` is optional but should be included for future age-group benchmarking.
+
+`joinedClubDate` is optional but useful for long-term player development tracking.
 
 ---
 
@@ -273,6 +350,20 @@ Each event belongs to:
 
 # Important Design Rules
 
+## Club Structure
+
+The app must support clubs with multiple teams.
+
+Do not design the database as if one user only has one team.
+
+The correct structure is:
+
+```text
+Club -> Team -> Player
+```
+
+---
+
 ## Customisation
 
 The system must allow users to create:
@@ -307,6 +398,25 @@ Progress over time should be calculated by comparing sessions of the same fitnes
 
 ---
 
+## Future Player Movement
+
+Players may move between teams over time.
+
+Examples:
+
+* Youth player promoted to senior team
+* Player moves between squads
+* Player returns after leaving
+* Player plays for both reserves and first team
+
+This should eventually be implemented using a `PlayerTeamMembership` model.
+
+Do not build this in the MVP.
+
+For MVP, a player belongs to one team.
+
+---
+
 ## MVP Database
 
 Use:
@@ -323,6 +433,7 @@ Do not use cloud databases for MVP.
 The final Prisma schema should include:
 
 * User
+* Club
 * Team
 * Player
 * FitnessTestType
