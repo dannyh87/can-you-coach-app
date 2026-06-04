@@ -75,6 +75,8 @@ export default function FitnessTimerClient({
   const [baseElapsed, setBaseElapsed] = useState(0)
   const [now, setNow] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
+  const [startedAtText, setStartedAtText] = useState<string | null>(null)
+  const [isStarting, setIsStarting] = useState(false)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -99,9 +101,10 @@ export default function FitnessTimerClient({
     timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
 
   const startTimer = async () => {
-    if (isRunning) return
+    if (isRunning || isStarting) return
 
     if (!isSessionLive) {
+      setIsStarting(true)
       setMessage(null)
 
       const formData = new FormData()
@@ -111,11 +114,19 @@ export default function FitnessTimerClient({
 
       if (!result?.ok) {
         setMessage('Fitness test could not be started. Try again.')
+        setIsStarting(false)
         return
       }
 
       setIsSessionLive(true)
+      setStartedAtText(
+        new Intl.DateTimeFormat('en-GB', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }).format(new Date(result.startedAt))
+      )
       setMessage('Fitness test started.')
+      setIsStarting(false)
     }
 
     const timestamp = Date.now()
@@ -226,9 +237,13 @@ export default function FitnessTimerClient({
             type="button"
             onClick={startTimer}
             className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isRunning}
+            disabled={isRunning || isStarting}
           >
-            {isSessionLive ? 'Start Timer' : 'Start Fitness Test'}
+            {isStarting
+              ? 'Starting...'
+              : isSessionLive
+                ? 'Start Timer'
+                : 'Start Fitness Test'}
           </button>
           <button
             type="button"
@@ -253,6 +268,11 @@ export default function FitnessTimerClient({
         {!isSessionLive && (
           <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
             Start the fitness test before recording finish times.
+          </p>
+        )}
+        {isSessionLive && (
+          <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
+            LIVE{startedAtText ? `: started ${startedAtText}` : ''}
           </p>
         )}
       </section>

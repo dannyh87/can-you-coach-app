@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
@@ -150,23 +150,29 @@ async function startFitnessTestSession(formData: FormData) {
 
   const sessionId = getTextValue(formData, 'fitnessTestSessionId')
 
-  if (!sessionId) return
+  if (!sessionId) return { ok: false }
   const session = await getOwnedSession(sessionId)
-  if (!session || session.status !== 'DRAFT') return
-  if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) return
+  if (!session || session.status !== 'DRAFT') return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) {
+    return { ok: false }
+  }
 
+  const startedAt = new Date()
   await prisma.fitnessTestSession.update({
     where: { id: session.id },
     data: {
       status: 'IN_PROGRESS',
-      startedAt: new Date(),
+      startedAt,
     },
   })
 
   revalidateFitnessSessionPaths(session.id)
   revalidatePath(`/fitness/sessions/${session.id}/timer`)
 
-  redirect(`/fitness/sessions/${session.id}/live?saved=started`)
+  return {
+    ok: true,
+    startedAt: startedAt.toISOString(),
+  }
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
@@ -310,15 +316,6 @@ export default async function FitnessLiveDropoutPage({
           </div>
         </dl>
 
-        {session.status === 'DRAFT' && (
-          <form action={startFitnessTestSession} className="mt-4">
-            <input type="hidden" name="fitnessTestSessionId" value={session.id} />
-            <button className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white">
-              Start Fitness Test
-            </button>
-          </form>
-        )}
-
         {session.status === 'IN_PROGRESS' && (
           <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
             LIVE: record each player when they drop out.
@@ -347,6 +344,7 @@ export default async function FitnessLiveDropoutPage({
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           isLive={session.status === 'IN_PROGRESS'}
           players={players}
+          startSessionAction={startFitnessTestSession}
           saveDropoutAction={saveDropoutResult}
           undoDropoutAction={undoDropoutResult}
         />
