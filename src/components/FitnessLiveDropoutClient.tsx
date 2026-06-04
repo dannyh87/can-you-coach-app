@@ -22,6 +22,7 @@ type FitnessLiveDropoutClientProps = {
   higherIsBetter: boolean
   rankingsHref: string
   isLive: boolean
+  startedAt: string | null
   players: DropoutPlayer[]
   startSessionAction: (formData: FormData) =>
     Promise<
@@ -59,14 +60,14 @@ export default function FitnessLiveDropoutClient({
   higherIsBetter,
   rankingsHref,
   isLive,
+  startedAt,
   players,
   startSessionAction,
   saveDropoutAction,
   undoDropoutAction,
 }: FitnessLiveDropoutClientProps) {
   const [dropoutPlayers, setDropoutPlayers] = useState(players)
-  const [isSessionLive, setIsSessionLive] = useState(isLive)
-  const [startedAt, setStartedAt] = useState<string | null>(null)
+  const [localStartedAt, setLocalStartedAt] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [currentResult, setCurrentResult] = useState({
     value: '1',
@@ -78,6 +79,8 @@ export default function FitnessLiveDropoutClient({
   const completedPlayers = dropoutPlayers.filter((player) => player.result)
   const allPlayersFinished =
     dropoutPlayers.length > 0 && completedPlayers.length === dropoutPlayers.length
+  const isSessionLive = isLive || Boolean(localStartedAt)
+  const effectiveStartedAt = localStartedAt ?? startedAt
 
   const setSharedCurrentResult = (nextResult: { value: string; text: string }) => {
     currentResultRef.current = nextResult
@@ -152,8 +155,7 @@ export default function FitnessLiveDropoutClient({
     const result = await startSessionAction(formData)
 
     if (result?.ok) {
-      setIsSessionLive(true)
-      setStartedAt(result.startedAt)
+      setLocalStartedAt(result.startedAt)
       setMessage('Fitness test started.')
     } else {
       setMessage(result?.reason ?? 'Fitness test could not be started. Try again.')
@@ -162,11 +164,11 @@ export default function FitnessLiveDropoutClient({
     setIsStarting(false)
   }
 
-  const formattedStartedAt = startedAt
+  const formattedStartedAt = effectiveStartedAt
     ? new Intl.DateTimeFormat('en-GB', {
         dateStyle: 'short',
         timeStyle: 'short',
-      }).format(new Date(startedAt))
+      }).format(new Date(effectiveStartedAt))
     : null
 
   const undoDropout = async (playerId: string) => {

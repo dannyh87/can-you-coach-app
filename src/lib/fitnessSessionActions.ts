@@ -54,10 +54,6 @@ export async function startFitnessTestSession(formData: FormData): Promise<
     return { ok: false, reason: 'Fitness test session was not found.' }
   }
 
-  if (session.status !== 'DRAFT') {
-    return { ok: false, reason: 'Fitness test has already been started.' }
-  }
-
   const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
   const isValidMode =
     mode === 'liveDropout'
@@ -66,6 +62,17 @@ export async function startFitnessTestSession(formData: FormData): Promise<
 
   if (!isValidMode) {
     return { ok: false, reason: 'This recording mode is not valid for this test.' }
+  }
+
+  if (session.status === 'IN_PROGRESS') {
+    return {
+      ok: true,
+      startedAt: (session.startedAt ?? new Date()).toISOString(),
+    }
+  }
+
+  if (session.status === 'COMPLETED') {
+    return { ok: false, reason: 'Fitness test is completed.' }
   }
 
   const startedAt = new Date()

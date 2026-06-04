@@ -314,6 +314,7 @@ export default async function FitnessLiveDropoutPage({
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           isLive={session.status === 'IN_PROGRESS'}
+          startedAt={session.startedAt?.toISOString() ?? null}
           players={players}
           startSessionAction={startFitnessTestSession}
           saveDropoutAction={saveDropoutResult}

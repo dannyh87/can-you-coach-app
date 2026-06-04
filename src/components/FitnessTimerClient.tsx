@@ -22,6 +22,7 @@ type FitnessTimerClientProps = {
   higherIsBetter: boolean
   rankingsHref: string
   isLive: boolean
+  startedAt: string | null
   players: TimerPlayer[]
   startSessionAction: (formData: FormData) =>
     Promise<
@@ -67,21 +68,30 @@ export default function FitnessTimerClient({
   higherIsBetter,
   rankingsHref,
   isLive,
+  startedAt: persistedStartedAt,
   players,
   startSessionAction,
   saveFinishAction,
   undoFinishAction,
 }: FitnessTimerClientProps) {
   const [timerPlayers, setTimerPlayers] = useState(players)
-  const [isSessionLive, setIsSessionLive] = useState(isLive)
   const [isRunning, setIsRunning] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [baseElapsed, setBaseElapsed] = useState(0)
   const [now, setNow] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
-  const [startedAtText, setStartedAtText] = useState<string | null>(null)
+  const [localStartedAtText, setLocalStartedAtText] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
+  const isSessionLive = isLive || Boolean(localStartedAtText)
+  const startedAtText =
+    localStartedAtText ??
+    (persistedStartedAt
+      ? new Intl.DateTimeFormat('en-GB', {
+          dateStyle: 'short',
+          timeStyle: 'short',
+        }).format(new Date(persistedStartedAt))
+      : null)
 
   useEffect(() => {
     if (!isRunning) return
@@ -123,8 +133,7 @@ export default function FitnessTimerClient({
         return
       }
 
-      setIsSessionLive(true)
-      setStartedAtText(
+      setLocalStartedAtText(
         new Intl.DateTimeFormat('en-GB', {
           dateStyle: 'short',
           timeStyle: 'short',
