@@ -113,7 +113,7 @@ export default async function FitnessPage() {
         <div>
           <h1 className="text-3xl font-bold">Fitness Testing</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Create fitness test sessions for teams. Result entry comes next.
+            Create fitness test sessions for teams and enter player results.
           </p>
         </div>
 
@@ -250,6 +250,13 @@ export default async function FitnessPage() {
               {session.notes && (
                 <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
               )}
+
+              <Link
+                href={`/fitness/sessions/${session.id}`}
+                className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Open Session / Enter Results
+              </Link>
             </article>
           ))
         )}
