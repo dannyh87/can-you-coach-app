@@ -63,6 +63,7 @@ export default function FitnessTimerClient({
       : baseElapsed
   const roundedElapsed = Math.round(elapsedSeconds * 10) / 10
   const formattedElapsed = formatElapsed(roundedElapsed)
+  const canRecordFinish = roundedElapsed > 0
 
   const startTimer = () => {
     if (isRunning) return
@@ -120,6 +121,10 @@ export default function FitnessTimerClient({
             Reset
           </button>
         </div>
+        <p className="mt-4 text-sm text-gray-300">
+          Resetting the timer does not delete already saved player finish results.
+          Use Undo / Reinstate on a player card to remove a saved finish.
+        </p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2">
@@ -161,8 +166,13 @@ export default function FitnessTimerClient({
                   <input type="hidden" name="playerId" value={player.id} />
                   <input type="hidden" name="resultValue" value={roundedElapsed} />
                   <input type="hidden" name="resultText" value={formattedElapsed} />
-                  <button className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white">
-                    Record Finish at {formattedElapsed}
+                  <button
+                    className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!canRecordFinish}
+                  >
+                    {canRecordFinish
+                      ? `Record Finish at ${formattedElapsed}`
+                      : 'Start timer first'}
                   </button>
                 </form>
               )}

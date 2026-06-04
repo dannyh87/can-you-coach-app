@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
+import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -95,6 +96,8 @@ async function saveDropoutResult(formData: FormData) {
   })
 
   revalidateFitnessSessionPaths(session.id)
+
+  redirect(`/fitness/sessions/${session.id}/live?saved=dropout`)
 }
 
 async function undoDropoutResult(formData: FormData) {
@@ -120,22 +123,21 @@ async function undoDropoutResult(formData: FormData) {
   })
 
   revalidateFitnessSessionPaths(session.id)
+
+  redirect(`/fitness/sessions/${session.id}/live?saved=undo`)
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
-const formatResult = (result: { resultValue: number | null; resultText: string | null }) => {
-  if (result.resultText) return result.resultText
-  if (result.resultValue !== null) return String(result.resultValue)
-  return 'Recorded'
-}
-
 export default async function FitnessLiveDropoutPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ saved?: string }>
 }) {
   const { id } = await params
+  const { saved } = await searchParams
   const session = await getOwnedSession(id)
 
   if (!session) notFound()
@@ -158,6 +160,29 @@ export default async function FitnessLiveDropoutPage({
   const recordedCount = activePlayers.filter((player) =>
     resultsByPlayerId.has(player.id)
   ).length
+  const players = activePlayers.map((player) => {
+    const result = resultsByPlayerId.get(player.id)
+
+    return {
+      id: player.id,
+      firstName: player.firstName,
+      surname: player.surname,
+      squadNumber: player.squadNumber,
+      preferredPosition: player.preferredPosition,
+      result: result
+        ? {
+            resultValue: result.resultValue,
+            resultText: result.resultText,
+          }
+        : null,
+    }
+  })
+  const savedMessage =
+    saved === 'dropout'
+      ? 'Dropout recorded.'
+      : saved === 'undo'
+        ? 'Player reinstated.'
+        : null
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
@@ -178,6 +203,12 @@ export default async function FitnessLiveDropoutPage({
           Rankings
         </Link>
       </div>
+
+      {savedMessage && (
+        <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          {savedMessage}
+        </p>
+      )}
 
       <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -224,71 +255,13 @@ export default async function FitnessLiveDropoutPage({
           </p>
         </section>
       ) : (
-        <section className="mt-6 grid gap-4 md:grid-cols-2">
-          {activePlayers.map((player) => {
-            const result = resultsByPlayerId.get(player.id)
-            const hasResult = Boolean(result)
-
-            return (
-              <article
-                key={player.id}
-                className={`rounded-lg border p-4 ${
-                  hasResult ? 'border-gray-200 bg-gray-50' : 'border-green-200 bg-green-50'
-                }`}
-              >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold">
-                      {player.firstName} {player.surname}
-                    </h2>
-                    <p className="text-sm text-gray-500">
-                      #{player.squadNumber} - {player.preferredPosition ?? 'No position'}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    {hasResult ? formatResult(result) : 'Still in'}
-                  </span>
-                </div>
-
-                {hasResult ? (
-                  <form action={undoDropoutResult}>
-                    <input type="hidden" name="fitnessTestSessionId" value={session.id} />
-                    <input type="hidden" name="playerId" value={player.id} />
-                    <button className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700">
-                      Undo / Reinstate
-                    </button>
-                  </form>
-                ) : (
-                  <form action={saveDropoutResult} className="grid gap-3">
-                    <input type="hidden" name="fitnessTestSessionId" value={session.id} />
-                    <input type="hidden" name="playerId" value={player.id} />
-                    <label className="text-sm font-medium">
-                      Numeric result
-                      <input
-                        name="resultValue"
-                        type="number"
-                        step="any"
-                        className="mt-1 w-full rounded border p-3 text-base"
-                        placeholder={session.fitnessTestType.resultUnit}
-                      />
-                    </label>
-                    <label className="text-sm font-medium">
-                      Display result
-                      <input
-                        name="resultText"
-                        className="mt-1 w-full rounded border p-3 text-base"
-                        placeholder="e.g. Level 12.4"
-                      />
-                    </label>
-                    <button className="w-full rounded bg-green-700 px-4 py-3 font-medium text-white">
-                      Record Dropout
-                    </button>
-                  </form>
-                )}
-              </article>
-            )
-          })}
-        </section>
+        <FitnessLiveDropoutClient
+          sessionId={session.id}
+          resultUnit={session.fitnessTestType.resultUnit}
+          players={players}
+          saveDropoutAction={saveDropoutResult}
+          undoDropoutAction={undoDropoutResult}
+        />
       )}
     </main>
   )

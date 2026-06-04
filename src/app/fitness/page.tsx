@@ -261,14 +261,28 @@ export default async function FitnessPage() {
                   href={`/fitness/sessions/${session.id}`}
                   className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
                 >
-                  Open Session / Enter Results
+                  Manual Entry
+                </Link>
+
+                <Link
+                  href={`/fitness/sessions/${session.id}/live`}
+                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+                >
+                  Live Dropout Mode
+                </Link>
+
+                <Link
+                  href={`/fitness/sessions/${session.id}/timer`}
+                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+                >
+                  Live Timed Finish Mode
                 </Link>
 
                 <Link
                   href={`/fitness/sessions/${session.id}/rankings`}
                   className="inline-flex rounded border px-4 py-2 text-sm font-medium"
                 >
-                  View Rankings
+                  Rankings
                 </Link>
               </div>
             </article>

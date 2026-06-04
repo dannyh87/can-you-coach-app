@@ -19,7 +19,15 @@ const formatStatus = (status: FitnessResultStatus) => {
   return labels[status]
 }
 
-const formatResult = (value: number, unit: string) => `${value} ${unit}`
+const formatResult = ({
+  resultText,
+  resultValue,
+  unit,
+}: {
+  resultText: string | null
+  resultValue: number | null
+  unit: string
+}) => resultText || `${resultValue ?? 0} ${unit}`
 
 export default async function FitnessSessionRankingsPage({
   params,
@@ -166,10 +174,11 @@ export default async function FitnessSessionRankingsPage({
                     </td>
                     <td className="p-3">{result.player.squadNumber ?? 'Not set'}</td>
                     <td className="p-3 font-medium">
-                      {formatResult(
-                        result.resultValue ?? 0,
-                        session.fitnessTestType.resultUnit
-                      )}
+                      {formatResult({
+                        resultText: result.resultText,
+                        resultValue: result.resultValue,
+                        unit: session.fitnessTestType.resultUnit,
+                      })}
                     </td>
                     <td className="p-3">{formatStatus(result.status)}</td>
                     <td className="p-3">{result.notes ?? 'None'}</td>

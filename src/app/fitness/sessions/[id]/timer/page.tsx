@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getLocalUser } from '@/lib/localUser'
@@ -96,6 +96,8 @@ async function saveTimedFinish(formData: FormData) {
   })
 
   revalidateFitnessSessionPaths(session.id)
+
+  redirect(`/fitness/sessions/${session.id}/timer?saved=finish`)
 }
 
 async function undoTimedFinish(formData: FormData) {
@@ -120,16 +122,21 @@ async function undoTimedFinish(formData: FormData) {
   })
 
   revalidateFitnessSessionPaths(session.id)
+
+  redirect(`/fitness/sessions/${session.id}/timer?saved=undo`)
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
 export default async function FitnessTimerPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ saved?: string }>
 }) {
   const { id } = await params
+  const { saved } = await searchParams
   const session = await getOwnedSession(id)
 
   if (!session) notFound()
@@ -166,6 +173,12 @@ export default async function FitnessTimerPage({
         : null,
     }
   })
+  const savedMessage =
+    saved === 'finish'
+      ? 'Finish recorded.'
+      : saved === 'undo'
+        ? 'Player reinstated.'
+        : null
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
@@ -186,6 +199,12 @@ export default async function FitnessTimerPage({
           Rankings
         </Link>
       </div>
+
+      {savedMessage && (
+        <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          {savedMessage}
+        </p>
+      )}
 
       <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
