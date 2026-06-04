@@ -251,12 +251,21 @@ export default async function FitnessPage() {
                 <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
               )}
 
-              <Link
-                href={`/fitness/sessions/${session.id}`}
-                className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-              >
-                Open Session / Enter Results
-              </Link>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href={`/fitness/sessions/${session.id}`}
+                  className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Open Session / Enter Results
+                </Link>
+
+                <Link
+                  href={`/fitness/sessions/${session.id}/rankings`}
+                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+                >
+                  View Rankings
+                </Link>
+              </div>
             </article>
           ))
         )}

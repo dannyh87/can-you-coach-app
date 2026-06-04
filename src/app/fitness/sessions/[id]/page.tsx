@@ -199,6 +199,13 @@ export default async function FitnessSessionPage({
         {session.notes && (
           <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
         )}
+
+        <Link
+          href={`/fitness/sessions/${session.id}/rankings`}
+          className="mt-4 inline-flex rounded border px-4 py-2 text-sm font-medium"
+        >
+          View Rankings
+        </Link>
       </section>
 
       {activePlayers.length === 0 ? (
