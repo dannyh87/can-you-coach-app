@@ -1,0 +1,244 @@
+import Link from 'next/link'
+import { revalidatePath } from 'next/cache'
+import { notFound } from 'next/navigation'
+
+import FitnessTimerClient from '@/components/FitnessTimerClient'
+import { getLocalUser } from '@/lib/localUser'
+import { prisma } from '@/lib/prisma'
+
+const getTextValue = (formData: FormData, key: string) => {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const getOptionalFloatValue = (formData: FormData, key: string) => {
+  const value = getTextValue(formData, key)
+  if (!value) return null
+
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const revalidateFitnessSessionPaths = (sessionId: string) => {
+  revalidatePath('/fitness')
+  revalidatePath(`/fitness/sessions/${sessionId}`)
+  revalidatePath(`/fitness/sessions/${sessionId}/timer`)
+  revalidatePath(`/fitness/sessions/${sessionId}/rankings`)
+  revalidatePath('/fitness/progress')
+}
+
+async function getOwnedSession(sessionId: string) {
+  const user = await getLocalUser()
+
+  return prisma.fitnessTestSession.findFirst({
+    where: {
+      id: sessionId,
+      team: {
+        club: {
+          userId: user.id,
+        },
+      },
+    },
+    include: {
+      team: {
+        include: {
+          club: true,
+        },
+      },
+      fitnessTestType: true,
+    },
+  })
+}
+
+async function saveTimedFinish(formData: FormData) {
+  'use server'
+
+  const sessionId = getTextValue(formData, 'fitnessTestSessionId')
+  const playerId = getTextValue(formData, 'playerId')
+  const resultValue = getOptionalFloatValue(formData, 'resultValue')
+  const resultText = getTextValue(formData, 'resultText')
+
+  if (!sessionId || !playerId || resultValue === null) return
+
+  const session = await getOwnedSession(sessionId)
+  if (!session) return
+
+  const player = await prisma.player.findFirst({
+    where: {
+      id: playerId,
+      teamId: session.teamId,
+      isActive: true,
+    },
+    select: { id: true },
+  })
+
+  if (!player) return
+
+  await prisma.fitnessTestResult.upsert({
+    where: {
+      fitnessTestSessionId_playerId: {
+        fitnessTestSessionId: session.id,
+        playerId: player.id,
+      },
+    },
+    update: {
+      resultValue,
+      resultText: resultText || null,
+      status: 'COMPLETED',
+    },
+    create: {
+      fitnessTestSessionId: session.id,
+      playerId: player.id,
+      resultValue,
+      resultText: resultText || null,
+      status: 'COMPLETED',
+    },
+  })
+
+  revalidateFitnessSessionPaths(session.id)
+}
+
+async function undoTimedFinish(formData: FormData) {
+  'use server'
+
+  const sessionId = getTextValue(formData, 'fitnessTestSessionId')
+  const playerId = getTextValue(formData, 'playerId')
+
+  if (!sessionId || !playerId) return
+  const session = await getOwnedSession(sessionId)
+  if (!session) return
+
+  await prisma.fitnessTestResult.deleteMany({
+    where: {
+      fitnessTestSessionId: session.id,
+      playerId,
+      player: {
+        teamId: session.teamId,
+        isActive: true,
+      },
+    },
+  })
+
+  revalidateFitnessSessionPaths(session.id)
+}
+
+const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+
+export default async function FitnessTimerPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  const session = await getOwnedSession(id)
+
+  if (!session) notFound()
+
+  const activePlayers = await prisma.player.findMany({
+    where: {
+      teamId: session.teamId,
+      isActive: true,
+    },
+    orderBy: [{ surname: 'asc' }, { firstName: 'asc' }],
+  })
+
+  const existingResults = await prisma.fitnessTestResult.findMany({
+    where: { fitnessTestSessionId: session.id },
+  })
+  const resultsByPlayerId = new Map(
+    existingResults.map((result) => [result.playerId, result])
+  )
+
+  const players = activePlayers.map((player) => {
+    const result = resultsByPlayerId.get(player.id)
+
+    return {
+      id: player.id,
+      firstName: player.firstName,
+      surname: player.surname,
+      squadNumber: player.squadNumber,
+      preferredPosition: player.preferredPosition,
+      result: result
+        ? {
+            resultValue: result.resultValue,
+            resultText: result.resultText,
+          }
+        : null,
+    }
+  })
+
+  return (
+    <main className="mx-auto w-full max-w-5xl p-6">
+      <div className="flex flex-wrap gap-3 text-sm">
+        <Link href={`/fitness/sessions/${session.id}`} className="text-blue-600 hover:underline">
+          Manual Entry
+        </Link>
+        <Link
+          href={`/fitness/sessions/${session.id}/live`}
+          className="text-blue-600 hover:underline"
+        >
+          Live Dropout Mode
+        </Link>
+        <Link
+          href={`/fitness/sessions/${session.id}/rankings`}
+          className="text-blue-600 hover:underline"
+        >
+          Rankings
+        </Link>
+      </div>
+
+      <section className="mt-6 rounded-xl border p-6">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-bold">Live Timed Finish Mode</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {session.fitnessTestType.name} - {session.team.club.name} -{' '}
+              {session.team.name}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+            {formatDate(session.date)}
+          </span>
+        </div>
+
+        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+          <div>
+            <dt className="font-medium text-gray-500">Result unit</dt>
+            <dd>{session.fitnessTestType.resultUnit}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-gray-500">Finished</dt>
+            <dd>{players.filter((player) => player.result).length}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-gray-500">Unfinished</dt>
+            <dd>{players.filter((player) => !player.result).length}</dd>
+          </div>
+        </dl>
+
+        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          This mode is useful for longer timed tests. Manual precision entry is still
+          preferred for short sprint and agility tests because phone tap timing may
+          not be accurate enough for split-second results.
+        </p>
+      </section>
+
+      {players.length === 0 ? (
+        <section className="mt-6 rounded-lg border p-4">
+          <h2 className="text-xl font-bold">No active players</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Add or restore active players before recording timed finishes.
+          </p>
+        </section>
+      ) : (
+        <FitnessTimerClient
+          sessionId={session.id}
+          players={players}
+          saveFinishAction={saveTimedFinish}
+          undoFinishAction={undoTimedFinish}
+        />
+      )}
+    </main>
+  )
+}
