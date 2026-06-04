@@ -28,10 +28,10 @@ export default function Home() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center p-6">
       <div className="mb-8">
         <p className="mb-2 text-sm font-medium text-blue-600">Can You Coach</p>
-        <h1 className="text-4xl font-bold tracking-tight">Club setup</h1>
+        <h1 className="text-4xl font-bold tracking-tight">Home</h1>
         <p className="mt-3 text-gray-600">
-          Start by creating a club, then add teams, players and fitness test
-          sessions.
+          Use this home page to move around the MVP. Start by creating a club,
+          then add teams, players and fitness test sessions.
         </p>
       </div>
 

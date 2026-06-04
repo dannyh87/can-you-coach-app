@@ -6,7 +6,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 const navigationLinks = [
-  { href: '/', label: 'Dashboard' },
+  { href: '/', label: 'Home' },
   { href: '/clubs', label: 'Clubs' },
   { href: '/teams', label: 'Teams' },
   { href: '/players', label: 'Players' },

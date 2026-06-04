@@ -3,6 +3,10 @@ import { revalidatePath } from 'next/cache'
 
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import {
+  formatFitnessSessionStatus,
+  getFitnessSessionStatusClasses,
+} from '@/lib/fitnessSessionStatus'
 import { prisma } from '@/lib/prisma'
 
 const getTextValue = (formData: FormData, key: string) => {
@@ -60,6 +64,11 @@ async function createFitnessTestSession(formData: FormData) {
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateTime = (date: Date | null) =>
+  date ? new Intl.DateTimeFormat('en-GB', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date) : 'Not started'
 
 export default async function FitnessPage() {
   const user = await getLocalUser()
@@ -233,9 +242,16 @@ export default async function FitnessPage() {
                 <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
                   {session._count.results} results
                 </span>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
+                    session.status
+                  )}`}
+                >
+                  {formatFitnessSessionStatus(session.status)}
+                </span>
               </div>
 
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-5">
                 <div>
                   <dt className="font-medium text-gray-500">Date</dt>
                   <dd>{formatDate(session.date)}</dd>
@@ -258,6 +274,11 @@ export default async function FitnessPage() {
                 <div>
                   <dt className="font-medium text-gray-500">Recording mode</dt>
                   <dd>{recordingModes.label}</dd>
+                </div>
+
+                <div>
+                  <dt className="font-medium text-gray-500">Started</dt>
+                  <dd>{formatDateTime(session.startedAt)}</dd>
                 </div>
               </dl>
 

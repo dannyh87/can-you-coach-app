@@ -21,7 +21,10 @@ type FitnessTimerClientProps = {
   resultUnit: string
   higherIsBetter: boolean
   rankingsHref: string
+  isLive: boolean
   players: TimerPlayer[]
+  startSessionAction: (formData: FormData) =>
+    Promise<{ ok: true; startedAt: string } | { ok: false } | undefined>
   saveFinishAction: (formData: FormData) => Promise<
     | {
         ok: true
@@ -59,11 +62,14 @@ export default function FitnessTimerClient({
   resultUnit,
   higherIsBetter,
   rankingsHref,
+  isLive,
   players,
+  startSessionAction,
   saveFinishAction,
   undoFinishAction,
 }: FitnessTimerClientProps) {
   const [timerPlayers, setTimerPlayers] = useState(players)
+  const [isSessionLive, setIsSessionLive] = useState(isLive)
   const [isRunning, setIsRunning] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [baseElapsed, setBaseElapsed] = useState(0)
@@ -92,8 +98,25 @@ export default function FitnessTimerClient({
   const allPlayersFinished =
     timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
 
-  const startTimer = () => {
+  const startTimer = async () => {
     if (isRunning) return
+
+    if (!isSessionLive) {
+      setMessage(null)
+
+      const formData = new FormData()
+      formData.set('fitnessTestSessionId', sessionId)
+
+      const result = await startSessionAction(formData)
+
+      if (!result?.ok) {
+        setMessage('Fitness test could not be started. Try again.')
+        return
+      }
+
+      setIsSessionLive(true)
+      setMessage('Fitness test started.')
+    }
 
     const timestamp = Date.now()
     setStartedAt(timestamp)
@@ -128,7 +151,7 @@ export default function FitnessTimerClient({
   }
 
   const recordFinish = async (playerId: string) => {
-    if (!canRecordFinish || pendingPlayerId) return
+    if (!isSessionLive || !canRecordFinish || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -168,7 +191,7 @@ export default function FitnessTimerClient({
   }
 
   const undoFinish = async (playerId: string) => {
-    if (pendingPlayerId) return
+    if (!isSessionLive || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -205,7 +228,7 @@ export default function FitnessTimerClient({
             className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
             disabled={isRunning}
           >
-            Start
+            {isSessionLive ? 'Start Timer' : 'Start Fitness Test'}
           </button>
           <button
             type="button"
@@ -227,6 +250,11 @@ export default function FitnessTimerClient({
           Resetting the timer does not delete already saved player finish results.
           Use Undo / Reinstate on a player card to remove a saved finish.
         </p>
+        {!isSessionLive && (
+          <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
+            Start the fitness test before recording finish times.
+          </p>
+        )}
       </section>
 
       {message && (
@@ -278,7 +306,7 @@ export default function FitnessTimerClient({
                   type="button"
                   onClick={() => undoFinish(player.id)}
                   className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={pendingPlayerId === player.id}
+                  disabled={!isSessionLive || pendingPlayerId === player.id}
                 >
                   {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
                 </button>
@@ -287,9 +315,11 @@ export default function FitnessTimerClient({
                   type="button"
                   onClick={() => recordFinish(player.id)}
                   className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!canRecordFinish || pendingPlayerId === player.id}
+                  disabled={!isSessionLive || !canRecordFinish || pendingPlayerId === player.id}
                 >
-                  {pendingPlayerId === player.id
+                  {!isSessionLive
+                    ? 'Start test first'
+                    : pendingPlayerId === player.id
                     ? 'Saving...'
                     : canRecordFinish
                       ? `Record Finish at ${formattedElapsed}`

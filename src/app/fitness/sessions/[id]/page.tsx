@@ -5,6 +5,10 @@ import { notFound, redirect } from 'next/navigation'
 
 import { getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import {
+  formatFitnessSessionStatus,
+  getFitnessSessionStatusClasses,
+} from '@/lib/fitnessSessionStatus'
 import { prisma } from '@/lib/prisma'
 
 const statusOptions: { label: string; value: FitnessResultStatus }[] = [
@@ -116,7 +120,52 @@ async function saveFitnessResults(formData: FormData) {
   redirect(`/fitness/sessions/${session.id}?saved=1`)
 }
 
+async function startFitnessTestSession(formData: FormData) {
+  'use server'
+
+  const user = await getLocalUser()
+  const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
+
+  if (!fitnessTestSessionId) return
+
+  const session = await prisma.fitnessTestSession.findFirst({
+    where: {
+      id: fitnessTestSessionId,
+      team: {
+        club: {
+          userId: user.id,
+        },
+      },
+    },
+  })
+
+  if (!session || session.status !== 'DRAFT') return
+
+  await prisma.fitnessTestSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+    },
+  })
+
+  revalidatePath('/fitness')
+  revalidatePath(`/fitness/sessions/${session.id}`)
+  revalidatePath(`/fitness/sessions/${session.id}/live`)
+  revalidatePath(`/fitness/sessions/${session.id}/timer`)
+
+  redirect(`/fitness/sessions/${session.id}?started=1`)
+}
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+
+const formatDateTime = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    : 'Not started'
 
 const formatSquadNumber = (squadNumber: number | null) =>
   squadNumber === null ? 'No squad number' : `#${squadNumber}`
@@ -126,10 +175,10 @@ export default async function FitnessSessionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ saved?: string }>
+  searchParams: Promise<{ saved?: string; started?: string }>
 }) {
   const { id } = await params
-  const { saved } = await searchParams
+  const { saved, started } = await searchParams
   const user = await getLocalUser()
 
   const session = await prisma.fitnessTestSession.findFirst({
@@ -181,6 +230,12 @@ export default async function FitnessSessionPage({
         </p>
       )}
 
+      {started === '1' && (
+        <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          Fitness test started.
+        </p>
+      )}
+
       <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -190,12 +245,21 @@ export default async function FitnessSessionPage({
             </p>
           </div>
 
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-            {formatDate(session.date)}
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              {formatDate(session.date)}
+            </span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
+                session.status
+              )}`}
+            >
+              {formatFitnessSessionStatus(session.status)}
+            </span>
+          </div>
         </div>
 
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <dt className="font-medium text-gray-500">Result unit</dt>
             <dd>{session.fitnessTestType.resultUnit}</dd>
@@ -214,10 +278,30 @@ export default async function FitnessSessionPage({
             <dt className="font-medium text-gray-500">Saved results</dt>
             <dd>{existingResults.length}</dd>
           </div>
+
+          <div>
+            <dt className="font-medium text-gray-500">Started</dt>
+            <dd>{formatDateTime(session.startedAt)}</dd>
+          </div>
         </dl>
 
         {session.notes && (
           <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
+        )}
+
+        {session.status === 'DRAFT' && (
+          <form action={startFitnessTestSession} className="mt-4">
+            <input type="hidden" name="fitnessTestSessionId" value={session.id} />
+            <button className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white">
+              Start Fitness Test
+            </button>
+          </form>
+        )}
+
+        {session.status === 'IN_PROGRESS' && (
+          <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
+            This fitness test is live.
+          </p>
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">

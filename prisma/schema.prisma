@@ -80,11 +80,20 @@ model FitnessTestSession {
   fitnessTestTypeId String
   date              DateTime
   notes             String?
+  status            FitnessTestSessionStatus @default(DRAFT)
+  startedAt         DateTime?
+  completedAt       DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   team              Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   fitnessTestType   FitnessTestType     @relation(fields: [fitnessTestTypeId], references: [id], onDelete: Restrict)
   results           FitnessTestResult[]
+}
+
+enum FitnessTestSessionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
 }
 
 model FitnessTestResult {

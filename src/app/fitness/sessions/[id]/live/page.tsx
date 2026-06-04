@@ -1,9 +1,13 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import {
+  formatFitnessSessionStatus,
+  getFitnessSessionStatusClasses,
+} from '@/lib/fitnessSessionStatus'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -63,6 +67,7 @@ async function saveDropoutResult(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (session.status !== 'IN_PROGRESS') return { ok: false }
   if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) {
     return { ok: false }
   }
@@ -119,6 +124,7 @@ async function undoDropoutResult(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (session.status !== 'IN_PROGRESS') return { ok: false }
   if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) {
     return { ok: false }
   }
@@ -139,7 +145,38 @@ async function undoDropoutResult(formData: FormData) {
   return { ok: true, playerId }
 }
 
+async function startFitnessTestSession(formData: FormData) {
+  'use server'
+
+  const sessionId = getTextValue(formData, 'fitnessTestSessionId')
+
+  if (!sessionId) return
+  const session = await getOwnedSession(sessionId)
+  if (!session || session.status !== 'DRAFT') return
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) return
+
+  await prisma.fitnessTestSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+    },
+  })
+
+  revalidateFitnessSessionPaths(session.id)
+  revalidatePath(`/fitness/sessions/${session.id}/timer`)
+
+  redirect(`/fitness/sessions/${session.id}/live?saved=started`)
+}
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateTime = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    : 'Not started'
 
 export default async function FitnessLiveDropoutPage({
   params,
@@ -196,6 +233,8 @@ export default async function FitnessLiveDropoutPage({
       ? 'Dropout recorded.'
       : saved === 'undo'
         ? 'Player reinstated.'
+        : saved === 'started'
+          ? 'Fitness test started.'
         : null
 
   return (
@@ -238,12 +277,21 @@ export default async function FitnessLiveDropoutPage({
             </p>
           </div>
 
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-            {formatDate(session.date)}
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              {formatDate(session.date)}
+            </span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
+                session.status
+              )}`}
+            >
+              {formatFitnessSessionStatus(session.status)}
+            </span>
+          </div>
         </div>
 
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <dt className="font-medium text-gray-500">Result unit</dt>
             <dd>{session.fitnessTestType.resultUnit}</dd>
@@ -256,7 +304,26 @@ export default async function FitnessLiveDropoutPage({
             <dt className="font-medium text-gray-500">Dropped out</dt>
             <dd>{recordedCount}</dd>
           </div>
+          <div>
+            <dt className="font-medium text-gray-500">Started</dt>
+            <dd>{formatDateTime(session.startedAt)}</dd>
+          </div>
         </dl>
+
+        {session.status === 'DRAFT' && (
+          <form action={startFitnessTestSession} className="mt-4">
+            <input type="hidden" name="fitnessTestSessionId" value={session.id} />
+            <button className="rounded bg-green-700 px-4 py-2 text-sm font-medium text-white">
+              Start Fitness Test
+            </button>
+          </form>
+        )}
+
+        {session.status === 'IN_PROGRESS' && (
+          <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
+            LIVE: record each player when they drop out.
+          </p>
+        )}
 
         <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
           Use this mode for staged endurance tests. Set the current level, stage, or
@@ -278,6 +345,7 @@ export default async function FitnessLiveDropoutPage({
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
+          isLive={session.status === 'IN_PROGRESS'}
           players={players}
           saveDropoutAction={saveDropoutResult}
           undoDropoutAction={undoDropoutResult}

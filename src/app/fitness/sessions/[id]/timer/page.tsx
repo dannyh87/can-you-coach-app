@@ -4,6 +4,10 @@ import { notFound } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import {
+  formatFitnessSessionStatus,
+  getFitnessSessionStatusClasses,
+} from '@/lib/fitnessSessionStatus'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -63,6 +67,7 @@ async function saveTimedFinish(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (session.status !== 'IN_PROGRESS') return { ok: false }
   if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
     return { ok: false }
   }
@@ -118,6 +123,7 @@ async function undoTimedFinish(formData: FormData) {
   if (!sessionId || !playerId) return { ok: false }
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (session.status !== 'IN_PROGRESS') return { ok: false }
   if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
     return { ok: false }
   }
@@ -138,7 +144,44 @@ async function undoTimedFinish(formData: FormData) {
   return { ok: true, playerId }
 }
 
+async function startFitnessTestSession(formData: FormData) {
+  'use server'
+
+  const sessionId = getTextValue(formData, 'fitnessTestSessionId')
+
+  if (!sessionId) return { ok: false }
+  const session = await getOwnedSession(sessionId)
+  if (!session || session.status !== 'DRAFT') return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
+    return { ok: false }
+  }
+
+  const startedAt = new Date()
+  await prisma.fitnessTestSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'IN_PROGRESS',
+      startedAt,
+    },
+  })
+
+  revalidateFitnessSessionPaths(session.id)
+  revalidatePath(`/fitness/sessions/${session.id}/live`)
+
+  return {
+    ok: true,
+    startedAt: startedAt.toISOString(),
+  }
+}
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateTime = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    : 'Not started'
 
 export default async function FitnessTimerPage({
   params,
@@ -234,12 +277,21 @@ export default async function FitnessTimerPage({
             </p>
           </div>
 
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-            {formatDate(session.date)}
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+              {formatDate(session.date)}
+            </span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
+                session.status
+              )}`}
+            >
+              {formatFitnessSessionStatus(session.status)}
+            </span>
+          </div>
         </div>
 
-        <dl className="grid gap-3 text-sm sm:grid-cols-3">
+        <dl className="grid gap-3 text-sm sm:grid-cols-4">
           <div>
             <dt className="font-medium text-gray-500">Result unit</dt>
             <dd>{session.fitnessTestType.resultUnit}</dd>
@@ -252,7 +304,17 @@ export default async function FitnessTimerPage({
             <dt className="font-medium text-gray-500">Unfinished</dt>
             <dd>{players.filter((player) => !player.result).length}</dd>
           </div>
+          <div>
+            <dt className="font-medium text-gray-500">Started</dt>
+            <dd>{formatDateTime(session.startedAt)}</dd>
+          </div>
         </dl>
+
+        {session.status === 'IN_PROGRESS' && (
+          <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
+            LIVE: record each player as they finish.
+          </p>
+        )}
 
         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           This mode is useful for longer timed tests. Manual precision entry is still
@@ -274,7 +336,9 @@ export default async function FitnessTimerPage({
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
+          isLive={session.status === 'IN_PROGRESS'}
           players={players}
+          startSessionAction={startFitnessTestSession}
           saveFinishAction={saveTimedFinish}
           undoFinishAction={undoTimedFinish}
         />

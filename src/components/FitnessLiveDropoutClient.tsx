@@ -21,6 +21,7 @@ type FitnessLiveDropoutClientProps = {
   resultUnit: string
   higherIsBetter: boolean
   rankingsHref: string
+  isLive: boolean
   players: DropoutPlayer[]
   saveDropoutAction: (formData: FormData) => Promise<
     | {
@@ -51,6 +52,7 @@ export default function FitnessLiveDropoutClient({
   resultUnit,
   higherIsBetter,
   rankingsHref,
+  isLive,
   players,
   saveDropoutAction,
   undoDropoutAction,
@@ -91,7 +93,7 @@ export default function FitnessLiveDropoutClient({
   }
 
   const recordDropout = async (playerId: string) => {
-    if (pendingPlayerId) return
+    if (!isLive || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -161,6 +163,11 @@ export default function FitnessLiveDropoutClient({
           Set this once, then tap each player as they drop out. You can adjust it as
           the test moves through levels, stages, or distances.
         </p>
+        {!isLive && (
+          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            Start the fitness test before changing levels or recording dropouts.
+          </p>
+        )}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="text-sm font-medium">
@@ -172,6 +179,7 @@ export default function FitnessLiveDropoutClient({
               onChange={(event) => updateCurrentValue(event.target.value)}
               className="mt-1 w-full rounded border p-3 text-base"
               placeholder={resultUnit}
+              disabled={!isLive}
             />
           </label>
 
@@ -182,6 +190,7 @@ export default function FitnessLiveDropoutClient({
               onChange={(event) => updateCurrentText(event.target.value)}
               className="mt-1 w-full rounded border p-3 text-base"
               placeholder="e.g. Level 12.4"
+              disabled={!isLive}
             />
           </label>
         </div>
@@ -190,14 +199,16 @@ export default function FitnessLiveDropoutClient({
           <button
             type="button"
             onClick={() => changeCurrentValue(-1)}
-            className="rounded border px-4 py-3 font-medium"
+            className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!isLive}
           >
             -1 Level
           </button>
           <button
             type="button"
             onClick={() => changeCurrentValue(1)}
-            className="rounded border px-4 py-3 font-medium"
+            className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!isLive}
           >
             +1 Level
           </button>
@@ -253,7 +264,7 @@ export default function FitnessLiveDropoutClient({
                   type="button"
                   onClick={() => undoDropout(player.id)}
                   className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={pendingPlayerId === player.id}
+                  disabled={!isLive || pendingPlayerId === player.id}
                 >
                   {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
                 </button>
@@ -262,9 +273,13 @@ export default function FitnessLiveDropoutClient({
                   type="button"
                   onClick={() => recordDropout(player.id)}
                   className="w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={pendingPlayerId === player.id}
+                  disabled={!isLive || pendingPlayerId === player.id}
                 >
-                  {pendingPlayerId === player.id ? 'Saving...' : 'Record Dropout'}
+                  {!isLive
+                    ? 'Start test first'
+                    : pendingPlayerId === player.id
+                      ? 'Saving...'
+                      : 'Record Dropout'}
                 </button>
               )}
             </article>

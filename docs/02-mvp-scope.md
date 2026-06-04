@@ -108,6 +108,9 @@ Each event records:
 
 ## Dashboards
 
+The current `/` page is a Home/navigation page for the MVP. A future Dashboard
+should contain informative player and team data, graphs, trends and stats.
+
 ### Player Dashboard
 
 Show:
