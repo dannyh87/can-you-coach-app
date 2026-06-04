@@ -117,9 +117,14 @@ export default async function FitnessPage() {
           </p>
         </div>
 
-        <Link href="/teams" className="text-sm text-blue-600 hover:underline">
-          Manage Teams
-        </Link>
+        <div className="flex flex-wrap gap-3 text-sm">
+          <Link href="/fitness/progress" className="text-blue-600 hover:underline">
+            View Progress
+          </Link>
+          <Link href="/teams" className="text-blue-600 hover:underline">
+            Manage Teams
+          </Link>
+        </div>
       </div>
 
       {teams.length === 0 ? (
