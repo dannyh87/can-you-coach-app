@@ -4,7 +4,10 @@ import { notFound } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
-import { startFitnessTestSession } from '@/lib/fitnessSessionActions'
+import {
+  endFitnessTestSession,
+  startFitnessTestSession,
+} from '@/lib/fitnessSessionActions'
 import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
@@ -279,11 +282,22 @@ export default async function FitnessTimerPage({
             <dt className="font-medium text-gray-500">Started</dt>
             <dd>{formatDateTime(session.startedAt)}</dd>
           </div>
+          <div>
+            <dt className="font-medium text-gray-500">Completed</dt>
+            <dd>{formatDateTime(session.completedAt)}</dd>
+          </div>
         </dl>
 
         {session.status === 'IN_PROGRESS' && (
           <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
             LIVE: record each player as they finish.
+          </p>
+        )}
+
+        {session.status === 'COMPLETED' && (
+          <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+            Fitness test completed{session.completedAt ? ` ${formatDateTime(session.completedAt)}` : ''}.
+            Results are now read-only.
           </p>
         )}
 
@@ -308,9 +322,12 @@ export default async function FitnessTimerPage({
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           isLive={session.status === 'IN_PROGRESS'}
+          isCompleted={session.status === 'COMPLETED'}
           startedAt={session.startedAt?.toISOString() ?? null}
+          completedAt={session.completedAt?.toISOString() ?? null}
           players={players}
           startSessionAction={startFitnessTestSession}
+          endSessionAction={endFitnessTestSession}
           saveFinishAction={saveTimedFinish}
           undoFinishAction={undoTimedFinish}
         />

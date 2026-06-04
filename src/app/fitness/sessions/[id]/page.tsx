@@ -38,6 +38,9 @@ const getStatusValue = (formData: FormData, key: string) => {
   return status?.value ?? 'COMPLETED'
 }
 
+const formatResultStatus = (status: FitnessResultStatus) =>
+  statusOptions.find((option) => option.value === status)?.label ?? status
+
 async function saveFitnessResults(formData: FormData) {
   'use server'
 
@@ -59,6 +62,7 @@ async function saveFitnessResults(formData: FormData) {
   })
 
   if (!session) return
+  if (session.status === 'COMPLETED') return
   if (!getFitnessRecordingModes(session.fitnessTestType).manualEntry) return
 
   const activePlayers = await prisma.player.findMany({
@@ -213,6 +217,10 @@ export default async function FitnessSessionPage({
 
   const existingResults = await prisma.fitnessTestResult.findMany({
     where: { fitnessTestSessionId: session.id },
+    include: {
+      player: true,
+    },
+    orderBy: [{ player: { surname: 'asc' } }, { player: { firstName: 'asc' } }],
   })
   const resultsByPlayerId = new Map(
     existingResults.map((result) => [result.playerId, result])
@@ -283,6 +291,11 @@ export default async function FitnessSessionPage({
             <dt className="font-medium text-gray-500">Started</dt>
             <dd>{formatDateTime(session.startedAt)}</dd>
           </div>
+
+          <div>
+            <dt className="font-medium text-gray-500">Completed</dt>
+            <dd>{formatDateTime(session.completedAt)}</dd>
+          </div>
         </dl>
 
         {session.notes && (
@@ -301,6 +314,13 @@ export default async function FitnessSessionPage({
         {session.status === 'IN_PROGRESS' && (
           <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
             This fitness test is live.
+          </p>
+        )}
+
+        {session.status === 'COMPLETED' && (
+          <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+            Fitness test completed{session.completedAt ? ` ${formatDateTime(session.completedAt)}` : ''}.
+            Results are now read-only.
           </p>
         )}
 
@@ -338,7 +358,69 @@ export default async function FitnessSessionPage({
         </div>
       </section>
 
-      {!recordingModes.manualEntry ? (
+      {session.status === 'COMPLETED' ? (
+        <section className="mt-6 rounded-lg border p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Saved Results</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                This completed test is locked. Results can still be viewed in rankings
+                and progress reports.
+              </p>
+            </div>
+            <Link
+              href={`/fitness/sessions/${session.id}/rankings`}
+              className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+            >
+              Rankings
+            </Link>
+          </div>
+
+          {existingResults.length === 0 ? (
+            <p className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500">
+              No results were saved before this test was completed.
+            </p>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Player</th>
+                    <th className="px-3 py-2 font-medium">Squad</th>
+                    <th className="px-3 py-2 font-medium">Result</th>
+                    <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {existingResults.map((result) => (
+                    <tr key={result.id}>
+                      <td className="px-3 py-2 font-medium">
+                        {result.player.firstName} {result.player.surname}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {formatSquadNumber(result.player.squadNumber)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {result.resultText ||
+                          (result.resultValue !== null
+                            ? `${result.resultValue} ${session.fitnessTestType.resultUnit}`
+                            : 'No result')}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {formatResultStatus(result.status)}
+                      </td>
+                      <td className="px-3 py-2 text-gray-600">
+                        {result.notes || 'None'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : !recordingModes.manualEntry ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">Manual entry is not used for this test</h2>
           <p className="mt-2 text-sm text-gray-500">

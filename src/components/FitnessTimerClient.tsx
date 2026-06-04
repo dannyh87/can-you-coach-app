@@ -22,11 +22,19 @@ type FitnessTimerClientProps = {
   higherIsBetter: boolean
   rankingsHref: string
   isLive: boolean
+  isCompleted: boolean
   startedAt: string | null
+  completedAt: string | null
   players: TimerPlayer[]
   startSessionAction: (formData: FormData) =>
     Promise<
       | { ok: true; startedAt: string }
+      | { ok: false; reason: string }
+      | undefined
+    >
+  endSessionAction: (formData: FormData) =>
+    Promise<
+      | { ok: true; completedAt: string }
       | { ok: false; reason: string }
       | undefined
     >
@@ -68,9 +76,12 @@ export default function FitnessTimerClient({
   higherIsBetter,
   rankingsHref,
   isLive,
+  isCompleted,
   startedAt: persistedStartedAt,
+  completedAt,
   players,
   startSessionAction,
+  endSessionAction,
   saveFinishAction,
   undoFinishAction,
 }: FitnessTimerClientProps) {
@@ -81,9 +92,12 @@ export default function FitnessTimerClient({
   const [now, setNow] = useState(0)
   const [message, setMessage] = useState<string | null>(null)
   const [localStartedAtText, setLocalStartedAtText] = useState<string | null>(null)
+  const [localCompletedAt, setLocalCompletedAt] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [isEnding, setIsEnding] = useState(false)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
-  const isSessionLive = isLive || Boolean(localStartedAtText)
+  const isSessionCompleted = isCompleted || Boolean(localCompletedAt)
+  const isSessionLive = !isSessionCompleted && (isLive || Boolean(localStartedAtText))
   const startedAtText =
     localStartedAtText ??
     (persistedStartedAt
@@ -92,6 +106,13 @@ export default function FitnessTimerClient({
           timeStyle: 'short',
         }).format(new Date(persistedStartedAt))
       : null)
+  const effectiveCompletedAt = localCompletedAt ?? completedAt
+  const completedAtText = effectiveCompletedAt
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(new Date(effectiveCompletedAt))
+    : null
 
   useEffect(() => {
     if (!isRunning) return
@@ -115,7 +136,7 @@ export default function FitnessTimerClient({
     timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
 
   const startTimer = async () => {
-    if (isRunning || isStarting) return
+    if (isSessionCompleted || isRunning || isStarting) return
 
     if (!isSessionLive) {
       setIsStarting(true)
@@ -150,7 +171,7 @@ export default function FitnessTimerClient({
   }
 
   const stopTimer = () => {
-    if (!isRunning || startedAt === null) return
+    if (isSessionCompleted || !isRunning || startedAt === null) return
 
     const timestamp = Date.now()
     setBaseElapsed(baseElapsed + (timestamp - startedAt) / 1000)
@@ -169,6 +190,8 @@ export default function FitnessTimerClient({
   }
 
   const resetTimer = () => {
+    if (isSessionCompleted) return
+
     const timestamp = Date.now()
     setBaseElapsed(0)
     setStartedAt(isRunning ? timestamp : null)
@@ -176,7 +199,7 @@ export default function FitnessTimerClient({
   }
 
   const recordFinish = async (playerId: string) => {
-    if (!isSessionLive || !canRecordFinish || pendingPlayerId) return
+    if (!isSessionLive || isSessionCompleted || !canRecordFinish || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -216,7 +239,7 @@ export default function FitnessTimerClient({
   }
 
   const undoFinish = async (playerId: string) => {
-    if (!isSessionLive || pendingPlayerId) return
+    if (!isSessionLive || isSessionCompleted || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -241,6 +264,30 @@ export default function FitnessTimerClient({
     setPendingPlayerId(null)
   }
 
+  const endFitnessTest = async () => {
+    if (!isSessionLive || isSessionCompleted || isEnding) return
+
+    setIsEnding(true)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+
+    const result = await endSessionAction(formData)
+
+    if (result?.ok) {
+      setLocalCompletedAt(result.completedAt)
+      setStartedAt(null)
+      setNow(0)
+      setIsRunning(false)
+      setMessage('Fitness test completed. Results are now read-only.')
+    } else {
+      setMessage(result?.reason ?? 'Fitness test could not be completed. Try again.')
+    }
+
+    setIsEnding(false)
+  }
+
   return (
     <div className="mt-6 space-y-6">
       <section className="rounded-xl border bg-gray-950 p-6 text-white">
@@ -251,9 +298,11 @@ export default function FitnessTimerClient({
             type="button"
             onClick={startTimer}
             className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isRunning || isStarting}
+            disabled={isSessionCompleted || isRunning || isStarting}
           >
-            {isStarting
+            {isSessionCompleted
+              ? 'Results locked'
+              : isStarting
               ? 'Starting...'
               : isSessionLive
                 ? 'Start Timer'
@@ -263,23 +312,39 @@ export default function FitnessTimerClient({
             type="button"
             onClick={stopTimer}
             className="rounded bg-amber-500 px-4 py-3 font-medium text-gray-950 disabled:opacity-50"
-            disabled={!isRunning}
+            disabled={isSessionCompleted || !isRunning}
           >
             Stop
           </button>
           <button
             type="button"
             onClick={resetTimer}
-            className="rounded border border-white/30 px-4 py-3 font-medium text-white"
+            className="rounded border border-white/30 px-4 py-3 font-medium text-white disabled:opacity-50"
+            disabled={isSessionCompleted}
           >
             Reset
           </button>
         </div>
+
+        {isSessionLive && (
+          <button
+            type="button"
+            onClick={endFitnessTest}
+            className="mt-3 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+            disabled={isEnding}
+          >
+            {isEnding ? 'Ending...' : 'End Fitness Test'}
+          </button>
+        )}
         <p className="mt-4 text-sm text-gray-300">
           Resetting the timer does not delete already saved player finish results.
           Use Undo / Reinstate on a player card to remove a saved finish.
         </p>
-        {!isSessionLive && (
+        {isSessionCompleted ? (
+          <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
+            Completed{completedAtText ? `: ${completedAtText}` : ''}. Results are read-only.
+          </p>
+        ) : !isSessionLive && (
           <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
             Start the fitness test before recording finish times.
           </p>
@@ -297,10 +362,14 @@ export default function FitnessTimerClient({
         </p>
       )}
 
-      {allPlayersFinished && (
+      {(allPlayersFinished || isSessionCompleted) && (
         <FitnessTestCompleteSummary
-          title="Test Complete"
-          description="All active players have recorded finish times."
+          title={isSessionCompleted ? 'Completed Results Summary' : 'Test Complete'}
+          description={
+            isSessionCompleted
+              ? 'This test is completed and locked. Saved finish results remain available.'
+              : 'All active players have recorded finish times.'
+          }
           players={timerPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
@@ -340,18 +409,24 @@ export default function FitnessTimerClient({
                   type="button"
                   onClick={() => undoFinish(player.id)}
                   className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!isSessionLive || pendingPlayerId === player.id}
+                  disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
                 >
-                  {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
+                  {isSessionCompleted
+                    ? 'Results locked'
+                    : pendingPlayerId === player.id
+                      ? 'Saving...'
+                      : 'Undo / Reinstate'}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => recordFinish(player.id)}
                   className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!isSessionLive || !canRecordFinish || pendingPlayerId === player.id}
+                  disabled={isSessionCompleted || !isSessionLive || !canRecordFinish || pendingPlayerId === player.id}
                 >
-                  {!isSessionLive
+                  {isSessionCompleted
+                    ? 'Results locked'
+                    : !isSessionLive
                     ? 'Start test first'
                     : pendingPlayerId === player.id
                     ? 'Saving...'

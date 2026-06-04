@@ -280,6 +280,11 @@ export default async function FitnessPage() {
                   <dt className="font-medium text-gray-500">Started</dt>
                   <dd>{formatDateTime(session.startedAt)}</dd>
                 </div>
+
+                <div>
+                  <dt className="font-medium text-gray-500">Completed</dt>
+                  <dd>{formatDateTime(session.completedAt)}</dd>
+                </div>
               </dl>
 
               {session.notes && (
@@ -287,6 +292,23 @@ export default async function FitnessPage() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
+                {session.status === 'COMPLETED' ? (
+                  <>
+                    <Link
+                      href={`/fitness/sessions/${session.id}`}
+                      className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                    >
+                      View Results
+                    </Link>
+                    <Link
+                      href={`/fitness/sessions/${session.id}/rankings`}
+                      className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+                    >
+                      Rankings
+                    </Link>
+                  </>
+                ) : (
+                  <>
                 {recordingModes.manualEntry && (
                   <Link
                     href={`/fitness/sessions/${session.id}`}
@@ -320,6 +342,8 @@ export default async function FitnessPage() {
                 >
                   Rankings
                 </Link>
+                  </>
+                )}
               </div>
             </article>
             )

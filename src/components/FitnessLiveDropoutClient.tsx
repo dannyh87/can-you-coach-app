@@ -22,11 +22,19 @@ type FitnessLiveDropoutClientProps = {
   higherIsBetter: boolean
   rankingsHref: string
   isLive: boolean
+  isCompleted: boolean
   startedAt: string | null
+  completedAt: string | null
   players: DropoutPlayer[]
   startSessionAction: (formData: FormData) =>
     Promise<
       | { ok: true; startedAt: string }
+      | { ok: false; reason: string }
+      | undefined
+    >
+  endSessionAction: (formData: FormData) =>
+    Promise<
+      | { ok: true; completedAt: string }
       | { ok: false; reason: string }
       | undefined
     >
@@ -60,15 +68,20 @@ export default function FitnessLiveDropoutClient({
   higherIsBetter,
   rankingsHref,
   isLive,
+  isCompleted,
   startedAt,
+  completedAt,
   players,
   startSessionAction,
+  endSessionAction,
   saveDropoutAction,
   undoDropoutAction,
 }: FitnessLiveDropoutClientProps) {
   const [dropoutPlayers, setDropoutPlayers] = useState(players)
   const [localStartedAt, setLocalStartedAt] = useState<string | null>(null)
+  const [localCompletedAt, setLocalCompletedAt] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
+  const [isEnding, setIsEnding] = useState(false)
   const [currentResult, setCurrentResult] = useState({
     value: '1',
     text: 'Level 1',
@@ -79,8 +92,10 @@ export default function FitnessLiveDropoutClient({
   const completedPlayers = dropoutPlayers.filter((player) => player.result)
   const allPlayersFinished =
     dropoutPlayers.length > 0 && completedPlayers.length === dropoutPlayers.length
-  const isSessionLive = isLive || Boolean(localStartedAt)
+  const isSessionCompleted = isCompleted || Boolean(localCompletedAt)
+  const isSessionLive = !isSessionCompleted && (isLive || Boolean(localStartedAt))
   const effectiveStartedAt = localStartedAt ?? startedAt
+  const effectiveCompletedAt = localCompletedAt ?? completedAt
 
   const setSharedCurrentResult = (nextResult: { value: string; text: string }) => {
     currentResultRef.current = nextResult
@@ -106,7 +121,7 @@ export default function FitnessLiveDropoutClient({
   }
 
   const recordDropout = async (playerId: string) => {
-    if (!isSessionLive || pendingPlayerId) return
+    if (!isSessionLive || isSessionCompleted || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -143,7 +158,7 @@ export default function FitnessLiveDropoutClient({
   }
 
   const startFitnessTest = async () => {
-    if (isSessionLive || isStarting) return
+    if (isSessionLive || isSessionCompleted || isStarting) return
 
     setIsStarting(true)
     setMessage(null)
@@ -171,8 +186,36 @@ export default function FitnessLiveDropoutClient({
       }).format(new Date(effectiveStartedAt))
     : null
 
+  const formattedCompletedAt = effectiveCompletedAt
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(new Date(effectiveCompletedAt))
+    : null
+
+  const endFitnessTest = async () => {
+    if (!isSessionLive || isSessionCompleted || isEnding) return
+
+    setIsEnding(true)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+
+    const result = await endSessionAction(formData)
+
+    if (result?.ok) {
+      setLocalCompletedAt(result.completedAt)
+      setMessage('Fitness test completed. Results are now read-only.')
+    } else {
+      setMessage(result?.reason ?? 'Fitness test could not be completed. Try again.')
+    }
+
+    setIsEnding(false)
+  }
+
   const undoDropout = async (playerId: string) => {
-    if (pendingPlayerId) return
+    if (!isSessionLive || isSessionCompleted || pendingPlayerId) return
 
     setPendingPlayerId(playerId)
     setMessage(null)
@@ -205,7 +248,11 @@ export default function FitnessLiveDropoutClient({
           Set this once, then tap each player as they drop out. You can adjust it as
           the test moves through levels, stages, or distances.
         </p>
-        {isSessionLive ? (
+        {isSessionCompleted ? (
+          <p className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+            Completed{formattedCompletedAt ? `: ${formattedCompletedAt}` : ''}. Results are read-only.
+          </p>
+        ) : isSessionLive ? (
           <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
             LIVE{formattedStartedAt ? `: started ${formattedStartedAt}` : ''}
           </p>
@@ -215,7 +262,7 @@ export default function FitnessLiveDropoutClient({
           </p>
         )}
 
-        {!isSessionLive && (
+        {!isSessionLive && !isSessionCompleted && (
           <button
             type="button"
             onClick={startFitnessTest}
@@ -223,6 +270,17 @@ export default function FitnessLiveDropoutClient({
             disabled={isStarting}
           >
             {isStarting ? 'Starting...' : 'Start Fitness Test'}
+          </button>
+        )}
+
+        {isSessionLive && (
+          <button
+            type="button"
+            onClick={endFitnessTest}
+            className="mt-4 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isEnding}
+          >
+            {isEnding ? 'Ending...' : 'End Fitness Test'}
           </button>
         )}
 
@@ -278,10 +336,14 @@ export default function FitnessLiveDropoutClient({
         </p>
       )}
 
-      {allPlayersFinished && (
+      {(allPlayersFinished || isSessionCompleted) && (
         <FitnessTestCompleteSummary
-          title="Test Complete"
-          description="All active players have recorded dropout results."
+          title={isSessionCompleted ? 'Completed Results Summary' : 'Test Complete'}
+          description={
+            isSessionCompleted
+              ? 'This test is completed and locked. Saved dropout results remain available.'
+              : 'All active players have recorded dropout results.'
+          }
           players={dropoutPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
@@ -321,18 +383,24 @@ export default function FitnessLiveDropoutClient({
                   type="button"
                   onClick={() => undoDropout(player.id)}
                   className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!isSessionLive || pendingPlayerId === player.id}
+                  disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
                 >
-                  {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
+                  {isSessionCompleted
+                    ? 'Results locked'
+                    : pendingPlayerId === player.id
+                      ? 'Saving...'
+                      : 'Undo / Reinstate'}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => recordDropout(player.id)}
                   className="w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={!isSessionLive || pendingPlayerId === player.id}
+                  disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
                 >
-                  {!isSessionLive
+                  {isSessionCompleted
+                    ? 'Results locked'
+                    : !isSessionLive
                     ? 'Start test first'
                     : pendingPlayerId === player.id
                       ? 'Saving...'
