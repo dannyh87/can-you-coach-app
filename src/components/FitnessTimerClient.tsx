@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 
+import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
+
 type TimerPlayer = {
   id: string
   firstName: string
@@ -16,9 +18,22 @@ type TimerPlayer = {
 
 type FitnessTimerClientProps = {
   sessionId: string
+  resultUnit: string
+  higherIsBetter: boolean
+  rankingsHref: string
   players: TimerPlayer[]
-  saveFinishAction: (formData: FormData) => Promise<void>
-  undoFinishAction: (formData: FormData) => Promise<void>
+  saveFinishAction: (formData: FormData) => Promise<
+    | {
+        ok: true
+        playerId: string
+        resultValue: number
+        resultText: string | null
+      }
+    | { ok: false }
+    | undefined
+  >
+  undoFinishAction: (formData: FormData) =>
+    Promise<{ ok: true; playerId: string } | { ok: false } | undefined>
 }
 
 const formatElapsed = (seconds: number) => {
@@ -36,16 +51,25 @@ const formatSavedResult = (result: TimerPlayer['result']) => {
   return 'Finished'
 }
 
+const formatSquadNumber = (squadNumber: number | null) =>
+  squadNumber === null ? 'No squad number' : `#${squadNumber}`
+
 export default function FitnessTimerClient({
   sessionId,
+  resultUnit,
+  higherIsBetter,
+  rankingsHref,
   players,
   saveFinishAction,
   undoFinishAction,
 }: FitnessTimerClientProps) {
+  const [timerPlayers, setTimerPlayers] = useState(players)
   const [isRunning, setIsRunning] = useState(false)
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [baseElapsed, setBaseElapsed] = useState(0)
   const [now, setNow] = useState(0)
+  const [message, setMessage] = useState<string | null>(null)
+  const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isRunning) return
@@ -64,6 +88,9 @@ export default function FitnessTimerClient({
   const roundedElapsed = Math.round(elapsedSeconds * 10) / 10
   const formattedElapsed = formatElapsed(roundedElapsed)
   const canRecordFinish = roundedElapsed > 0
+  const completedPlayers = timerPlayers.filter((player) => player.result)
+  const allPlayersFinished =
+    timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
 
   const startTimer = () => {
     if (isRunning) return
@@ -84,11 +111,86 @@ export default function FitnessTimerClient({
     setIsRunning(false)
   }
 
+  const stopTimerAtElapsed = (elapsed: number) => {
+    if (!isRunning) return
+
+    setBaseElapsed(elapsed)
+    setStartedAt(null)
+    setNow(0)
+    setIsRunning(false)
+  }
+
   const resetTimer = () => {
     const timestamp = Date.now()
     setBaseElapsed(0)
     setStartedAt(isRunning ? timestamp : null)
     setNow(timestamp)
+  }
+
+  const recordFinish = async (playerId: string) => {
+    if (!canRecordFinish || pendingPlayerId) return
+
+    setPendingPlayerId(playerId)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+    formData.set('playerId', playerId)
+    formData.set('resultValue', String(roundedElapsed))
+    formData.set('resultText', formattedElapsed)
+
+    const result = await saveFinishAction(formData)
+
+    if (result?.ok) {
+      const nextPlayers = timerPlayers.map((player) =>
+        player.id === result.playerId
+          ? {
+              ...player,
+              result: {
+                resultValue: result.resultValue,
+                resultText: result.resultText,
+              },
+            }
+          : player
+      )
+
+      setTimerPlayers(nextPlayers)
+      setMessage('Finish recorded.')
+
+      if (nextPlayers.every((player) => player.result)) {
+        stopTimerAtElapsed(roundedElapsed)
+      }
+    } else {
+      setMessage('Finish could not be recorded. Try again.')
+    }
+
+    setPendingPlayerId(null)
+  }
+
+  const undoFinish = async (playerId: string) => {
+    if (pendingPlayerId) return
+
+    setPendingPlayerId(playerId)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+    formData.set('playerId', playerId)
+
+    const result = await undoFinishAction(formData)
+
+    if (result?.ok) {
+      setTimerPlayers((currentPlayers) =>
+        currentPlayers.map((player) =>
+          player.id === result.playerId ? { ...player, result: null } : player
+        )
+      )
+      setMessage('Player reinstated.')
+    } else {
+      setMessage('Player could not be reinstated. Try again.')
+    }
+
+    setPendingPlayerId(null)
   }
 
   return (
@@ -127,8 +229,26 @@ export default function FitnessTimerClient({
         </p>
       </section>
 
+      {message && (
+        <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          {message}
+        </p>
+      )}
+
+      {allPlayersFinished && (
+        <FitnessTestCompleteSummary
+          title="Test Complete"
+          description="All active players have recorded finish times."
+          players={timerPlayers}
+          resultUnit={resultUnit}
+          higherIsBetter={higherIsBetter}
+          statusLabel="Completed"
+          rankingsHref={rankingsHref}
+        />
+      )}
+
       <section className="grid gap-4 md:grid-cols-2">
-        {players.map((player) => {
+        {timerPlayers.map((player) => {
           const hasResult = Boolean(player.result)
 
           return (
@@ -144,7 +264,8 @@ export default function FitnessTimerClient({
                     {player.firstName} {player.surname}
                   </h2>
                   <p className="text-sm text-gray-500">
-                    #{player.squadNumber} - {player.preferredPosition ?? 'No position'}
+                    {formatSquadNumber(player.squadNumber)} -{' '}
+                    {player.preferredPosition ?? 'No position'}
                   </p>
                 </div>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
@@ -153,28 +274,27 @@ export default function FitnessTimerClient({
               </div>
 
               {hasResult ? (
-                <form action={undoFinishAction}>
-                  <input type="hidden" name="fitnessTestSessionId" value={sessionId} />
-                  <input type="hidden" name="playerId" value={player.id} />
-                  <button className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700">
-                    Undo / Reinstate
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => undoFinish(player.id)}
+                  className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={pendingPlayerId === player.id}
+                >
+                  {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
+                </button>
               ) : (
-                <form action={saveFinishAction}>
-                  <input type="hidden" name="fitnessTestSessionId" value={sessionId} />
-                  <input type="hidden" name="playerId" value={player.id} />
-                  <input type="hidden" name="resultValue" value={roundedElapsed} />
-                  <input type="hidden" name="resultText" value={formattedElapsed} />
-                  <button
-                    className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={!canRecordFinish}
-                  >
-                    {canRecordFinish
+                <button
+                  type="button"
+                  onClick={() => recordFinish(player.id)}
+                  className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={!canRecordFinish || pendingPlayerId === player.id}
+                >
+                  {pendingPlayerId === player.id
+                    ? 'Saving...'
+                    : canRecordFinish
                       ? `Record Finish at ${formattedElapsed}`
                       : 'Start timer first'}
-                  </button>
-                </form>
+                </button>
               )}
             </article>
           )

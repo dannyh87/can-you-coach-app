@@ -9,6 +9,9 @@ const formatDate = (date: Date | null) => {
   return new Intl.DateTimeFormat('en-GB').format(date)
 }
 
+const formatSquadNumber = (squadNumber: number | null) =>
+  squadNumber === null ? 'Not set' : squadNumber
+
 export default async function PlayerPage({
   params,
 }: {
@@ -68,7 +71,9 @@ export default async function PlayerPage({
         <dl className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border p-4">
             <dt className="text-sm text-gray-500">Squad Number</dt>
-            <dd className="mt-1 text-xl font-bold">{player.squadNumber}</dd>
+            <dd className="mt-1 text-xl font-bold">
+              {formatSquadNumber(player.squadNumber)}
+            </dd>
           </div>
 
           <div className="rounded-lg border p-4">

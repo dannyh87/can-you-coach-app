@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getLocalUser } from '@/lib/localUser'
@@ -58,10 +58,10 @@ async function saveTimedFinish(formData: FormData) {
   const resultValue = getOptionalFloatValue(formData, 'resultValue')
   const resultText = getTextValue(formData, 'resultText')
 
-  if (!sessionId || !playerId || resultValue === null) return
+  if (!sessionId || !playerId || resultValue === null) return { ok: false }
 
   const session = await getOwnedSession(sessionId)
-  if (!session) return
+  if (!session) return { ok: false }
 
   const player = await prisma.player.findFirst({
     where: {
@@ -72,7 +72,7 @@ async function saveTimedFinish(formData: FormData) {
     select: { id: true },
   })
 
-  if (!player) return
+  if (!player) return { ok: false }
 
   await prisma.fitnessTestResult.upsert({
     where: {
@@ -97,7 +97,12 @@ async function saveTimedFinish(formData: FormData) {
 
   revalidateFitnessSessionPaths(session.id)
 
-  redirect(`/fitness/sessions/${session.id}/timer?saved=finish`)
+  return {
+    ok: true,
+    playerId: player.id,
+    resultValue,
+    resultText: resultText || null,
+  }
 }
 
 async function undoTimedFinish(formData: FormData) {
@@ -106,9 +111,9 @@ async function undoTimedFinish(formData: FormData) {
   const sessionId = getTextValue(formData, 'fitnessTestSessionId')
   const playerId = getTextValue(formData, 'playerId')
 
-  if (!sessionId || !playerId) return
+  if (!sessionId || !playerId) return { ok: false }
   const session = await getOwnedSession(sessionId)
-  if (!session) return
+  if (!session) return { ok: false }
 
   await prisma.fitnessTestResult.deleteMany({
     where: {
@@ -123,7 +128,7 @@ async function undoTimedFinish(formData: FormData) {
 
   revalidateFitnessSessionPaths(session.id)
 
-  redirect(`/fitness/sessions/${session.id}/timer?saved=undo`)
+  return { ok: true, playerId }
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
@@ -253,6 +258,9 @@ export default async function FitnessTimerPage({
       ) : (
         <FitnessTimerClient
           sessionId={session.id}
+          resultUnit={session.fitnessTestType.resultUnit}
+          higherIsBetter={session.fitnessTestType.higherIsBetter}
+          rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           players={players}
           saveFinishAction={saveTimedFinish}
           undoFinishAction={undoTimedFinish}

@@ -115,6 +115,9 @@ async function saveFitnessResults(formData: FormData) {
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
+const formatSquadNumber = (squadNumber: number | null) =>
+  squadNumber === null ? 'No squad number' : `#${squadNumber}`
+
 export default async function FitnessSessionPage({
   params,
   searchParams,
@@ -280,7 +283,8 @@ export default async function FitnessSessionPage({
                     {player.firstName} {player.surname}
                   </h3>
                   <p className="text-sm text-gray-500">
-                    #{player.squadNumber} - {player.preferredPosition ?? 'No position'}
+                    {formatSquadNumber(player.squadNumber)} -{' '}
+                    {player.preferredPosition ?? 'No position'}
                   </p>
                 </div>
 

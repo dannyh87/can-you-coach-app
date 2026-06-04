@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getLocalUser } from '@/lib/localUser'
@@ -58,10 +58,10 @@ async function saveDropoutResult(formData: FormData) {
   const resultValue = getOptionalFloatValue(formData, 'resultValue')
   const resultText = getTextValue(formData, 'resultText')
 
-  if (!sessionId || !playerId) return
+  if (!sessionId || !playerId) return { ok: false }
 
   const session = await getOwnedSession(sessionId)
-  if (!session) return
+  if (!session) return { ok: false }
 
   const player = await prisma.player.findFirst({
     where: {
@@ -72,7 +72,7 @@ async function saveDropoutResult(formData: FormData) {
     select: { id: true },
   })
 
-  if (!player) return
+  if (!player) return { ok: false }
 
   await prisma.fitnessTestResult.upsert({
     where: {
@@ -97,7 +97,12 @@ async function saveDropoutResult(formData: FormData) {
 
   revalidateFitnessSessionPaths(session.id)
 
-  redirect(`/fitness/sessions/${session.id}/live?saved=dropout`)
+  return {
+    ok: true,
+    playerId: player.id,
+    resultValue,
+    resultText: resultText || null,
+  }
 }
 
 async function undoDropoutResult(formData: FormData) {
@@ -106,10 +111,10 @@ async function undoDropoutResult(formData: FormData) {
   const sessionId = getTextValue(formData, 'fitnessTestSessionId')
   const playerId = getTextValue(formData, 'playerId')
 
-  if (!sessionId || !playerId) return
+  if (!sessionId || !playerId) return { ok: false }
 
   const session = await getOwnedSession(sessionId)
-  if (!session) return
+  if (!session) return { ok: false }
 
   await prisma.fitnessTestResult.deleteMany({
     where: {
@@ -124,7 +129,7 @@ async function undoDropoutResult(formData: FormData) {
 
   revalidateFitnessSessionPaths(session.id)
 
-  redirect(`/fitness/sessions/${session.id}/live?saved=undo`)
+  return { ok: true, playerId }
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
@@ -241,8 +246,8 @@ export default async function FitnessLiveDropoutPage({
         </dl>
 
         <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-          Use this mode for staged endurance tests. Enter the current level, stage, or
-          distance on the player card, then record the player when they drop out.
+          Use this mode for staged endurance tests. Set the current level, stage, or
+          distance at the top of the screen, then record players as they drop out.
           Archived players are excluded.
         </p>
       </section>
@@ -258,6 +263,8 @@ export default async function FitnessLiveDropoutPage({
         <FitnessLiveDropoutClient
           sessionId={session.id}
           resultUnit={session.fitnessTestType.resultUnit}
+          higherIsBetter={session.fitnessTestType.higherIsBetter}
+          rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           players={players}
           saveDropoutAction={saveDropoutResult}
           undoDropoutAction={undoDropoutResult}

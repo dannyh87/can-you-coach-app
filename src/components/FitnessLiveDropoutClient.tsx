@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 
+import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
+
 type DropoutPlayer = {
   id: string
   firstName: string
@@ -17,9 +19,21 @@ type DropoutPlayer = {
 type FitnessLiveDropoutClientProps = {
   sessionId: string
   resultUnit: string
+  higherIsBetter: boolean
+  rankingsHref: string
   players: DropoutPlayer[]
-  saveDropoutAction: (formData: FormData) => Promise<void>
-  undoDropoutAction: (formData: FormData) => Promise<void>
+  saveDropoutAction: (formData: FormData) => Promise<
+    | {
+        ok: true
+        playerId: string
+        resultValue: number | null
+        resultText: string | null
+      }
+    | { ok: false }
+    | undefined
+  >
+  undoDropoutAction: (formData: FormData) =>
+    Promise<{ ok: true; playerId: string } | { ok: false } | undefined>
 }
 
 const formatResult = (result: DropoutPlayer['result']) => {
@@ -29,15 +43,26 @@ const formatResult = (result: DropoutPlayer['result']) => {
   return 'Recorded'
 }
 
+const formatSquadNumber = (squadNumber: number | null) =>
+  squadNumber === null ? 'No squad number' : `#${squadNumber}`
+
 export default function FitnessLiveDropoutClient({
   sessionId,
   resultUnit,
+  higherIsBetter,
+  rankingsHref,
   players,
   saveDropoutAction,
   undoDropoutAction,
 }: FitnessLiveDropoutClientProps) {
+  const [dropoutPlayers, setDropoutPlayers] = useState(players)
   const [currentValue, setCurrentValue] = useState('')
   const [currentText, setCurrentText] = useState('')
+  const [message, setMessage] = useState<string | null>(null)
+  const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
+  const completedPlayers = dropoutPlayers.filter((player) => player.result)
+  const allPlayersFinished =
+    dropoutPlayers.length > 0 && completedPlayers.length === dropoutPlayers.length
 
   const changeCurrentValue = (amount: number) => {
     const numberValue = Number(currentValue || 0)
@@ -48,6 +73,68 @@ export default function FitnessLiveDropoutClient({
 
     setCurrentValue(formattedValue)
     if (!currentText) setCurrentText(formattedValue)
+  }
+
+  const recordDropout = async (playerId: string) => {
+    if (pendingPlayerId) return
+
+    setPendingPlayerId(playerId)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+    formData.set('playerId', playerId)
+    formData.set('resultValue', currentValue)
+    formData.set('resultText', currentText)
+
+    const result = await saveDropoutAction(formData)
+
+    if (result?.ok) {
+      setDropoutPlayers((currentPlayers) =>
+        currentPlayers.map((player) =>
+          player.id === result.playerId
+            ? {
+                ...player,
+                result: {
+                  resultValue: result.resultValue,
+                  resultText: result.resultText,
+                },
+              }
+            : player
+        )
+      )
+      setMessage('Dropout recorded.')
+    } else {
+      setMessage('Dropout could not be recorded. Try again.')
+    }
+
+    setPendingPlayerId(null)
+  }
+
+  const undoDropout = async (playerId: string) => {
+    if (pendingPlayerId) return
+
+    setPendingPlayerId(playerId)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('fitnessTestSessionId', sessionId)
+    formData.set('playerId', playerId)
+
+    const result = await undoDropoutAction(formData)
+
+    if (result?.ok) {
+      setDropoutPlayers((currentPlayers) =>
+        currentPlayers.map((player) =>
+          player.id === result.playerId ? { ...player, result: null } : player
+        )
+      )
+      setMessage('Player reinstated.')
+    } else {
+      setMessage('Player could not be reinstated. Try again.')
+    }
+
+    setPendingPlayerId(null)
   }
 
   return (
@@ -101,8 +188,26 @@ export default function FitnessLiveDropoutClient({
         </div>
       </section>
 
+      {message && (
+        <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          {message}
+        </p>
+      )}
+
+      {allPlayersFinished && (
+        <FitnessTestCompleteSummary
+          title="Test Complete"
+          description="All active players have recorded dropout results."
+          players={dropoutPlayers}
+          resultUnit={resultUnit}
+          higherIsBetter={higherIsBetter}
+          statusLabel="Dropped out"
+          rankingsHref={rankingsHref}
+        />
+      )}
+
       <section className="grid gap-4 md:grid-cols-2">
-        {players.map((player) => {
+        {dropoutPlayers.map((player) => {
           const hasResult = Boolean(player.result)
 
           return (
@@ -118,7 +223,8 @@ export default function FitnessLiveDropoutClient({
                     {player.firstName} {player.surname}
                   </h2>
                   <p className="text-sm text-gray-500">
-                    #{player.squadNumber} - {player.preferredPosition ?? 'No position'}
+                    {formatSquadNumber(player.squadNumber)} -{' '}
+                    {player.preferredPosition ?? 'No position'}
                   </p>
                 </div>
                 <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
@@ -127,23 +233,23 @@ export default function FitnessLiveDropoutClient({
               </div>
 
               {hasResult ? (
-                <form action={undoDropoutAction}>
-                  <input type="hidden" name="fitnessTestSessionId" value={sessionId} />
-                  <input type="hidden" name="playerId" value={player.id} />
-                  <button className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700">
-                    Undo / Reinstate
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => undoDropout(player.id)}
+                  className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={pendingPlayerId === player.id}
+                >
+                  {pendingPlayerId === player.id ? 'Saving...' : 'Undo / Reinstate'}
+                </button>
               ) : (
-                <form action={saveDropoutAction}>
-                  <input type="hidden" name="fitnessTestSessionId" value={sessionId} />
-                  <input type="hidden" name="playerId" value={player.id} />
-                  <input type="hidden" name="resultValue" value={currentValue} />
-                  <input type="hidden" name="resultText" value={currentText} />
-                  <button className="w-full rounded bg-green-700 px-4 py-3 font-medium text-white">
-                    Record Dropout
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={() => recordDropout(player.id)}
+                  className="w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={pendingPlayerId === player.id}
+                >
+                  {pendingPlayerId === player.id ? 'Saving...' : 'Record Dropout'}
+                </button>
               )}
             </article>
           )

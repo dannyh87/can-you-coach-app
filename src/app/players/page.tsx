@@ -22,13 +22,16 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-const getRequiredNumberValue = (formData: FormData, key: string) => {
+const getOptionalNumberValue = (formData: FormData, key: string) => {
   const value = getTextValue(formData, key)
   if (!value) return null
 
   const numberValue = Number(value)
   return Number.isInteger(numberValue) ? numberValue : null
 }
+
+const formatSquadNumber = (squadNumber: number | null) =>
+  squadNumber === null ? 'No squad number' : `#${squadNumber}`
 
 const getOptionalDateValue = (formData: FormData, key: string) => {
   const value = getTextValue(formData, key)
@@ -71,12 +74,11 @@ async function createPlayer(formData: FormData) {
   const firstName = getTextValue(formData, 'firstName')
   const surname = getTextValue(formData, 'surname')
   const preferredPosition = getTextValue(formData, 'preferredPosition')
-  const squadNumber = getRequiredNumberValue(formData, 'squadNumber')
+  const squadNumber = getOptionalNumberValue(formData, 'squadNumber')
   const dateOfBirth = getOptionalDateValue(formData, 'dateOfBirth')
   const joinedClubDate = getOptionalDateValue(formData, 'joinedClubDate')
 
   if (!teamId || !firstName || !surname || !preferredPosition) return
-  if (squadNumber === null) return
   if (!(await userOwnsTeam(user.id, teamId))) return
 
   await prisma.player.create({
@@ -104,12 +106,11 @@ async function updatePlayer(formData: FormData) {
   const firstName = getTextValue(formData, 'firstName')
   const surname = getTextValue(formData, 'surname')
   const preferredPosition = getTextValue(formData, 'preferredPosition')
-  const squadNumber = getRequiredNumberValue(formData, 'squadNumber')
+  const squadNumber = getOptionalNumberValue(formData, 'squadNumber')
   const dateOfBirth = getOptionalDateValue(formData, 'dateOfBirth')
   const joinedClubDate = getOptionalDateValue(formData, 'joinedClubDate')
 
   if (!id || !teamId || !firstName || !surname || !preferredPosition) return
-  if (squadNumber === null) return
   if (!(await userOwnsPlayer(user.id, id))) return
   if (!(await userOwnsTeam(user.id, teamId))) return
 
@@ -249,12 +250,11 @@ function PlayerForm({
       </label>
 
       <label className="text-sm font-medium">
-        Squad number
+        Squad number optional
         <input
           name="squadNumber"
           type="number"
           min="0"
-          required
           defaultValue={player?.squadNumber ?? ''}
           className="mt-1 w-full rounded border p-2"
         />
@@ -328,8 +328,8 @@ function PlayerCard({
             {player.firstName} {player.surname}
           </Link>
           <p className="mt-1 text-sm text-gray-500">
-            #{player.squadNumber} - {player.preferredPosition} - {player.team.club.name} /{' '}
-            {player.team.name}
+            {formatSquadNumber(player.squadNumber)} - {player.preferredPosition} -{' '}
+            {player.team.club.name} / {player.team.name}
           </p>
         </div>
 
