@@ -24,7 +24,11 @@ type FitnessLiveDropoutClientProps = {
   isLive: boolean
   players: DropoutPlayer[]
   startSessionAction: (formData: FormData) =>
-    Promise<{ ok: true; startedAt: string } | { ok: false } | undefined>
+    Promise<
+      | { ok: true; startedAt: string }
+      | { ok: false; reason: string }
+      | undefined
+    >
   saveDropoutAction: (formData: FormData) => Promise<
     | {
         ok: true
@@ -143,6 +147,7 @@ export default function FitnessLiveDropoutClient({
 
     const formData = new FormData()
     formData.set('fitnessTestSessionId', sessionId)
+    formData.set('mode', 'liveDropout')
 
     const result = await startSessionAction(formData)
 
@@ -151,7 +156,7 @@ export default function FitnessLiveDropoutClient({
       setStartedAt(result.startedAt)
       setMessage('Fitness test started.')
     } else {
-      setMessage('Fitness test could not be started. Try again.')
+      setMessage(result?.reason ?? 'Fitness test could not be started. Try again.')
     }
 
     setIsStarting(false)

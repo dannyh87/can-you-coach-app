@@ -24,7 +24,11 @@ type FitnessTimerClientProps = {
   isLive: boolean
   players: TimerPlayer[]
   startSessionAction: (formData: FormData) =>
-    Promise<{ ok: true; startedAt: string } | { ok: false } | undefined>
+    Promise<
+      | { ok: true; startedAt: string }
+      | { ok: false; reason: string }
+      | undefined
+    >
   saveFinishAction: (formData: FormData) => Promise<
     | {
         ok: true
@@ -109,11 +113,12 @@ export default function FitnessTimerClient({
 
       const formData = new FormData()
       formData.set('fitnessTestSessionId', sessionId)
+      formData.set('mode', 'liveTimedFinish')
 
       const result = await startSessionAction(formData)
 
       if (!result?.ok) {
-        setMessage('Fitness test could not be started. Try again.')
+        setMessage(result?.reason ?? 'Fitness test could not be started. Try again.')
         setIsStarting(false)
         return
       }

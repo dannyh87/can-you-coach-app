@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import { startFitnessTestSession } from '@/lib/fitnessSessionActions'
 import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
@@ -142,36 +143,6 @@ async function undoTimedFinish(formData: FormData) {
   revalidateFitnessSessionPaths(session.id)
 
   return { ok: true, playerId }
-}
-
-async function startFitnessTestSession(formData: FormData) {
-  'use server'
-
-  const sessionId = getTextValue(formData, 'fitnessTestSessionId')
-
-  if (!sessionId) return { ok: false }
-  const session = await getOwnedSession(sessionId)
-  if (!session || session.status !== 'DRAFT') return { ok: false }
-  if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
-    return { ok: false }
-  }
-
-  const startedAt = new Date()
-  await prisma.fitnessTestSession.update({
-    where: { id: session.id },
-    data: {
-      status: 'IN_PROGRESS',
-      startedAt,
-    },
-  })
-
-  revalidateFitnessSessionPaths(session.id)
-  revalidatePath(`/fitness/sessions/${session.id}/live`)
-
-  return {
-    ok: true,
-    startedAt: startedAt.toISOString(),
-  }
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
