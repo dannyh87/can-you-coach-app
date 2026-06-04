@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
 
@@ -56,23 +56,38 @@ export default function FitnessLiveDropoutClient({
   undoDropoutAction,
 }: FitnessLiveDropoutClientProps) {
   const [dropoutPlayers, setDropoutPlayers] = useState(players)
-  const [currentValue, setCurrentValue] = useState('')
-  const [currentText, setCurrentText] = useState('')
+  const [currentResult, setCurrentResult] = useState({
+    value: '1',
+    text: 'Level 1',
+  })
+  const currentResultRef = useRef(currentResult)
   const [message, setMessage] = useState<string | null>(null)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
   const completedPlayers = dropoutPlayers.filter((player) => player.result)
   const allPlayersFinished =
     dropoutPlayers.length > 0 && completedPlayers.length === dropoutPlayers.length
 
+  const setSharedCurrentResult = (nextResult: { value: string; text: string }) => {
+    currentResultRef.current = nextResult
+    setCurrentResult(nextResult)
+  }
+
   const changeCurrentValue = (amount: number) => {
-    const numberValue = Number(currentValue || 0)
+    const numberValue = Number(currentResultRef.current.value || 0)
     const nextValue = Number.isFinite(numberValue) ? numberValue + amount : amount
     const formattedValue = Number.isInteger(nextValue)
       ? String(nextValue)
       : nextValue.toFixed(1)
 
-    setCurrentValue(formattedValue)
-    if (!currentText) setCurrentText(formattedValue)
+    setSharedCurrentResult({ value: formattedValue, text: `Level ${formattedValue}` })
+  }
+
+  const updateCurrentValue = (value: string) => {
+    setSharedCurrentResult({ value, text: value ? `Level ${value}` : '' })
+  }
+
+  const updateCurrentText = (text: string) => {
+    setSharedCurrentResult({ value: currentResultRef.current.value, text })
   }
 
   const recordDropout = async (playerId: string) => {
@@ -82,10 +97,11 @@ export default function FitnessLiveDropoutClient({
     setMessage(null)
 
     const formData = new FormData()
+    const resultAtDropout = currentResultRef.current
     formData.set('fitnessTestSessionId', sessionId)
     formData.set('playerId', playerId)
-    formData.set('resultValue', currentValue)
-    formData.set('resultText', currentText)
+    formData.set('resultValue', resultAtDropout.value)
+    formData.set('resultText', resultAtDropout.text || resultAtDropout.value)
 
     const result = await saveDropoutAction(formData)
 
@@ -152,8 +168,8 @@ export default function FitnessLiveDropoutClient({
             <input
               type="number"
               step="any"
-              value={currentValue}
-              onChange={(event) => setCurrentValue(event.target.value)}
+              value={currentResult.value}
+              onChange={(event) => updateCurrentValue(event.target.value)}
               className="mt-1 w-full rounded border p-3 text-base"
               placeholder={resultUnit}
             />
@@ -162,8 +178,8 @@ export default function FitnessLiveDropoutClient({
           <label className="text-sm font-medium">
             Current display result
             <input
-              value={currentText}
-              onChange={(event) => setCurrentText(event.target.value)}
+              value={currentResult.text}
+              onChange={(event) => updateCurrentText(event.target.value)}
               className="mt-1 w-full rounded border p-3 text-base"
               placeholder="e.g. Level 12.4"
             />
@@ -176,14 +192,14 @@ export default function FitnessLiveDropoutClient({
             onClick={() => changeCurrentValue(-1)}
             className="rounded border px-4 py-3 font-medium"
           >
-            -1
+            -1 Level
           </button>
           <button
             type="button"
             onClick={() => changeCurrentValue(1)}
             className="rounded border px-4 py-3 font-medium"
           >
-            +1
+            +1 Level
           </button>
         </div>
       </section>

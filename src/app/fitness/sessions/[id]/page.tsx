@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
 
 import { getLocalUser } from '@/lib/localUser'
+import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { prisma } from '@/lib/prisma'
 
 const statusOptions: { label: string; value: FitnessResultStatus }[] = [
@@ -50,9 +51,11 @@ async function saveFitnessResults(formData: FormData) {
         },
       },
     },
+    include: { fitnessTestType: true },
   })
 
   if (!session) return
+  if (!getFitnessRecordingModes(session.fitnessTestType).manualEntry) return
 
   const activePlayers = await prisma.player.findMany({
     where: {
@@ -149,6 +152,7 @@ export default async function FitnessSessionPage({
   })
 
   if (!session) notFound()
+  const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
 
   const activePlayers = await prisma.player.findMany({
     where: {
@@ -217,24 +221,30 @@ export default async function FitnessSessionPage({
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link
-            href={`/fitness/sessions/${session.id}`}
-            className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-          >
-            Manual Entry
-          </Link>
-          <Link
-            href={`/fitness/sessions/${session.id}/live`}
-            className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-          >
-            Live Dropout Mode
-          </Link>
-          <Link
-            href={`/fitness/sessions/${session.id}/timer`}
-            className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-          >
-            Live Timed Finish Mode
-          </Link>
+          {recordingModes.manualEntry && (
+            <Link
+              href={`/fitness/sessions/${session.id}`}
+              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Manual Entry
+            </Link>
+          )}
+          {recordingModes.liveDropout && (
+            <Link
+              href={`/fitness/sessions/${session.id}/live`}
+              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Live Dropout Mode
+            </Link>
+          )}
+          {recordingModes.liveTimedFinish && (
+            <Link
+              href={`/fitness/sessions/${session.id}/timer`}
+              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            >
+              Live Timed Finish Mode
+            </Link>
+          )}
           <Link
             href={`/fitness/sessions/${session.id}/rankings`}
             className="inline-flex rounded border px-4 py-2 text-sm font-medium"
@@ -244,7 +254,14 @@ export default async function FitnessSessionPage({
         </div>
       </section>
 
-      {activePlayers.length === 0 ? (
+      {!recordingModes.manualEntry ? (
+        <section className="mt-6 rounded-lg border p-4">
+          <h2 className="text-xl font-bold">Manual entry is not used for this test</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            Use the valid recording mode shown above for {session.fitnessTestType.name}.
+          </p>
+        </section>
+      ) : activePlayers.length === 0 ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">No active players</h2>
           <p className="mt-2 text-sm text-gray-500">

@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
+import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -62,6 +63,9 @@ async function saveDropoutResult(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) {
+    return { ok: false }
+  }
 
   const player = await prisma.player.findFirst({
     where: {
@@ -115,6 +119,9 @@ async function undoDropoutResult(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveDropout) {
+    return { ok: false }
+  }
 
   await prisma.fitnessTestResult.deleteMany({
     where: {
@@ -146,6 +153,8 @@ export default async function FitnessLiveDropoutPage({
   const session = await getOwnedSession(id)
 
   if (!session) notFound()
+  const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
+  if (!recordingModes.liveDropout) notFound()
 
   const activePlayers = await prisma.player.findMany({
     where: {
@@ -192,15 +201,19 @@ export default async function FitnessLiveDropoutPage({
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
       <div className="flex flex-wrap gap-3 text-sm">
-        <Link href={`/fitness/sessions/${session.id}`} className="text-blue-600 hover:underline">
-          Manual Entry
-        </Link>
-        <Link
-          href={`/fitness/sessions/${session.id}/timer`}
-          className="text-blue-600 hover:underline"
-        >
-          Live Timed Finish Mode
-        </Link>
+        {recordingModes.manualEntry && (
+          <Link href={`/fitness/sessions/${session.id}`} className="text-blue-600 hover:underline">
+            Manual Entry
+          </Link>
+        )}
+        {recordingModes.liveTimedFinish && (
+          <Link
+            href={`/fitness/sessions/${session.id}/timer`}
+            className="text-blue-600 hover:underline"
+          >
+            Live Timed Finish Mode
+          </Link>
+        )}
         <Link
           href={`/fitness/sessions/${session.id}/rankings`}
           className="text-blue-600 hover:underline"

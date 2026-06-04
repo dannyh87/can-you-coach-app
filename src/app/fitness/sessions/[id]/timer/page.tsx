@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import FitnessTimerClient from '@/components/FitnessTimerClient'
+import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -62,6 +63,9 @@ async function saveTimedFinish(formData: FormData) {
 
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
+    return { ok: false }
+  }
 
   const player = await prisma.player.findFirst({
     where: {
@@ -114,6 +118,9 @@ async function undoTimedFinish(formData: FormData) {
   if (!sessionId || !playerId) return { ok: false }
   const session = await getOwnedSession(sessionId)
   if (!session) return { ok: false }
+  if (!getFitnessRecordingModes(session.fitnessTestType).liveTimedFinish) {
+    return { ok: false }
+  }
 
   await prisma.fitnessTestResult.deleteMany({
     where: {
@@ -145,6 +152,8 @@ export default async function FitnessTimerPage({
   const session = await getOwnedSession(id)
 
   if (!session) notFound()
+  const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
+  if (!recordingModes.liveTimedFinish) notFound()
 
   const activePlayers = await prisma.player.findMany({
     where: {
@@ -188,15 +197,19 @@ export default async function FitnessTimerPage({
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
       <div className="flex flex-wrap gap-3 text-sm">
-        <Link href={`/fitness/sessions/${session.id}`} className="text-blue-600 hover:underline">
-          Manual Entry
-        </Link>
-        <Link
-          href={`/fitness/sessions/${session.id}/live`}
-          className="text-blue-600 hover:underline"
-        >
-          Live Dropout Mode
-        </Link>
+        {recordingModes.manualEntry && (
+          <Link href={`/fitness/sessions/${session.id}`} className="text-blue-600 hover:underline">
+            Manual Entry
+          </Link>
+        )}
+        {recordingModes.liveDropout && (
+          <Link
+            href={`/fitness/sessions/${session.id}/live`}
+            className="text-blue-600 hover:underline"
+          >
+            Live Dropout Mode
+          </Link>
+        )}
         <Link
           href={`/fitness/sessions/${session.id}/rankings`}
           className="text-blue-600 hover:underline"

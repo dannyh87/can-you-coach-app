@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
+import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { prisma } from '@/lib/prisma'
 
 const getTextValue = (formData: FormData, key: string) => {
@@ -216,7 +217,10 @@ export default async function FitnessPage() {
             No fitness test sessions yet.
           </p>
         ) : (
-          sessions.map((session) => (
+          sessions.map((session) => {
+            const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
+
+            return (
             <article key={session.id} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -231,7 +235,7 @@ export default async function FitnessPage() {
                 </span>
               </div>
 
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
                 <div>
                   <dt className="font-medium text-gray-500">Date</dt>
                   <dd>{formatDate(session.date)}</dd>
@@ -250,6 +254,11 @@ export default async function FitnessPage() {
                       : 'Lower is better'}
                   </dd>
                 </div>
+
+                <div>
+                  <dt className="font-medium text-gray-500">Recording mode</dt>
+                  <dd>{recordingModes.label}</dd>
+                </div>
               </dl>
 
               {session.notes && (
@@ -257,26 +266,32 @@ export default async function FitnessPage() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/fitness/sessions/${session.id}`}
-                  className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                >
-                  Manual Entry
-                </Link>
+                {recordingModes.manualEntry && (
+                  <Link
+                    href={`/fitness/sessions/${session.id}`}
+                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Manual Entry
+                  </Link>
+                )}
 
-                <Link
-                  href={`/fitness/sessions/${session.id}/live`}
-                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-                >
-                  Live Dropout Mode
-                </Link>
+                {recordingModes.liveDropout && (
+                  <Link
+                    href={`/fitness/sessions/${session.id}/live`}
+                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Live Dropout Mode
+                  </Link>
+                )}
 
-                <Link
-                  href={`/fitness/sessions/${session.id}/timer`}
-                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-                >
-                  Live Timed Finish Mode
-                </Link>
+                {recordingModes.liveTimedFinish && (
+                  <Link
+                    href={`/fitness/sessions/${session.id}/timer`}
+                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Live Timed Finish Mode
+                  </Link>
+                )}
 
                 <Link
                   href={`/fitness/sessions/${session.id}/rankings`}
@@ -286,7 +301,8 @@ export default async function FitnessPage() {
                 </Link>
               </div>
             </article>
-          ))
+            )
+          })
         )}
       </section>
     </main>
