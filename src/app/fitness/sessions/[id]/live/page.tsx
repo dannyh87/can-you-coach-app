@@ -59,7 +59,15 @@ async function getOwnedSession(sessionId: string) {
   })
 }
 
-async function saveDropoutResult(formData: FormData) {
+async function saveDropoutResult(formData: FormData): Promise<
+  | {
+      ok: true
+      playerId: string
+      resultValue: number | null
+      resultText: string | null
+    }
+  | { ok: false }
+> {
   'use server'
 
   const sessionId = getTextValue(formData, 'fitnessTestSessionId')
@@ -118,7 +126,10 @@ async function saveDropoutResult(formData: FormData) {
   }
 }
 
-async function undoDropoutResult(formData: FormData) {
+async function undoDropoutResult(formData: FormData): Promise<
+  | { ok: true; playerId: string }
+  | { ok: false }
+> {
   'use server'
 
   const sessionId = getTextValue(formData, 'fitnessTestSessionId')
