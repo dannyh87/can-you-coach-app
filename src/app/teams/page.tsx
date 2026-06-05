@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 
+import TeamsClient from '@/app/teams/TeamsClient'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -20,7 +21,11 @@ async function userOwnsClub(userId: string, clubId: string) {
   return Boolean(club)
 }
 
-async function createTeam(formData: FormData) {
+type TeamActionResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
+async function createTeam(formData: FormData): Promise<TeamActionResult> {
   'use server'
 
   const user = await getLocalUser()
@@ -29,8 +34,13 @@ async function createTeam(formData: FormData) {
   const ageGroup = getTextValue(formData, 'ageGroup')
   const season = getTextValue(formData, 'season')
 
-  if (!clubId || !name || !ageGroup || !season) return
-  if (!(await userOwnsClub(user.id, clubId))) return
+  if (!clubId || !name || !ageGroup || !season) {
+    return { ok: false, reason: 'Club, team name, age group and season are required.' }
+  }
+
+  if (!(await userOwnsClub(user.id, clubId))) {
+    return { ok: false, reason: 'You cannot add a team to this club.' }
+  }
 
   await prisma.team.create({
     data: {
@@ -42,9 +52,10 @@ async function createTeam(formData: FormData) {
   })
 
   revalidatePath('/teams')
+  return { ok: true }
 }
 
-async function updateTeam(formData: FormData) {
+async function updateTeam(formData: FormData): Promise<TeamActionResult> {
   'use server'
 
   const user = await getLocalUser()
@@ -54,8 +65,13 @@ async function updateTeam(formData: FormData) {
   const ageGroup = getTextValue(formData, 'ageGroup')
   const season = getTextValue(formData, 'season')
 
-  if (!id || !clubId || !name || !ageGroup || !season) return
-  if (!(await userOwnsClub(user.id, clubId))) return
+  if (!id || !clubId || !name || !ageGroup || !season) {
+    return { ok: false, reason: 'Club, team name, age group and season are required.' }
+  }
+
+  if (!(await userOwnsClub(user.id, clubId))) {
+    return { ok: false, reason: 'You cannot move this team to that club.' }
+  }
 
   const team = await prisma.team.findFirst({
     where: {
@@ -66,7 +82,7 @@ async function updateTeam(formData: FormData) {
     },
   })
 
-  if (!team) return
+  if (!team) return { ok: false, reason: 'Team was not found.' }
 
   await prisma.team.update({
     where: { id },
@@ -79,15 +95,16 @@ async function updateTeam(formData: FormData) {
   })
 
   revalidatePath('/teams')
+  return { ok: true }
 }
 
-async function deleteTeam(formData: FormData) {
+async function deleteTeam(formData: FormData): Promise<TeamActionResult> {
   'use server'
 
   const user = await getLocalUser()
   const id = getTextValue(formData, 'id')
 
-  if (!id) return
+  if (!id) return { ok: false, reason: 'Missing team.' }
 
   const team = await prisma.team.findFirst({
     where: {
@@ -96,12 +113,29 @@ async function deleteTeam(formData: FormData) {
         userId: user.id,
       },
     },
+    include: {
+      _count: {
+        select: {
+          players: true,
+          fitnessTestSessions: true,
+        },
+      },
+    },
   })
 
-  if (!team) return
+  if (!team) return { ok: false, reason: 'Team was not found.' }
+
+  if (team._count.players > 0 || team._count.fitnessTestSessions > 0) {
+    return {
+      ok: false,
+      reason: 'This team has players or fitness sessions. Move or remove them before deleting.',
+    }
+  }
+
   await prisma.team.delete({ where: { id } })
 
   revalidatePath('/teams')
+  return { ok: true }
 }
 
 export default async function TeamsPage() {
@@ -131,8 +165,24 @@ export default async function TeamsPage() {
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
 
+  const clubOptions = clubs.map((club) => ({
+    id: club.id,
+    name: club.name,
+  }))
+
+  const teamRows = teams.map((team) => ({
+    id: team.id,
+    clubId: team.clubId,
+    clubName: team.club.name,
+    name: team.name,
+    ageGroup: team.ageGroup,
+    season: team.season,
+    playerCount: team._count.players,
+    fitnessSessionCount: team._count.fitnessTestSessions,
+  }))
+
   return (
-    <main className="mx-auto w-full max-w-4xl p-6">
+    <main className="mx-auto w-full max-w-6xl p-6">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Teams</h1>
@@ -146,142 +196,13 @@ export default async function TeamsPage() {
         </Link>
       </div>
 
-      <section className="mb-8 rounded-lg border p-4">
-        <h2 className="mb-4 text-xl font-bold">Create Team</h2>
-
-        <form action={createTeam} className="grid gap-3 md:grid-cols-2">
-          <label className="text-sm font-medium md:col-span-2">
-            Club
-            <select name="clubId" required className="mt-1 w-full rounded border p-2">
-              {clubs.map((club) => (
-                <option key={club.id} value={club.id}>
-                  {club.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm font-medium">
-            Team name
-            <input
-              name="name"
-              required
-              className="mt-1 w-full rounded border p-2"
-              placeholder="e.g. First Team"
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Age group
-            <input
-              name="ageGroup"
-              required
-              className="mt-1 w-full rounded border p-2"
-              placeholder="e.g. Open Age"
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Season
-            <input
-              name="season"
-              required
-              className="mt-1 w-full rounded border p-2"
-              placeholder="e.g. 2026/27"
-            />
-          </label>
-
-          <div className="flex items-end">
-            <button className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white">
-              Create Team
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-xl font-bold">Existing Teams</h2>
-
-        {teams.length === 0 ? (
-          <p className="rounded-lg border p-4 text-sm text-gray-500">
-            No teams created yet.
-          </p>
-        ) : (
-          teams.map((team) => (
-            <article key={team.id} className="rounded-lg border p-4">
-              <form action={updateTeam} className="grid gap-3 md:grid-cols-2">
-                <input type="hidden" name="id" value={team.id} />
-
-                <label className="text-sm font-medium md:col-span-2">
-                  Club
-                  <select
-                    name="clubId"
-                    required
-                    defaultValue={team.clubId}
-                    className="mt-1 w-full rounded border p-2"
-                  >
-                    {clubs.map((club) => (
-                      <option key={club.id} value={club.id}>
-                        {club.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="text-sm font-medium">
-                  Team name
-                  <input
-                    name="name"
-                    required
-                    defaultValue={team.name}
-                    className="mt-1 w-full rounded border p-2"
-                  />
-                </label>
-
-                <label className="text-sm font-medium">
-                  Age group
-                  <input
-                    name="ageGroup"
-                    required
-                    defaultValue={team.ageGroup}
-                    className="mt-1 w-full rounded border p-2"
-                  />
-                </label>
-
-                <label className="text-sm font-medium">
-                  Season
-                  <input
-                    name="season"
-                    required
-                    defaultValue={team.season}
-                    className="mt-1 w-full rounded border p-2"
-                  />
-                </label>
-
-                <div className="flex items-end">
-                  <button className="w-full rounded bg-gray-900 px-4 py-2 font-medium text-white">
-                    Save Team
-                  </button>
-                </div>
-              </form>
-
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-sm text-gray-500">
-                  {team._count.players} players · {team._count.fitnessTestSessions}{' '}
-                  fitness sessions
-                </span>
-
-                <form action={deleteTeam}>
-                  <input type="hidden" name="id" value={team.id} />
-                  <button className="text-sm font-medium text-red-600 hover:underline">
-                    Delete Team
-                  </button>
-                </form>
-              </div>
-            </article>
-          ))
-        )}
-      </section>
+      <TeamsClient
+        teams={teamRows}
+        clubs={clubOptions}
+        createTeamAction={createTeam}
+        updateTeamAction={updateTeam}
+        deleteTeamAction={deleteTeam}
+      />
     </main>
   )
 }
