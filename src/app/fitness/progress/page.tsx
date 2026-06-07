@@ -147,6 +147,7 @@ export default async function FitnessProgressPage({
             fitnessTestSession: {
               teamId: selectedTeam.id,
               fitnessTestTypeId: selectedFitnessTestType.id,
+              status: 'COMPLETED',
               team: {
                 club: {
                   userId: user.id,
@@ -272,8 +273,8 @@ export default async function FitnessProgressPage({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Fitness Progress</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Track player and team improvement across repeated fitness tests.
+        <p className="mt-1 text-sm text-gray-500">
+            Track player and team improvement across completed fitness tests.
           </p>
         </div>
 
@@ -353,9 +354,9 @@ export default async function FitnessProgressPage({
           Select a team and test type to view progress reporting.
         </p>
       ) : !hasEnoughData ? (
-        <p className="rounded-lg border p-4 text-sm text-gray-500">
-          At least two sessions with valid numeric results are needed to show
-          progress.
+          <p className="rounded-lg border p-4 text-sm text-gray-500">
+          At least two completed sessions with valid numeric results are needed
+          to show progress.
         </p>
       ) : (
         <div className="space-y-8">

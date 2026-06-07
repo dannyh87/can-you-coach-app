@@ -253,8 +253,8 @@ export default async function PlayersPage() {
           </p>
         </div>
 
-        <Link href="/teams" className="text-sm text-blue-600 hover:underline">
-          Manage Teams
+        <Link href="/club-setup" className="text-sm text-blue-600 hover:underline">
+          Club Setup
         </Link>
       </div>
 
@@ -265,10 +265,10 @@ export default async function PlayersPage() {
             Players must belong to a team. Create a team before adding players.
           </p>
           <Link
-            href="/teams"
+            href="/club-setup"
             className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 font-medium text-white"
           >
-            Go to Teams
+            Go to Club Setup
           </Link>
         </section>
       ) : (

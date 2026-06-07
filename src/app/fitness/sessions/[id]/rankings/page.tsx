@@ -106,7 +106,7 @@ export default async function FitnessSessionRankingsPage({
           href={`/fitness/sessions/${session.id}`}
           className="text-blue-600 hover:underline"
         >
-          Enter Results
+          {session.status === 'COMPLETED' ? 'View Results' : 'Enter Results'}
         </Link>
       </div>
 

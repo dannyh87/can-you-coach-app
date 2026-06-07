@@ -94,32 +94,38 @@ export default function FitnessTestCompleteSummary({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b bg-gray-50">
-              <th className="p-3 text-left">Rank</th>
-              <th className="p-3 text-left">Player</th>
-              <th className="p-3 text-left">Squad number</th>
-              <th className="p-3 text-left">Result</th>
-              <th className="p-3 text-left">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rankedPlayers.map((player, index) => (
-              <tr key={player.id} className="border-b last:border-b-0">
-                <td className="p-3 font-bold">{index + 1}</td>
-                <td className="p-3">{getPlayerName(player)}</td>
-                <td className="p-3">{formatSquadNumber(player.squadNumber)}</td>
-                <td className="p-3 font-medium">
-                  {formatResult(player.result, resultUnit)}
-                </td>
-                <td className="p-3">{statusLabel}</td>
+      {rankedPlayers.length === 0 ? (
+        <p className="rounded-lg border p-4 text-sm text-gray-500">
+          No player results were saved for this completed test.
+        </p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b bg-gray-50">
+                <th className="p-3 text-left">Rank</th>
+                <th className="p-3 text-left">Player</th>
+                <th className="p-3 text-left">Squad number</th>
+                <th className="p-3 text-left">Result</th>
+                <th className="p-3 text-left">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {rankedPlayers.map((player, index) => (
+                <tr key={player.id} className="border-b last:border-b-0">
+                  <td className="p-3 font-bold">{index + 1}</td>
+                  <td className="p-3">{getPlayerName(player)}</td>
+                  <td className="p-3">{formatSquadNumber(player.squadNumber)}</td>
+                  <td className="p-3 font-medium">
+                    {formatResult(player.result, resultUnit)}
+                  </td>
+                  <td className="p-3">{statusLabel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }

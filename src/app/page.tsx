@@ -24,7 +24,7 @@ export default function Home() {
       <div className="mb-8">
         <p className="mb-2 text-sm font-medium text-blue-600">Can You Coach</p>
         <h1 className="text-4xl font-bold tracking-tight">Home</h1>
-          <p className="mt-3 text-gray-600">
+        <p className="mt-3 text-gray-600">
           Use this home page to move around the MVP. Start with Club Setup,
           then add players and fitness test sessions.
         </p>

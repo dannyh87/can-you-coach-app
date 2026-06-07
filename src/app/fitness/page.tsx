@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
@@ -61,6 +62,7 @@ async function createFitnessTestSession(formData: FormData) {
   })
 
   revalidatePath('/fitness')
+  redirect('/fitness?created=1')
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
@@ -70,7 +72,12 @@ const formatDateTime = (date: Date | null) =>
     timeStyle: 'short',
   }).format(date) : 'Not started'
 
-export default async function FitnessPage() {
+export default async function FitnessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ created?: string }>
+}) {
+  const { created } = await searchParams
   const user = await getLocalUser()
   await ensureDefaultClub(user.id)
 
@@ -131,11 +138,17 @@ export default async function FitnessPage() {
           <Link href="/fitness/progress" className="text-blue-600 hover:underline">
             View Progress
           </Link>
-          <Link href="/teams" className="text-blue-600 hover:underline">
-            Manage Teams
+          <Link href="/club-setup" className="text-blue-600 hover:underline">
+            Club Setup
           </Link>
         </div>
       </div>
+
+      {created === '1' && (
+        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+          Fitness test session created.
+        </p>
+      )}
 
       {teams.length === 0 ? (
         <section className="mb-8 rounded-lg border p-4">
@@ -144,10 +157,10 @@ export default async function FitnessPage() {
             Fitness test sessions must belong to a team.
           </p>
           <Link
-            href="/teams"
+            href="/club-setup"
             className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 font-medium text-white"
           >
-            Go to Teams
+            Go to Club Setup
           </Link>
         </section>
       ) : fitnessTestTypes.length === 0 ? (

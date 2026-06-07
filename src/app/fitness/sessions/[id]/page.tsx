@@ -325,36 +325,55 @@ export default async function FitnessSessionPage({
         )}
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {recordingModes.manualEntry && (
-            <Link
-              href={`/fitness/sessions/${session.id}`}
-              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-            >
-              Manual Entry
-            </Link>
+          {session.status === 'COMPLETED' ? (
+            <>
+              <Link
+                href="/fitness"
+                className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+              >
+                Back to Fitness
+              </Link>
+              <Link
+                href={`/fitness/sessions/${session.id}/rankings`}
+                className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+              >
+                Rankings
+              </Link>
+            </>
+          ) : (
+            <>
+              {recordingModes.manualEntry && (
+                <Link
+                  href={`/fitness/sessions/${session.id}`}
+                  className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Manual Entry
+                </Link>
+              )}
+              {recordingModes.liveDropout && (
+                <Link
+                  href={`/fitness/sessions/${session.id}/live`}
+                  className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Live Dropout Mode
+                </Link>
+              )}
+              {recordingModes.liveTimedFinish && (
+                <Link
+                  href={`/fitness/sessions/${session.id}/timer`}
+                  className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+                >
+                  Live Timed Finish Mode
+                </Link>
+              )}
+              <Link
+                href={`/fitness/sessions/${session.id}/rankings`}
+                className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+              >
+                Rankings
+              </Link>
+            </>
           )}
-          {recordingModes.liveDropout && (
-            <Link
-              href={`/fitness/sessions/${session.id}/live`}
-              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-            >
-              Live Dropout Mode
-            </Link>
-          )}
-          {recordingModes.liveTimedFinish && (
-            <Link
-              href={`/fitness/sessions/${session.id}/timer`}
-              className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-            >
-              Live Timed Finish Mode
-            </Link>
-          )}
-          <Link
-            href={`/fitness/sessions/${session.id}/rankings`}
-            className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-          >
-            Rankings
-          </Link>
         </div>
       </section>
 
