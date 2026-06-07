@@ -7,8 +7,7 @@ const inter = Inter({ subsets: ['latin'] })
 
 const navigationLinks = [
   { href: '/', label: 'Home' },
-  { href: '/clubs', label: 'Clubs' },
-  { href: '/teams', label: 'Teams' },
+  { href: '/club-setup', label: 'Club Setup' },
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
 ]

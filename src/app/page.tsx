@@ -2,14 +2,9 @@ import Link from 'next/link'
 
 const setupLinks = [
   {
-    href: '/clubs',
-    title: 'Clubs',
-    description: 'Create and manage clubs for the local MVP workspace.',
-  },
-  {
-    href: '/teams',
-    title: 'Teams',
-    description: 'Create teams inside clubs before adding players.',
+    href: '/club-setup',
+    title: 'Club Setup',
+    description: 'Manage your club details and teams in one place.',
   },
   {
     href: '/players',
@@ -29,13 +24,13 @@ export default function Home() {
       <div className="mb-8">
         <p className="mb-2 text-sm font-medium text-blue-600">Can You Coach</p>
         <h1 className="text-4xl font-bold tracking-tight">Home</h1>
-        <p className="mt-3 text-gray-600">
-          Use this home page to move around the MVP. Start by creating a club,
-          then add teams, players and fitness test sessions.
+          <p className="mt-3 text-gray-600">
+          Use this home page to move around the MVP. Start with Club Setup,
+          then add players and fitness test sessions.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         {setupLinks.map((link) => (
           <Link
             key={link.href}
