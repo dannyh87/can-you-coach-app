@@ -70,7 +70,11 @@ const formatSavedResult = (result: TimerPlayer['result']) => {
 const formatSquadNumber = (squadNumber: number | null) =>
   squadNumber === null ? 'No squad number' : `#${squadNumber}`
 
-export default function FitnessTimerClient({
+export default function FitnessTimerClient(props: FitnessTimerClientProps) {
+  return <FitnessTimerInner key={props.sessionId} {...props} />
+}
+
+function FitnessTimerInner({
   sessionId,
   resultUnit,
   higherIsBetter,
@@ -362,14 +366,16 @@ export default function FitnessTimerClient({
         </p>
       )}
 
-      {(allPlayersFinished || isSessionCompleted) && (
+      {!isSessionCompleted && isSessionLive && allPlayersFinished && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+          All active players have finish times. End Fitness Test to complete and lock this session.
+        </p>
+      )}
+
+      {isSessionCompleted && (
         <FitnessTestCompleteSummary
-          title={isSessionCompleted ? 'Completed Results Summary' : 'Test Complete'}
-          description={
-            isSessionCompleted
-              ? 'This test is completed and locked. Saved finish results remain available.'
-              : 'All active players have recorded finish times.'
-          }
+          title="Completed Results Summary"
+          description="This test is completed and locked. Saved finish results remain available."
           players={timerPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
@@ -378,67 +384,74 @@ export default function FitnessTimerClient({
         />
       )}
 
-      <section className="grid gap-4 md:grid-cols-2">
-        {timerPlayers.map((player) => {
-          const hasResult = Boolean(player.result)
+      {!isSessionCompleted && (
+        <section className="grid gap-4 md:grid-cols-2">
+          {timerPlayers.map((player) => {
+            const hasResult = Boolean(player.result)
 
-          return (
-            <article
-              key={player.id}
-              className={`rounded-lg border p-4 ${
-                hasResult ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50'
-              }`}
-            >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold">
-                    {player.firstName} {player.surname}
-                  </h2>
-                  <p className="text-sm text-gray-500">
-                    {formatSquadNumber(player.squadNumber)} -{' '}
-                    {player.preferredPosition ?? 'No position'}
-                  </p>
+            return (
+              <article
+                key={player.id}
+                className={`rounded-lg border p-4 ${
+                  hasResult ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50'
+                }`}
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold">
+                      {player.firstName} {player.surname}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      {formatSquadNumber(player.squadNumber)} -{' '}
+                      {player.preferredPosition ?? 'No position'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
+                    {formatSavedResult(player.result)}
+                  </span>
                 </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                  {formatSavedResult(player.result)}
-                </span>
-              </div>
 
-              {hasResult ? (
-                <button
-                  type="button"
-                  onClick={() => undoFinish(player.id)}
-                  className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
-                >
-                  {isSessionCompleted
-                    ? 'Results locked'
-                    : pendingPlayerId === player.id
-                      ? 'Saving...'
-                      : 'Undo / Reinstate'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => recordFinish(player.id)}
-                  className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  disabled={isSessionCompleted || !isSessionLive || !canRecordFinish || pendingPlayerId === player.id}
-                >
-                  {isSessionCompleted
-                    ? 'Results locked'
-                    : !isSessionLive
-                    ? 'Start test first'
-                    : pendingPlayerId === player.id
-                    ? 'Saving...'
-                    : canRecordFinish
-                      ? `Record Finish at ${formattedElapsed}`
-                      : 'Start timer first'}
-                </button>
-              )}
-            </article>
-          )
-        })}
-      </section>
+                {hasResult ? (
+                  <button
+                    type="button"
+                    onClick={() => undoFinish(player.id)}
+                    className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
+                  >
+                    {isSessionCompleted
+                      ? 'Results locked'
+                      : pendingPlayerId === player.id
+                        ? 'Saving...'
+                        : 'Undo / Reinstate'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => recordFinish(player.id)}
+                    className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={
+                      isSessionCompleted ||
+                      !isSessionLive ||
+                      !canRecordFinish ||
+                      pendingPlayerId === player.id
+                    }
+                  >
+                    {isSessionCompleted
+                      ? 'Results locked'
+                      : !isSessionLive
+                        ? 'Start test first'
+                        : pendingPlayerId === player.id
+                          ? 'Saving...'
+                          : canRecordFinish
+                            ? `Record Finish at ${formattedElapsed}`
+                            : 'Start timer first'}
+                  </button>
+                )}
+              </article>
+            )
+          })}
+        </section>
+      )}
     </div>
   )
 }
