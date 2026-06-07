@@ -45,6 +45,15 @@ type PlayerRow = {
 }
 
 type ModalMode = 'add' | 'detail' | 'edit' | null
+type PlayerSortOption =
+  | 'nameAsc'
+  | 'nameDesc'
+  | 'teamAsc'
+  | 'positionAsc'
+  | 'squadAsc'
+  | 'squadDesc'
+  | 'activeFirst'
+  | 'archivedFirst'
 
 type PlayersClientProps = {
   players: PlayerRow[]
@@ -74,8 +83,81 @@ export default function PlayersClient({
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerRow | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [teamFilter, setTeamFilter] = useState('all')
+  const [positionFilter, setPositionFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState<PlayerSortOption>('nameAsc')
   const activeCount = players.filter((player) => player.isActive).length
   const archivedCount = players.length - activeCount
+  const teamFilterOptions = Array.from(
+    new Set(players.map((player) => `${player.clubName} / ${player.teamName}`))
+  ).sort((a, b) => a.localeCompare(b))
+  const positionFilterOptions = Array.from(
+    new Set(
+      players
+        .map((player) => player.preferredPosition)
+        .filter((position): position is string => Boolean(position))
+    )
+  ).sort((a, b) => a.localeCompare(b))
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+  const filteredPlayers = players.filter((player) => {
+    const teamLabel = `${player.clubName} / ${player.teamName}`
+    const searchableText = [
+      getPlayerName(player),
+      player.teamName,
+      player.clubName,
+      player.preferredPosition ?? '',
+      player.squadNumber === null ? '' : String(player.squadNumber),
+    ]
+      .join(' ')
+      .toLowerCase()
+
+    return (
+      (!normalizedSearchTerm || searchableText.includes(normalizedSearchTerm)) &&
+      (teamFilter === 'all' || teamLabel === teamFilter) &&
+      (positionFilter === 'all' || player.preferredPosition === positionFilter) &&
+      (statusFilter === 'all' ||
+        (statusFilter === 'active' ? player.isActive : !player.isActive))
+    )
+  })
+  const filteredAndSortedPlayers = [...filteredPlayers].sort((a, b) => {
+    const firstName = getPlayerName(a)
+    const secondName = getPlayerName(b)
+
+    if (sortBy === 'nameDesc') return secondName.localeCompare(firstName)
+    if (sortBy === 'teamAsc') {
+      return `${a.clubName} / ${a.teamName}`.localeCompare(
+        `${b.clubName} / ${b.teamName}`
+      )
+    }
+    if (sortBy === 'positionAsc') {
+      return (a.preferredPosition ?? '').localeCompare(b.preferredPosition ?? '')
+    }
+    if (sortBy === 'squadAsc') {
+      return (a.squadNumber ?? Number.MAX_SAFE_INTEGER) -
+        (b.squadNumber ?? Number.MAX_SAFE_INTEGER)
+    }
+    if (sortBy === 'squadDesc') return (b.squadNumber ?? -1) - (a.squadNumber ?? -1)
+    if (sortBy === 'activeFirst') return Number(b.isActive) - Number(a.isActive)
+    if (sortBy === 'archivedFirst') return Number(a.isActive) - Number(b.isActive)
+
+    return firstName.localeCompare(secondName)
+  })
+  const hasActiveFilters =
+    Boolean(normalizedSearchTerm) ||
+    teamFilter !== 'all' ||
+    positionFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    sortBy !== 'nameAsc'
+
+  const clearFilters = () => {
+    setSearchTerm('')
+    setTeamFilter('all')
+    setPositionFilter('all')
+    setStatusFilter('all')
+    setSortBy('nameAsc')
+  }
 
   const closeModal = () => {
     if (isSubmitting) return
@@ -168,8 +250,105 @@ export default function PlayersClient({
           </button>
         </div>
 
+        <div className="border-b p-4">
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
+            <label className="text-sm font-medium lg:col-span-2">
+              Search
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                className="mt-1 w-full rounded border p-2"
+                placeholder="Name, team, position or squad number"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Team
+              <select
+                value={teamFilter}
+                onChange={(event) => setTeamFilter(event.target.value)}
+                className="mt-1 w-full rounded border p-2"
+              >
+                <option value="all">All teams</option>
+                {teamFilterOptions.map((team) => (
+                  <option key={team} value={team}>
+                    {team}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Status
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="mt-1 w-full rounded border p-2"
+              >
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
+              Sort
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as PlayerSortOption)}
+                className="mt-1 w-full rounded border p-2"
+              >
+                <option value="nameAsc">Name A-Z</option>
+                <option value="nameDesc">Name Z-A</option>
+                <option value="teamAsc">Team A-Z</option>
+                <option value="positionAsc">Position A-Z</option>
+                <option value="squadAsc">Squad number ascending</option>
+                <option value="squadDesc">Squad number descending</option>
+                <option value="activeFirst">Active first</option>
+                <option value="archivedFirst">Archived first</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
+            <p>
+              Showing {filteredAndSortedPlayers.length} of {players.length} players.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="font-medium text-gray-700">
+                Position
+                <select
+                  value={positionFilter}
+                  onChange={(event) => setPositionFilter(event.target.value)}
+                  className="ml-2 rounded border p-2 text-sm font-normal text-gray-900"
+                >
+                  <option value="all">All</option>
+                  {positionFilterOptions.map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {players.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No players yet.</p>
+        ) : filteredAndSortedPlayers.length === 0 ? (
+          <p className="p-4 text-sm text-gray-500">
+            No players match these filters.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
@@ -183,7 +362,7 @@ export default function PlayersClient({
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {players.map((player) => (
+                {filteredAndSortedPlayers.map((player) => (
                   <tr
                     key={player.id}
                     onClick={() => openDetailModal(player)}

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 
+import FitnessClient from '@/app/fitness/FitnessClient'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
@@ -14,6 +14,21 @@ const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
   return typeof value === 'string' ? value.trim() : ''
 }
+
+const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateTime = (date: Date | null) =>
+  date
+    ? new Intl.DateTimeFormat('en-GB', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date)
+    : 'Not started'
+
+const formatDateInputValue = (date: Date) => date.toISOString().split('T')[0]
+
+type FitnessActionResult =
+  | { ok: true }
+  | { ok: false; reason: string }
 
 async function userOwnsTeam(userId: string, teamId: string) {
   const team = await prisma.team.findFirst({
@@ -39,7 +54,9 @@ async function userCanUseFitnessTestType(userId: string, fitnessTestTypeId: stri
   return Boolean(fitnessTestType)
 }
 
-async function createFitnessTestSession(formData: FormData) {
+async function createFitnessTestSession(
+  formData: FormData
+): Promise<FitnessActionResult> {
   'use server'
 
   const user = await getLocalUser()
@@ -48,9 +65,17 @@ async function createFitnessTestSession(formData: FormData) {
   const date = getTextValue(formData, 'date')
   const notes = getTextValue(formData, 'notes')
 
-  if (!teamId || !fitnessTestTypeId || !date) return
-  if (!(await userOwnsTeam(user.id, teamId))) return
-  if (!(await userCanUseFitnessTestType(user.id, fitnessTestTypeId))) return
+  if (!teamId || !fitnessTestTypeId || !date) {
+    return { ok: false, reason: 'Team, test type and date are required.' }
+  }
+
+  if (!(await userOwnsTeam(user.id, teamId))) {
+    return { ok: false, reason: 'You cannot create a session for this team.' }
+  }
+
+  if (!(await userCanUseFitnessTestType(user.id, fitnessTestTypeId))) {
+    return { ok: false, reason: 'Fitness test type was not found.' }
+  }
 
   await prisma.fitnessTestSession.create({
     data: {
@@ -62,22 +87,51 @@ async function createFitnessTestSession(formData: FormData) {
   })
 
   revalidatePath('/fitness')
-  redirect('/fitness?created=1')
+  return { ok: true }
 }
 
-const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
-const formatDateTime = (date: Date | null) =>
-  date ? new Intl.DateTimeFormat('en-GB', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(date) : 'Not started'
+async function deleteFitnessTestSession(
+  formData: FormData
+): Promise<FitnessActionResult> {
+  'use server'
 
-export default async function FitnessPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ created?: string }>
-}) {
-  const { created } = await searchParams
+  const user = await getLocalUser()
+  const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
+
+  if (!fitnessTestSessionId) {
+    return { ok: false, reason: 'Missing fitness test session.' }
+  }
+
+  const session = await prisma.fitnessTestSession.findFirst({
+    where: {
+      id: fitnessTestSessionId,
+      team: {
+        club: {
+          userId: user.id,
+        },
+      },
+    },
+  })
+
+  if (!session) {
+    return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (session.status === 'IN_PROGRESS') {
+    return {
+      ok: false,
+      reason: 'Live fitness tests cannot be deleted. End the test before deleting it.',
+    }
+  }
+
+  await prisma.fitnessTestSession.delete({ where: { id: session.id } })
+
+  revalidatePath('/fitness')
+  revalidatePath('/fitness/progress')
+  return { ok: true }
+}
+
+export default async function FitnessPage() {
   const user = await getLocalUser()
   await ensureDefaultClub(user.id)
 
@@ -124,8 +178,46 @@ export default async function FitnessPage({
     orderBy: { date: 'desc' },
   })
 
+  const teamOptions = teams.map((team) => ({
+    id: team.id,
+    name: team.name,
+    clubName: team.club.name,
+  }))
+
+  const fitnessTestTypeOptions = fitnessTestTypes.map((fitnessTestType) => ({
+    id: fitnessTestType.id,
+    name: fitnessTestType.name,
+    resultUnit: fitnessTestType.resultUnit,
+  }))
+
+  const sessionRows = sessions.map((session) => {
+    const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
+
+    return {
+      id: session.id,
+      dateDisplay: formatDate(session.date),
+      dateInput: formatDateInputValue(session.date),
+      teamName: session.team.name,
+      clubName: session.team.club.name,
+      fitnessTestTypeName: session.fitnessTestType.name,
+      resultUnit: session.fitnessTestType.resultUnit,
+      higherIsBetter: session.fitnessTestType.higherIsBetter,
+      status: session.status,
+      statusLabel: formatFitnessSessionStatus(session.status),
+      statusClasses: getFitnessSessionStatusClasses(session.status),
+      startedAtDisplay: formatDateTime(session.startedAt),
+      completedAtDisplay: formatDateTime(session.completedAt),
+      notes: session.notes,
+      resultCount: session._count.results,
+      recordingModeLabel: recordingModes.label,
+      manualEntry: recordingModes.manualEntry,
+      liveDropout: recordingModes.liveDropout,
+      liveTimedFinish: recordingModes.liveTimedFinish,
+    }
+  })
+
   return (
-    <main className="mx-auto w-full max-w-4xl p-6">
+    <main className="mx-auto w-full max-w-6xl p-6">
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Fitness Testing</h1>
@@ -143,12 +235,6 @@ export default async function FitnessPage({
           </Link>
         </div>
       </div>
-
-      {created === '1' && (
-        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-          Fitness test session created.
-        </p>
-      )}
 
       {teams.length === 0 ? (
         <section className="mb-8 rounded-lg border p-4">
@@ -171,198 +257,14 @@ export default async function FitnessPage({
           </p>
         </section>
       ) : (
-        <section className="mb-8 rounded-lg border p-4">
-          <h2 className="mb-4 text-xl font-bold">Create Test Session</h2>
-
-          <form action={createFitnessTestSession} className="grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-medium">
-              Team
-              <select name="teamId" required className="mt-1 w-full rounded border p-2">
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.club.name} - {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-medium">
-              Test type
-              <select
-                name="fitnessTestTypeId"
-                required
-                className="mt-1 w-full rounded border p-2"
-              >
-                {fitnessTestTypes.map((fitnessTestType) => (
-                  <option key={fitnessTestType.id} value={fitnessTestType.id}>
-                    {fitnessTestType.name} ({fitnessTestType.resultUnit})
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-medium">
-              Date
-              <input
-                name="date"
-                type="date"
-                required
-                defaultValue={new Date().toISOString().split('T')[0]}
-                className="mt-1 w-full rounded border p-2"
-              />
-            </label>
-
-            <label className="text-sm font-medium md:col-span-2">
-              Notes
-              <textarea
-                name="notes"
-                className="mt-1 w-full rounded border p-2"
-                placeholder="Optional"
-                rows={3}
-              />
-            </label>
-
-            <div className="flex items-end md:col-span-2">
-              <button className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white">
-                Create Test Session
-              </button>
-            </div>
-          </form>
-        </section>
+        <FitnessClient
+          sessions={sessionRows}
+          teams={teamOptions}
+          fitnessTestTypes={fitnessTestTypeOptions}
+          createFitnessTestSessionAction={createFitnessTestSession}
+          deleteFitnessTestSessionAction={deleteFitnessTestSession}
+        />
       )}
-
-      <section className="space-y-4">
-        <h2 className="text-xl font-bold">Previous Test Sessions</h2>
-
-        {sessions.length === 0 ? (
-          <p className="rounded-lg border p-4 text-sm text-gray-500">
-            No fitness test sessions yet.
-          </p>
-        ) : (
-          sessions.map((session) => {
-            const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
-
-            return (
-            <article key={session.id} className="rounded-lg border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-lg font-bold">{session.fitnessTestType.name}</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {session.team.club.name} - {session.team.name}
-                  </p>
-                </div>
-
-                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                  {session._count.results} results
-                </span>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
-                    session.status
-                  )}`}
-                >
-                  {formatFitnessSessionStatus(session.status)}
-                </span>
-              </div>
-
-              <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-5">
-                <div>
-                  <dt className="font-medium text-gray-500">Date</dt>
-                  <dd>{formatDate(session.date)}</dd>
-                </div>
-
-                <div>
-                  <dt className="font-medium text-gray-500">Unit</dt>
-                  <dd>{session.fitnessTestType.resultUnit}</dd>
-                </div>
-
-                <div>
-                  <dt className="font-medium text-gray-500">Ranking</dt>
-                  <dd>
-                    {session.fitnessTestType.higherIsBetter
-                      ? 'Higher is better'
-                      : 'Lower is better'}
-                  </dd>
-                </div>
-
-                <div>
-                  <dt className="font-medium text-gray-500">Recording mode</dt>
-                  <dd>{recordingModes.label}</dd>
-                </div>
-
-                <div>
-                  <dt className="font-medium text-gray-500">Started</dt>
-                  <dd>{formatDateTime(session.startedAt)}</dd>
-                </div>
-
-                <div>
-                  <dt className="font-medium text-gray-500">Completed</dt>
-                  <dd>{formatDateTime(session.completedAt)}</dd>
-                </div>
-              </dl>
-
-              {session.notes && (
-                <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
-              )}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {session.status === 'COMPLETED' ? (
-                  <>
-                    <Link
-                      href={`/fitness/sessions/${session.id}`}
-                      className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                    >
-                      View Results
-                    </Link>
-                    <Link
-                      href={`/fitness/sessions/${session.id}/rankings`}
-                      className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-                    >
-                      Rankings
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                {recordingModes.manualEntry && (
-                  <Link
-                    href={`/fitness/sessions/${session.id}`}
-                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Manual Entry
-                  </Link>
-                )}
-
-                {recordingModes.liveDropout && (
-                  <Link
-                    href={`/fitness/sessions/${session.id}/live`}
-                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Live Dropout Mode
-                  </Link>
-                )}
-
-                {recordingModes.liveTimedFinish && (
-                  <Link
-                    href={`/fitness/sessions/${session.id}/timer`}
-                    className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-                  >
-                    Live Timed Finish Mode
-                  </Link>
-                )}
-
-                <Link
-                  href={`/fitness/sessions/${session.id}/rankings`}
-                  className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-                >
-                  Rankings
-                </Link>
-                  </>
-                )}
-              </div>
-            </article>
-            )
-          })
-        )}
-      </section>
     </main>
   )
 }
