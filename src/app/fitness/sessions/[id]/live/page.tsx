@@ -258,7 +258,7 @@ export default async function FitnessLiveDropoutPage({
         </p>
       )}
 
-      <section className="mt-6 rounded-xl border p-6">
+      {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold">Live Dropout Mode</h1>
@@ -311,21 +311,14 @@ export default async function FitnessLiveDropoutPage({
           </p>
         )}
 
-        {session.status === 'COMPLETED' && (
-          <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-            Fitness test completed{session.completedAt ? ` ${formatDateTime(session.completedAt)}` : ''}.
-            Results are now read-only.
-          </p>
-        )}
-
         <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
           Use this mode for staged endurance tests. Set the current level, stage, or
           distance at the top of the screen, then record players as they drop out.
           Archived players are excluded.
         </p>
-      </section>
+      </section>}
 
-      {activePlayers.length === 0 ? (
+      {session.status !== 'COMPLETED' && activePlayers.length === 0 ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">No active players</h2>
           <p className="mt-2 text-sm text-gray-500">
@@ -335,9 +328,14 @@ export default async function FitnessLiveDropoutPage({
       ) : (
         <FitnessLiveDropoutClient
           sessionId={session.id}
+          testTypeName={session.fitnessTestType.name}
+          teamName={`${session.team.club.name} - ${session.team.name}`}
+          dateLabel={formatDate(session.date)}
+          sessionStatusLabel={formatFitnessSessionStatus(session.status)}
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
+          progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}
           isCompleted={session.status === 'COMPLETED'}
           startedAt={session.startedAt?.toISOString() ?? null}

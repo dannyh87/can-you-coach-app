@@ -18,9 +18,14 @@ type DropoutPlayer = {
 
 type FitnessLiveDropoutClientProps = {
   sessionId: string
+  testTypeName: string
+  teamName: string
+  dateLabel: string
+  sessionStatusLabel: string
   resultUnit: string
   higherIsBetter: boolean
   rankingsHref: string
+  progressHref: string
   isLive: boolean
   isCompleted: boolean
   startedAt: string | null
@@ -70,9 +75,14 @@ export default function FitnessLiveDropoutClient(
 
 function FitnessLiveDropoutInner({
   sessionId,
+  testTypeName,
+  teamName,
+  dateLabel,
+  sessionStatusLabel,
   resultUnit,
   higherIsBetter,
   rankingsHref,
+  progressHref,
   isLive,
   isCompleted,
   startedAt,
@@ -248,95 +258,93 @@ function FitnessLiveDropoutInner({
 
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-xl border p-4">
-        <h2 className="text-xl font-bold">Current Result</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Set this once, then tap each player as they drop out. You can adjust it as
-          the test moves through levels, stages, or distances.
-        </p>
-        {isSessionCompleted ? (
-          <p className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-            Completed{formattedCompletedAt ? `: ${formattedCompletedAt}` : ''}. Results are read-only.
+      {!isSessionCompleted && (
+        <section className="rounded-xl border p-4">
+          <h2 className="text-xl font-bold">Current Level</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Set the current level or stage, then tap players as they drop out. The
+            value is saved for rankings and progress.
           </p>
-        ) : isSessionLive ? (
-          <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
-            LIVE{formattedStartedAt ? `: started ${formattedStartedAt}` : ''}
-          </p>
-        ) : (
-          <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            Start the fitness test before changing levels or recording dropouts.
-          </p>
-        )}
+          {isSessionLive ? (
+            <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
+              LIVE{formattedStartedAt ? `: started ${formattedStartedAt}` : ''}
+            </p>
+          ) : (
+            <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+              Start the fitness test before changing levels or recording dropouts.
+            </p>
+          )}
 
-        {!isSessionLive && !isSessionCompleted && (
-          <button
-            type="button"
-            onClick={startFitnessTest}
-            className="mt-4 w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isStarting}
-          >
-            {isStarting ? 'Starting...' : 'Start Fitness Test'}
-          </button>
-        )}
+          {!isSessionLive && (
+            <button
+              type="button"
+              onClick={startFitnessTest}
+              className="mt-4 w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isStarting}
+            >
+              {isStarting ? 'Starting...' : 'Start'}
+            </button>
+          )}
 
-        {isSessionLive && (
-          <button
-            type="button"
-            onClick={endFitnessTest}
-            className="mt-4 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={isEnding}
-          >
-            {isEnding ? 'Ending...' : 'End Fitness Test'}
-          </button>
-        )}
+          {isSessionLive && (
+            <button
+              type="button"
+              onClick={endFitnessTest}
+              className="mt-4 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isEnding}
+            >
+              {isEnding ? 'Ending...' : 'End Fitness Test'}
+            </button>
+          )}
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="text-sm font-medium">
-            Current numeric result
-            <input
-              type="number"
-              step="any"
-              value={currentResult.value}
-              onChange={(event) => updateCurrentValue(event.target.value)}
-              className="mt-1 w-full rounded border p-3 text-base"
-              placeholder={resultUnit}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">
+              Level value
+              <input
+                type="number"
+                step="any"
+                value={currentResult.value}
+                onChange={(event) => updateCurrentValue(event.target.value)}
+                className="mt-1 w-full rounded border p-3 text-base"
+                placeholder={resultUnit}
+                disabled={!isSessionLive}
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Display label
+              <input
+                value={currentResult.text}
+                onChange={(event) => updateCurrentText(event.target.value)}
+                className="mt-1 w-full rounded border p-3 text-base"
+                placeholder="e.g. Level 12.4"
+                disabled={!isSessionLive}
+              />
+            </label>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => changeCurrentValue(-1)}
+              className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSessionLive}
-            />
-          </label>
-
-          <label className="text-sm font-medium">
-            Current display result
-            <input
-              value={currentResult.text}
-              onChange={(event) => updateCurrentText(event.target.value)}
-              className="mt-1 w-full rounded border p-3 text-base"
-              placeholder="e.g. Level 12.4"
+            >
+              -1 Level
+            </button>
+            <button
+              type="button"
+              onClick={() => changeCurrentValue(1)}
+              className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSessionLive}
-            />
-          </label>
-        </div>
+            >
+              +1 Level
+            </button>
+          </div>
+        </section>
+      )}
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => changeCurrentValue(-1)}
-            className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!isSessionLive}
-          >
-            -1 Level
-          </button>
-          <button
-            type="button"
-            onClick={() => changeCurrentValue(1)}
-            className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!isSessionLive}
-          >
-            +1 Level
-          </button>
-        </div>
-      </section>
-
-      {message && (
+      {!isSessionCompleted && message && (
         <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
           {message}
         </p>
@@ -350,13 +358,21 @@ function FitnessLiveDropoutInner({
 
       {isSessionCompleted && (
         <FitnessTestCompleteSummary
-          title="Completed Results Summary"
-          description="This test is completed and locked. Saved dropout results remain available."
+          title="Test Complete"
+          description="This session is closed. Results are read-only."
+          testTypeName={testTypeName}
+          teamName={teamName}
+          dateLabel={dateLabel}
+          sessionStatusLabel={isSessionCompleted ? 'Completed' : sessionStatusLabel}
+          startedAtLabel={formattedStartedAt ?? 'Not started'}
+          completedAtLabel={formattedCompletedAt ?? 'Not completed'}
+          resultCount={completedPlayers.length}
           players={dropoutPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
           statusLabel="Dropped out"
           rankingsHref={rankingsHref}
+          progressHref={progressHref}
         />
       )}
 

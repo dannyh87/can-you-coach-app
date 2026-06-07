@@ -18,9 +18,14 @@ type TimerPlayer = {
 
 type FitnessTimerClientProps = {
   sessionId: string
+  testTypeName: string
+  teamName: string
+  dateLabel: string
+  sessionStatusLabel: string
   resultUnit: string
   higherIsBetter: boolean
   rankingsHref: string
+  progressHref: string
   isLive: boolean
   isCompleted: boolean
   startedAt: string | null
@@ -76,9 +81,14 @@ export default function FitnessTimerClient(props: FitnessTimerClientProps) {
 
 function FitnessTimerInner({
   sessionId,
+  testTypeName,
+  teamName,
+  dateLabel,
+  sessionStatusLabel,
   resultUnit,
   higherIsBetter,
   rankingsHref,
+  progressHref,
   isLive,
   isCompleted,
   startedAt: persistedStartedAt,
@@ -294,73 +304,64 @@ function FitnessTimerInner({
 
   return (
     <div className="mt-6 space-y-6">
-      <section className="rounded-xl border bg-gray-950 p-6 text-white">
-        <p className="text-sm uppercase tracking-wide text-gray-300">Elapsed time</p>
-        <div className="mt-3 text-6xl font-bold tabular-nums">{formattedElapsed}</div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={startTimer}
-            className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isSessionCompleted || isRunning || isStarting}
-          >
-            {isSessionCompleted
-              ? 'Results locked'
-              : isStarting
-              ? 'Starting...'
-              : isSessionLive
-                ? 'Start Timer'
-                : 'Start Fitness Test'}
-          </button>
-          <button
-            type="button"
-            onClick={stopTimer}
-            className="rounded bg-amber-500 px-4 py-3 font-medium text-gray-950 disabled:opacity-50"
-            disabled={isSessionCompleted || !isRunning}
-          >
-            Stop
-          </button>
-          <button
-            type="button"
-            onClick={resetTimer}
-            className="rounded border border-white/30 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isSessionCompleted}
-          >
-            Reset
-          </button>
-        </div>
+      {!isSessionCompleted && (
+        <section className="rounded-xl border bg-gray-950 p-6 text-white">
+          <p className="text-sm uppercase tracking-wide text-gray-300">Elapsed time</p>
+          <div className="mt-3 text-6xl font-bold tabular-nums">{formattedElapsed}</div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <button
+              type="button"
+              onClick={startTimer}
+              className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+              disabled={isRunning || isStarting}
+            >
+              {isStarting ? 'Starting...' : 'Start'}
+            </button>
+            <button
+              type="button"
+              onClick={stopTimer}
+              className="rounded bg-amber-500 px-4 py-3 font-medium text-gray-950 disabled:opacity-50"
+              disabled={!isRunning}
+            >
+              Stop
+            </button>
+            <button
+              type="button"
+              onClick={resetTimer}
+              className="rounded border border-white/30 px-4 py-3 font-medium text-white disabled:opacity-50"
+            >
+              Reset
+            </button>
+          </div>
 
-        {isSessionLive && (
-          <button
-            type="button"
-            onClick={endFitnessTest}
-            className="mt-3 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isEnding}
-          >
-            {isEnding ? 'Ending...' : 'End Fitness Test'}
-          </button>
-        )}
-        <p className="mt-4 text-sm text-gray-300">
-          Resetting the timer does not delete already saved player finish results.
-          Use Undo / Reinstate on a player card to remove a saved finish.
-        </p>
-        {isSessionCompleted ? (
-          <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
-            Completed{completedAtText ? `: ${completedAtText}` : ''}. Results are read-only.
+          {isSessionLive && (
+            <button
+              type="button"
+              onClick={endFitnessTest}
+              className="mt-3 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+              disabled={isEnding}
+            >
+              {isEnding ? 'Ending...' : 'End Fitness Test'}
+            </button>
+          )}
+          <p className="mt-4 text-sm text-gray-300">
+            Resetting the timer does not delete already saved player finish results.
+            Use Undo / Reinstate on a player card to remove a saved finish.
           </p>
-        ) : !isSessionLive && (
-          <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
-            Start the fitness test before recording finish times.
-          </p>
-        )}
-        {isSessionLive && (
-          <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
-            LIVE{startedAtText ? `: started ${startedAtText}` : ''}
-          </p>
-        )}
-      </section>
+          {!isSessionLive && (
+            <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
+              Start the fitness test before recording finish times.
+            </p>
+          )}
+          {isSessionLive && (
+            <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
+              LIVE{startedAtText ? `: started ${startedAtText}` : ''}
+            </p>
+          )}
+        </section>
+      )}
 
-      {message && (
+      {!isSessionCompleted && message && (
         <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
           {message}
         </p>
@@ -374,13 +375,21 @@ function FitnessTimerInner({
 
       {isSessionCompleted && (
         <FitnessTestCompleteSummary
-          title="Completed Results Summary"
-          description="This test is completed and locked. Saved finish results remain available."
+          title="Test Complete"
+          description="This session is closed. Results are read-only."
+          testTypeName={testTypeName}
+          teamName={teamName}
+          dateLabel={dateLabel}
+          sessionStatusLabel={isSessionCompleted ? 'Completed' : sessionStatusLabel}
+          startedAtLabel={startedAtText ?? 'Not started'}
+          completedAtLabel={completedAtText ?? 'Not completed'}
+          resultCount={completedPlayers.length}
           players={timerPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
           statusLabel="Completed"
           rankingsHref={rankingsHref}
+          progressHref={progressHref}
         />
       )}
 

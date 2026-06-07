@@ -252,7 +252,7 @@ export default async function FitnessTimerPage({
         </p>
       )}
 
-      <section className="mt-6 rounded-xl border p-6">
+      {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold">Live Timed Finish Mode</h1>
@@ -305,21 +305,14 @@ export default async function FitnessTimerPage({
           </p>
         )}
 
-        {session.status === 'COMPLETED' && (
-          <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-            Fitness test completed{session.completedAt ? ` ${formatDateTime(session.completedAt)}` : ''}.
-            Results are now read-only.
-          </p>
-        )}
-
         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           This mode is useful for longer timed tests. Manual precision entry is still
           preferred for short sprint and agility tests because phone tap timing may
           not be accurate enough for split-second results.
         </p>
-      </section>
+      </section>}
 
-      {players.length === 0 ? (
+      {session.status !== 'COMPLETED' && players.length === 0 ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">No active players</h2>
           <p className="mt-2 text-sm text-gray-500">
@@ -329,9 +322,14 @@ export default async function FitnessTimerPage({
       ) : (
         <FitnessTimerClient
           sessionId={session.id}
+          testTypeName={session.fitnessTestType.name}
+          teamName={`${session.team.club.name} - ${session.team.name}`}
+          dateLabel={formatDate(session.date)}
+          sessionStatusLabel={formatFitnessSessionStatus(session.status)}
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
+          progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}
           isCompleted={session.status === 'COMPLETED'}
           startedAt={session.startedAt?.toISOString() ?? null}

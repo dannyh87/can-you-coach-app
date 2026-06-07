@@ -14,11 +14,19 @@ type SummaryPlayer = {
 type FitnessTestCompleteSummaryProps = {
   title: string
   description: string
+  testTypeName: string
+  teamName: string
+  dateLabel: string
+  sessionStatusLabel: string
+  startedAtLabel: string
+  completedAtLabel: string
+  resultCount: number
   players: SummaryPlayer[]
   resultUnit: string
   higherIsBetter: boolean
   statusLabel: string
   rankingsHref: string
+  progressHref: string
 }
 
 const formatSquadNumber = (squadNumber: number | null) =>
@@ -40,11 +48,19 @@ const getPlayerName = (player: SummaryPlayer) =>
 export default function FitnessTestCompleteSummary({
   title,
   description,
+  testTypeName,
+  teamName,
+  dateLabel,
+  sessionStatusLabel,
+  startedAtLabel,
+  completedAtLabel,
+  resultCount,
   players,
   resultUnit,
   higherIsBetter,
   statusLabel,
   rankingsHref,
+  progressHref,
 }: FitnessTestCompleteSummaryProps) {
   const rankedPlayers = players
     .filter((player) => player.result)
@@ -59,32 +75,63 @@ export default function FitnessTestCompleteSummary({
     })
   const topPerformer = rankedPlayers[0]
   const bottomPerformer = rankedPlayers[rankedPlayers.length - 1]
+  const metadata = [
+    { label: 'Test type', value: testTypeName },
+    { label: 'Team', value: teamName },
+    { label: 'Date', value: dateLabel },
+    { label: 'Status', value: sessionStatusLabel },
+    { label: 'Started', value: startedAtLabel },
+    { label: 'Completed', value: completedAtLabel },
+    { label: 'Results saved', value: String(resultCount) },
+  ]
 
   return (
-    <section className="space-y-4 rounded-xl border p-4">
+    <section className="space-y-5 rounded-xl border border-green-200 bg-green-50/40 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">{title}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-2xl font-bold">{title}</h2>
+            <span className="rounded-full bg-green-700 px-3 py-1 text-xs font-medium text-white">
+              {sessionStatusLabel}
+            </span>
+          </div>
           <p className="mt-1 text-sm text-gray-500">{description}</p>
         </div>
-        <Link
-          href={rankingsHref}
-          className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Full Rankings
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={rankingsHref}
+            className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+          >
+            Full Rankings
+          </Link>
+          <Link
+            href={progressHref}
+            className="inline-flex rounded border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700"
+          >
+            Progress
+          </Link>
+        </div>
       </div>
+
+      <dl className="grid gap-3 rounded-lg border bg-white p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        {metadata.map((item) => (
+          <div key={item.label}>
+            <dt className="font-medium text-gray-500">{item.label}</dt>
+            <dd className="mt-1 font-semibold text-gray-950">{item.value}</dd>
+          </div>
+        ))}
+      </dl>
 
       {topPerformer && bottomPerformer && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+          <div className="rounded-lg border border-green-200 bg-white p-3">
             <p className="text-sm font-medium text-green-800">Top performer</p>
             <p className="mt-1 font-bold">{getPlayerName(topPerformer)}</p>
             <p className="text-sm text-green-900">
               {formatResult(topPerformer.result, resultUnit)}
             </p>
           </div>
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
             <p className="text-sm font-medium text-gray-700">Bottom performer</p>
             <p className="mt-1 font-bold">{getPlayerName(bottomPerformer)}</p>
             <p className="text-sm text-gray-700">
@@ -95,11 +142,11 @@ export default function FitnessTestCompleteSummary({
       )}
 
       {rankedPlayers.length === 0 ? (
-        <p className="rounded-lg border p-4 text-sm text-gray-500">
+        <p className="rounded-lg border bg-white p-4 text-sm text-gray-500">
           No player results were saved for this completed test.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border bg-white">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b bg-gray-50">
