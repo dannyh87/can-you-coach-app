@@ -35,6 +35,8 @@ model Team {
   name                String
   ageGroup            String
   season              String
+  league              String?
+  footballPyramidStep String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   club                Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)

@@ -62,6 +62,8 @@ async function createTeam(formData: FormData): Promise<SetupActionResult> {
   const name = getTextValue(formData, 'name')
   const ageGroup = getTextValue(formData, 'ageGroup')
   const season = getTextValue(formData, 'season')
+  const league = getTextValue(formData, 'league')
+  const footballPyramidStep = getTextValue(formData, 'footballPyramidStep')
 
   if (!clubId || !name || !ageGroup || !season) {
     return { ok: false, reason: 'Club, team name, age group and season are required.' }
@@ -77,6 +79,8 @@ async function createTeam(formData: FormData): Promise<SetupActionResult> {
       name,
       ageGroup,
       season,
+      league: league || null,
+      footballPyramidStep: footballPyramidStep || null,
     },
   })
 
@@ -94,6 +98,8 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
   const name = getTextValue(formData, 'name')
   const ageGroup = getTextValue(formData, 'ageGroup')
   const season = getTextValue(formData, 'season')
+  const league = getTextValue(formData, 'league')
+  const footballPyramidStep = getTextValue(formData, 'footballPyramidStep')
 
   if (!id || !clubId || !name || !ageGroup || !season) {
     return { ok: false, reason: 'Club, team name, age group and season are required.' }
@@ -121,6 +127,8 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
       name,
       ageGroup,
       season,
+      league: league || null,
+      footballPyramidStep: footballPyramidStep || null,
     },
   })
 
@@ -204,6 +212,8 @@ export default async function ClubSetupPage() {
       name: team.name,
       ageGroup: team.ageGroup,
       season: team.season,
+      league: team.league,
+      footballPyramidStep: team.footballPyramidStep,
       playerCount: team._count.players,
       fitnessSessionCount: team._count.fitnessTestSessions,
     })),

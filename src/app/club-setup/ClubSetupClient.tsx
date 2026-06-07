@@ -16,6 +16,8 @@ type TeamRow = {
   name: string
   ageGroup: string
   season: string
+  league: string | null
+  footballPyramidStep: string | null
   playerCount: number
   fitnessSessionCount: number
 }
@@ -37,6 +39,17 @@ type ClubSetupClientProps = {
   updateTeamAction: SetupAction
   deleteTeamAction: SetupAction
 }
+
+const footballPyramidStepOptions = [
+  'Step 1',
+  'Step 2',
+  'Step 3',
+  'Step 4',
+  'Step 5',
+  'Step 6',
+  'Step 7 and below',
+  'Sunday League',
+]
 
 export default function ClubSetupClient({
   clubs,
@@ -193,12 +206,14 @@ export default function ClubSetupClient({
           <p className="p-4 text-sm text-gray-500">No teams created for this club yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[960px] text-left text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Team name</th>
                   <th className="px-4 py-3 font-medium">Age group</th>
                   <th className="px-4 py-3 font-medium">Season</th>
+                  <th className="px-4 py-3 font-medium">League</th>
+                  <th className="px-4 py-3 font-medium">Level</th>
                   <th className="px-4 py-3 font-medium">Players</th>
                   <th className="px-4 py-3 font-medium">Fitness sessions</th>
                 </tr>
@@ -213,6 +228,12 @@ export default function ClubSetupClient({
                     <td className="px-4 py-3 font-medium">{team.name}</td>
                     <td className="px-4 py-3 text-gray-600">{team.ageGroup}</td>
                     <td className="px-4 py-3 text-gray-600">{team.season}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {team.league || 'Not set'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {team.footballPyramidStep || 'Not set'}
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{team.playerCount}</td>
                     <td className="px-4 py-3 text-gray-600">
                       {team.fitnessSessionCount}
@@ -412,6 +433,11 @@ function TeamForm({
         Club: <span className="font-medium text-gray-900">{club.name}</span>
       </div>
 
+      <p className="rounded-lg bg-blue-50 p-3 text-sm text-blue-900 md:col-span-2">
+        League and level are optional now, but will support future benchmarking.
+        Use the step dropdown for Open Age teams where pyramid level matters.
+      </p>
+
       <label className="text-sm font-medium">
         Team name
         <input
@@ -445,7 +471,33 @@ function TeamForm({
         />
       </label>
 
-      <div className="flex items-end">
+      <label className="text-sm font-medium">
+        League
+        <input
+          name="league"
+          defaultValue={team?.league ?? ''}
+          className="mt-1 w-full rounded border p-2"
+          placeholder="e.g. North West Counties League"
+        />
+      </label>
+
+      <label className="text-sm font-medium">
+        Football pyramid step
+        <select
+          name="footballPyramidStep"
+          defaultValue={team?.footballPyramidStep ?? ''}
+          className="mt-1 w-full rounded border p-2"
+        >
+          <option value="">Not set</option>
+          {footballPyramidStepOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="flex items-end md:col-span-2">
         <button
           className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
           disabled={isSubmitting}
@@ -474,6 +526,11 @@ function TeamDetail({
         <DetailItem label="Club" value={team.clubName} />
         <DetailItem label="Age group" value={team.ageGroup} />
         <DetailItem label="Season" value={team.season} />
+        <DetailItem label="League" value={team.league || 'Not set'} />
+        <DetailItem
+          label="Football pyramid step"
+          value={team.footballPyramidStep || 'Not set'}
+        />
         <DetailItem label="Players" value={String(team.playerCount)} />
         <DetailItem
           label="Fitness sessions"
