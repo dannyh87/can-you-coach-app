@@ -255,10 +255,13 @@ export default async function FitnessTimerPage({
       {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold">Live Timed Finish Mode</h1>
+            <h1 className="text-3xl font-bold">{session.fitnessTestType.name}</h1>
             <p className="mt-1 text-sm text-gray-500">
-              {session.fitnessTestType.name} - {session.team.club.name} -{' '}
-              {session.team.name}
+              {formatDate(session.date)} · {session.team.club.name} ·{' '}
+              {session.team.name} · {formatFitnessSessionStatus(session.status)}
+            </p>
+            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+              Recording mode: Live timed finish
             </p>
           </div>
 
@@ -306,9 +309,7 @@ export default async function FitnessTimerPage({
         )}
 
         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          This mode is useful for longer timed tests. Manual precision entry is still
-          preferred for short sprint and agility tests because phone tap timing may
-          not be accurate enough for split-second results.
+          Start the timer, then tap each player as they finish.
         </p>
       </section>}
 

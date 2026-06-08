@@ -10,6 +10,7 @@ const navigationLinks = [
   { href: '/club-setup', label: 'Club Setup' },
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
+  { href: '/match-day', label: 'Match Day' },
 ]
 
 export const metadata: Metadata = {

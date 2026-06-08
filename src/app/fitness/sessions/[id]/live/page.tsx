@@ -261,10 +261,13 @@ export default async function FitnessLiveDropoutPage({
       {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold">Live Dropout Mode</h1>
+            <h1 className="text-3xl font-bold">{session.fitnessTestType.name}</h1>
             <p className="mt-1 text-sm text-gray-500">
-              {session.fitnessTestType.name} - {session.team.club.name} -{' '}
-              {session.team.name}
+              {formatDate(session.date)} · {session.team.club.name} ·{' '}
+              {session.team.name} · {formatFitnessSessionStatus(session.status)}
+            </p>
+            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+              Recording mode: Live dropout
             </p>
           </div>
 
@@ -312,8 +315,7 @@ export default async function FitnessLiveDropoutPage({
         )}
 
         <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-          Use this mode for staged endurance tests. Set the current level, stage, or
-          distance at the top of the screen, then record players as they drop out.
+          Set the current level, then tap each player as they drop out.
           Archived players are excluded.
         </p>
       </section>}

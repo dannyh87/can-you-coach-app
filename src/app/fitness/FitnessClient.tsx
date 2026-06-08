@@ -669,16 +669,16 @@ function SessionActions({ session }: { session: FitnessSessionRow }) {
           Manual Entry
         </ActionLink>
       )}
-      {session.liveDropout && (
-        <ActionLink href={`/fitness/sessions/${session.id}/live`} primary>
-          Start Live Dropout
-        </ActionLink>
-      )}
-      {session.liveTimedFinish && (
-        <ActionLink href={`/fitness/sessions/${session.id}/timer`} primary>
-          Start Live Timed Finish
-        </ActionLink>
-      )}
+        {session.liveDropout && (
+          <ActionLink href={`/fitness/sessions/${session.id}/live`} primary>
+            Start
+          </ActionLink>
+        )}
+        {session.liveTimedFinish && (
+          <ActionLink href={`/fitness/sessions/${session.id}/timer`} primary>
+            Start
+          </ActionLink>
+        )}
       <ActionLink href={`/fitness/sessions/${session.id}/rankings`}>
         Rankings
       </ActionLink>

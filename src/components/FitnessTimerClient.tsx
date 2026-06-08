@@ -341,7 +341,7 @@ function FitnessTimerInner({
               className="mt-3 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
               disabled={isEnding}
             >
-              {isEnding ? 'Ending...' : 'End Fitness Test'}
+              {isEnding ? 'Ending...' : 'Finish test'}
             </button>
           )}
           <p className="mt-4 text-sm text-gray-300">
@@ -369,7 +369,7 @@ function FitnessTimerInner({
 
       {!isSessionCompleted && isSessionLive && allPlayersFinished && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-          All active players have finish times. End Fitness Test to complete and lock this session.
+          All active players have finish times. Finish test to complete and lock this session.
         </p>
       )}
 

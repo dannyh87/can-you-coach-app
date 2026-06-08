@@ -42,6 +42,41 @@ model Team {
   club                Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
   players             Player[]
   fitnessTestSessions FitnessTestSession[]
+  matchDays           MatchDay[]
+}
+
+model MatchDay {
+  id              String      @id @default(cuid())
+  teamId          String
+  kickoffAt       DateTime
+  opposition      String
+  matchType       MatchType
+  venue           MatchVenue
+  ownScore        Int         @default(0)
+  oppositionScore Int         @default(0)
+  status          MatchStatus @default(DRAFT)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+enum MatchType {
+  LEAGUE
+  CUP
+  FRIENDLY
+}
+
+enum MatchVenue {
+  HOME
+  AWAY
+  NEUTRAL
+}
+
+enum MatchStatus {
+  DRAFT
+  IN_PROGRESS
+  HALF_TIME
+  COMPLETED
 }
 
 model Player {

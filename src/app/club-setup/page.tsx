@@ -157,6 +157,7 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
         select: {
           players: true,
           fitnessTestSessions: true,
+          matchDays: true,
         },
       },
     },
@@ -164,10 +165,14 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
 
   if (!team) return { ok: false, reason: 'Team was not found.' }
 
-  if (team._count.players > 0 || team._count.fitnessTestSessions > 0) {
+  if (
+    team._count.players > 0 ||
+    team._count.fitnessTestSessions > 0 ||
+    team._count.matchDays > 0
+  ) {
     return {
       ok: false,
-      reason: 'This team has players or fitness sessions. Move or remove them before deleting.',
+      reason: 'This team has players, fitness sessions or match days. Move or remove them before deleting.',
     }
   }
 
@@ -191,6 +196,7 @@ export default async function ClubSetupPage() {
             select: {
               players: true,
               fitnessTestSessions: true,
+              matchDays: true,
             },
           },
         },
@@ -216,6 +222,7 @@ export default async function ClubSetupPage() {
       footballPyramidStep: team.footballPyramidStep,
       playerCount: team._count.players,
       fitnessSessionCount: team._count.fitnessTestSessions,
+      matchDayCount: team._count.matchDays,
     })),
   }))
 

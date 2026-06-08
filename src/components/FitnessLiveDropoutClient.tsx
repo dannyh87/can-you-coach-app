@@ -98,11 +98,8 @@ function FitnessLiveDropoutInner({
   const [localCompletedAt, setLocalCompletedAt] = useState<string | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [isEnding, setIsEnding] = useState(false)
-  const [currentResult, setCurrentResult] = useState({
-    value: '1',
-    text: 'Level 1',
-  })
-  const currentResultRef = useRef(currentResult)
+  const [currentLevel, setCurrentLevel] = useState('1')
+  const currentLevelRef = useRef(currentLevel)
   const [message, setMessage] = useState<string | null>(null)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
   const completedPlayers = dropoutPlayers.filter((player) => player.result)
@@ -113,27 +110,23 @@ function FitnessLiveDropoutInner({
   const effectiveStartedAt = localStartedAt ?? startedAt
   const effectiveCompletedAt = localCompletedAt ?? completedAt
 
-  const setSharedCurrentResult = (nextResult: { value: string; text: string }) => {
-    currentResultRef.current = nextResult
-    setCurrentResult(nextResult)
+  const setSharedCurrentLevel = (nextLevel: string) => {
+    currentLevelRef.current = nextLevel
+    setCurrentLevel(nextLevel)
   }
 
-  const changeCurrentValue = (amount: number) => {
-    const numberValue = Number(currentResultRef.current.value || 0)
+  const changeCurrentLevel = (amount: number) => {
+    const numberValue = Number(currentLevelRef.current || 0)
     const nextValue = Number.isFinite(numberValue) ? numberValue + amount : amount
     const formattedValue = Number.isInteger(nextValue)
       ? String(nextValue)
       : nextValue.toFixed(1)
 
-    setSharedCurrentResult({ value: formattedValue, text: `Level ${formattedValue}` })
+    setSharedCurrentLevel(formattedValue)
   }
 
-  const updateCurrentValue = (value: string) => {
-    setSharedCurrentResult({ value, text: value ? `Level ${value}` : '' })
-  }
-
-  const updateCurrentText = (text: string) => {
-    setSharedCurrentResult({ value: currentResultRef.current.value, text })
+  const updateCurrentLevel = (value: string) => {
+    setSharedCurrentLevel(value)
   }
 
   const recordDropout = async (playerId: string) => {
@@ -143,11 +136,11 @@ function FitnessLiveDropoutInner({
     setMessage(null)
 
     const formData = new FormData()
-    const resultAtDropout = currentResultRef.current
+    const levelAtDropout = currentLevelRef.current
     formData.set('fitnessTestSessionId', sessionId)
     formData.set('playerId', playerId)
-    formData.set('resultValue', resultAtDropout.value)
-    formData.set('resultText', resultAtDropout.text || resultAtDropout.value)
+    formData.set('resultValue', levelAtDropout)
+    formData.set('resultText', levelAtDropout ? `Level ${levelAtDropout}` : '')
 
     const result = await saveDropoutAction(formData)
 
@@ -291,33 +284,22 @@ function FitnessLiveDropoutInner({
               type="button"
               onClick={endFitnessTest}
               className="mt-4 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isEnding}
-            >
-              {isEnding ? 'Ending...' : 'End Fitness Test'}
+            disabled={isEnding}
+          >
+              {isEnding ? 'Ending...' : 'Finish test'}
             </button>
           )}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4">
             <label className="text-sm font-medium">
-              Level value
+              Current level
               <input
                 type="number"
                 step="any"
-                value={currentResult.value}
-                onChange={(event) => updateCurrentValue(event.target.value)}
+                value={currentLevel}
+                onChange={(event) => updateCurrentLevel(event.target.value)}
                 className="mt-1 w-full rounded border p-3 text-base"
-                placeholder={resultUnit}
-                disabled={!isSessionLive}
-              />
-            </label>
-
-            <label className="text-sm font-medium">
-              Display label
-              <input
-                value={currentResult.text}
-                onChange={(event) => updateCurrentText(event.target.value)}
-                className="mt-1 w-full rounded border p-3 text-base"
-                placeholder="e.g. Level 12.4"
+                placeholder="Level"
                 disabled={!isSessionLive}
               />
             </label>
@@ -326,19 +308,19 @@ function FitnessLiveDropoutInner({
           <div className="mt-3 grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => changeCurrentValue(-1)}
+              onClick={() => changeCurrentLevel(-1)}
               className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSessionLive}
             >
-              -1 Level
+              Previous level
             </button>
             <button
               type="button"
-              onClick={() => changeCurrentValue(1)}
+              onClick={() => changeCurrentLevel(1)}
               className="rounded border px-4 py-3 font-medium disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!isSessionLive}
             >
-              +1 Level
+              Next level
             </button>
           </div>
         </section>
@@ -352,7 +334,7 @@ function FitnessLiveDropoutInner({
 
       {!isSessionCompleted && isSessionLive && allPlayersFinished && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
-          All active players have dropout results. End Fitness Test to complete and lock this session.
+          All active players have dropout results. Finish test to complete and lock this session.
         </p>
       )}
 
