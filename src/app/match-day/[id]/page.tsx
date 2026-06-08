@@ -3,11 +3,13 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
+import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
+const pitchTargetStates = ['ON', 'OFF'] as const
 
 type SquadActionResult =
   | { ok: true }
@@ -59,6 +61,59 @@ const getMatchHeadline = ({
 }) => {
   if (venue === 'AWAY') return `${opposition} vs ${teamName}`
   return `${teamName} vs ${opposition}`
+}
+
+const getSecondsBetween = (start: Date, end: Date) =>
+  Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000))
+
+const getActiveHalf = (match: {
+  status: string
+  firstHalfStartedAt: Date | null
+  firstHalfEndedAt: Date | null
+  secondHalfStartedAt: Date | null
+  secondHalfEndedAt: Date | null
+}) => {
+  if (match.status !== 'IN_PROGRESS') return null
+
+  if (match.secondHalfStartedAt && !match.secondHalfEndedAt) {
+    return {
+      half: 'SECOND_HALF' as const,
+      startedAt: match.secondHalfStartedAt,
+    }
+  }
+
+  if (match.firstHalfStartedAt && !match.firstHalfEndedAt) {
+    return {
+      half: 'FIRST_HALF' as const,
+      startedAt: match.firstHalfStartedAt,
+    }
+  }
+
+  return null
+}
+
+const getStintDuration = (stint: { startedAt: Date; endedAt: Date | null }) => {
+  const endedAt = stint.endedAt ?? new Date()
+  return Math.max(0, endedAt.getTime() - stint.startedAt.getTime())
+}
+
+const getMatchElapsedMilliseconds = (match: {
+  firstHalfStartedAt: Date | null
+  firstHalfEndedAt: Date | null
+  secondHalfStartedAt: Date | null
+  secondHalfEndedAt: Date | null
+  completedAt: Date | null
+}) => {
+  const now = new Date()
+  const firstHalfElapsed = match.firstHalfStartedAt
+    ? (match.firstHalfEndedAt ?? now).getTime() - match.firstHalfStartedAt.getTime()
+    : 0
+  const secondHalfElapsed = match.secondHalfStartedAt
+    ? (match.secondHalfEndedAt ?? match.completedAt ?? now).getTime() -
+      match.secondHalfStartedAt.getTime()
+    : 0
+
+  return Math.max(0, firstHalfElapsed) + Math.max(0, secondHalfElapsed)
 }
 
 async function getOwnedMatch(matchDayId: string) {
@@ -208,13 +263,35 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
     return { ok: false, reason: 'This match cannot be started from its current state.' }
   }
 
-  await prisma.matchDay.update({
-    where: { id: match.id },
-    data: {
-      status: 'IN_PROGRESS',
-      firstHalfStartedAt: new Date(),
+  const now = new Date()
+  const starters = await prisma.matchDayPlayer.findMany({
+    where: {
+      matchDayId: match.id,
+      squadStatus: 'STARTER',
     },
   })
+
+  await prisma.$transaction([
+    prisma.matchDay.update({
+      where: { id: match.id },
+      data: {
+        status: 'IN_PROGRESS',
+        firstHalfStartedAt: now,
+      },
+    }),
+    ...starters.map((starter) =>
+      prisma.matchPlayerStint.create({
+        data: {
+          matchDayId: match.id,
+          matchDayPlayerId: starter.id,
+          playerId: starter.playerId,
+          half: 'FIRST_HALF',
+          startedAt: now,
+          startMatchSecond: 0,
+        },
+      })
+    ),
+  ])
 
   revalidatePath(`/match-day/${match.id}`)
   revalidatePath('/match-day')
@@ -241,13 +318,29 @@ async function endFirstHalf(formData: FormData): Promise<MatchActionResult> {
     return { ok: false, reason: 'This match is not in the first half.' }
   }
 
-  await prisma.matchDay.update({
-    where: { id: match.id },
-    data: {
-      status: 'HALF_TIME',
-      firstHalfEndedAt: new Date(),
-    },
-  })
+  const now = new Date()
+  const endMatchSecond = getSecondsBetween(match.firstHalfStartedAt, now)
+
+  await prisma.$transaction([
+    prisma.matchDay.update({
+      where: { id: match.id },
+      data: {
+        status: 'HALF_TIME',
+        firstHalfEndedAt: now,
+      },
+    }),
+    prisma.matchPlayerStint.updateMany({
+      where: {
+        matchDayId: match.id,
+        half: 'FIRST_HALF',
+        endedAt: null,
+      },
+      data: {
+        endedAt: now,
+        endMatchSecond,
+      },
+    }),
+  ])
 
   revalidatePath(`/match-day/${match.id}`)
   revalidatePath('/match-day')
@@ -273,13 +366,40 @@ async function startSecondHalf(formData: FormData): Promise<MatchActionResult> {
     return { ok: false, reason: 'This match cannot start the second half yet.' }
   }
 
-  await prisma.matchDay.update({
-    where: { id: match.id },
-    data: {
-      status: 'IN_PROGRESS',
-      secondHalfStartedAt: new Date(),
+  const now = new Date()
+  const playersOnAtHalfTime = await prisma.matchPlayerStint.findMany({
+    where: {
+      matchDayId: match.id,
+      half: 'FIRST_HALF',
+      endedAt: match.firstHalfEndedAt,
+    },
+    select: {
+      matchDayPlayerId: true,
+      playerId: true,
     },
   })
+
+  await prisma.$transaction([
+    prisma.matchDay.update({
+      where: { id: match.id },
+      data: {
+        status: 'IN_PROGRESS',
+        secondHalfStartedAt: now,
+      },
+    }),
+    ...playersOnAtHalfTime.map((stint) =>
+      prisma.matchPlayerStint.create({
+        data: {
+          matchDayId: match.id,
+          matchDayPlayerId: stint.matchDayPlayerId,
+          playerId: stint.playerId,
+          half: 'SECOND_HALF',
+          startedAt: now,
+          startMatchSecond: 0,
+        },
+      })
+    ),
+  ])
 
   revalidatePath(`/match-day/${match.id}`)
   revalidatePath('/match-day')
@@ -306,14 +426,28 @@ async function completeMatch(formData: FormData): Promise<MatchActionResult> {
   }
 
   const now = new Date()
-  await prisma.matchDay.update({
-    where: { id: match.id },
-    data: {
-      status: 'COMPLETED',
-      secondHalfEndedAt: now,
-      completedAt: now,
-    },
-  })
+  const endMatchSecond = getSecondsBetween(match.secondHalfStartedAt, now)
+  await prisma.$transaction([
+    prisma.matchDay.update({
+      where: { id: match.id },
+      data: {
+        status: 'COMPLETED',
+        secondHalfEndedAt: now,
+        completedAt: now,
+      },
+    }),
+    prisma.matchPlayerStint.updateMany({
+      where: {
+        matchDayId: match.id,
+        half: 'SECOND_HALF',
+        endedAt: null,
+      },
+      data: {
+        endedAt: now,
+        endMatchSecond,
+      },
+    }),
+  ])
 
   revalidatePath(`/match-day/${match.id}`)
   revalidatePath('/match-day')
@@ -361,6 +495,94 @@ async function updateMatchScore(formData: FormData): Promise<MatchActionResult> 
   return { ok: true }
 }
 
+async function togglePlayerOnPitch(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
+  const targetState = getTextValue(formData, 'targetState')
+
+  if (!matchDayId || !matchDayPlayerId || !targetState) {
+    return { ok: false, reason: 'Match, player and target state are required.' }
+  }
+
+  if (!pitchTargetStates.includes(targetState as (typeof pitchTargetStates)[number])) {
+    return { ok: false, reason: 'On-pitch target state is invalid.' }
+  }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches are read-only.' }
+  }
+
+  const activeHalf = getActiveHalf(match)
+  if (!activeHalf) {
+    return { ok: false, reason: 'Players can only be toggled during live match play.' }
+  }
+
+  const squadPlayer = await prisma.matchDayPlayer.findFirst({
+    where: {
+      id: matchDayPlayerId,
+      matchDayId: match.id,
+      matchDay: {
+        teamId: match.teamId,
+      },
+    },
+  })
+
+  if (!squadPlayer) {
+    return { ok: false, reason: 'Player is not in this match squad.' }
+  }
+
+  if (squadPlayer.squadStatus === 'NOT_INVOLVED') {
+    return { ok: false, reason: 'Not involved players cannot be toggled on.' }
+  }
+
+  const openStint = await prisma.matchPlayerStint.findFirst({
+    where: {
+      matchDayId: match.id,
+      matchDayPlayerId: squadPlayer.id,
+      endedAt: null,
+    },
+  })
+
+  const now = new Date()
+  const matchSecond = getSecondsBetween(activeHalf.startedAt, now)
+
+  if (targetState === 'ON') {
+    if (openStint) {
+      return { ok: false, reason: 'Player is already on the pitch.' }
+    }
+
+    await prisma.matchPlayerStint.create({
+      data: {
+        matchDayId: match.id,
+        matchDayPlayerId: squadPlayer.id,
+        playerId: squadPlayer.playerId,
+        half: activeHalf.half,
+        startedAt: now,
+        startMatchSecond: matchSecond,
+      },
+    })
+  } else {
+    if (!openStint) {
+      return { ok: false, reason: 'Player is already off the pitch.' }
+    }
+
+    await prisma.matchPlayerStint.update({
+      where: { id: openStint.id },
+      data: {
+        endedAt: now,
+        endMatchSecond: matchSecond,
+      },
+    })
+  }
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
 export default async function MatchDayDetailPage({
   params,
 }: {
@@ -390,6 +612,7 @@ export default async function MatchDayDetailPage({
       matchDayPlayers: {
         include: {
           player: true,
+          stints: true,
         },
       },
     },
@@ -422,6 +645,28 @@ export default async function MatchDayDetailPage({
       hasSquadRecord: Boolean(squadRecord),
     }
   })
+  const matchElapsedMilliseconds = getMatchElapsedMilliseconds(match)
+  const pitchPlayers = match.matchDayPlayers
+    .filter((squadPlayer) => squadPlayer.squadStatus !== 'NOT_INVOLVED')
+    .map((squadPlayer) => {
+      const openStint = squadPlayer.stints.find((stint) => !stint.endedAt)
+      const totalMilliseconds = squadPlayer.stints.reduce(
+        (total, stint) => (stint.endedAt ? total + getStintDuration(stint) : total),
+        0
+      )
+
+      return {
+        matchDayPlayerId: squadPlayer.id,
+        playerId: squadPlayer.playerId,
+        firstName: squadPlayer.player.firstName,
+        surname: squadPlayer.player.surname,
+        squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
+        squadStatus: squadPlayer.squadStatus as 'STARTER' | 'SUBSTITUTE',
+        isOnPitch: Boolean(openStint),
+        openStintStartedAt: openStint?.startedAt.toISOString() ?? null,
+        totalMilliseconds,
+      }
+    })
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
@@ -492,6 +737,16 @@ export default async function MatchDayDetailPage({
           This match is completed and read-only in this skeleton.
         </p>
       )}
+
+      <section className="mt-6">
+        <MatchPitchClient
+          matchDayId={match.id}
+          status={match.status}
+          matchElapsedMilliseconds={matchElapsedMilliseconds}
+          players={pitchPlayers}
+          togglePlayerOnPitchAction={togglePlayerOnPitch}
+        />
+      </section>
 
       <section className="mt-6">
         <MatchSquadClient

@@ -64,6 +64,7 @@ model MatchDay {
   updatedAt       DateTime    @updatedAt
   team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
   matchDayPlayers MatchDayPlayer[]
+  matchPlayerStints MatchPlayerStint[]
 }
 
 model MatchDayPlayer {
@@ -77,8 +78,26 @@ model MatchDayPlayer {
   updatedAt           DateTime         @updatedAt
   matchDay            MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   player              Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stints              MatchPlayerStint[]
 
   @@unique([matchDayId, playerId])
+}
+
+model MatchPlayerStint {
+  id               String         @id @default(cuid())
+  matchDayId       String
+  matchDayPlayerId String
+  playerId         String
+  half             MatchHalf
+  startedAt        DateTime
+  endedAt          DateTime?
+  startMatchSecond Int?
+  endMatchSecond   Int?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  matchDay         MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  matchDayPlayer   MatchDayPlayer @relation(fields: [matchDayPlayerId], references: [id], onDelete: Cascade)
+  player           Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
 }
 
 enum MatchType {
@@ -106,6 +125,11 @@ enum MatchSquadStatus {
   NOT_INVOLVED
 }
 
+enum MatchHalf {
+  FIRST_HALF
+  SECOND_HALF
+}
+
 model Player {
   id                 String              @id @default(cuid())
   teamId             String
@@ -121,6 +145,7 @@ model Player {
   team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   fitnessTestResults FitnessTestResult[]
   matchDayPlayers    MatchDayPlayer[]
+  matchPlayerStints  MatchPlayerStint[]
 }
 
 model FitnessTestType {
