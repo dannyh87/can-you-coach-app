@@ -58,6 +58,22 @@ model MatchDay {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  matchDayPlayers MatchDayPlayer[]
+}
+
+model MatchDayPlayer {
+  id                  String           @id @default(cuid())
+  matchDayId          String
+  playerId            String
+  squadStatus         MatchSquadStatus @default(NOT_INVOLVED)
+  startingPosition    String?
+  shirtNumberSnapshot Int?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  matchDay            MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player              Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([matchDayId, playerId])
 }
 
 enum MatchType {
@@ -79,6 +95,12 @@ enum MatchStatus {
   COMPLETED
 }
 
+enum MatchSquadStatus {
+  STARTER
+  SUBSTITUTE
+  NOT_INVOLVED
+}
+
 model Player {
   id                 String              @id @default(cuid())
   teamId             String
@@ -93,6 +115,7 @@ model Player {
   updatedAt          DateTime            @updatedAt
   team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
   fitnessTestResults FitnessTestResult[]
+  matchDayPlayers    MatchDayPlayer[]
 }
 
 model FitnessTestType {

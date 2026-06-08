@@ -1,8 +1,21 @@
 import Link from 'next/link'
+import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
+import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
+
+const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
+
+type SquadActionResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
+const getTextValue = (formData: FormData, key: string) => {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 const formatDateTime = (date: Date) =>
@@ -43,6 +56,138 @@ const getMatchHeadline = ({
   return `${teamName} vs ${opposition}`
 }
 
+async function getOwnedMatch(matchDayId: string) {
+  const user = await getLocalUser()
+
+  return prisma.matchDay.findFirst({
+    where: {
+      id: matchDayId,
+      team: {
+        club: {
+          userId: user.id,
+        },
+      },
+    },
+    include: {
+      team: {
+        include: {
+          club: true,
+        },
+      },
+    },
+  })
+}
+
+async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches are read-only.' }
+  }
+
+  const activePlayers = await prisma.player.findMany({
+    where: {
+      teamId: match.teamId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      squadNumber: true,
+    },
+  })
+
+  for (const player of activePlayers) {
+    await prisma.matchDayPlayer.upsert({
+      where: {
+        matchDayId_playerId: {
+          matchDayId: match.id,
+          playerId: player.id,
+        },
+      },
+      update: {},
+      create: {
+        matchDayId: match.id,
+        playerId: player.id,
+        squadStatus: 'NOT_INVOLVED',
+        shirtNumberSnapshot: player.squadNumber,
+      },
+    })
+  }
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
+async function updateMatchSquadPlayer(
+  formData: FormData
+): Promise<SquadActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const playerId = getTextValue(formData, 'playerId')
+  const squadStatus = getTextValue(formData, 'squadStatus')
+  const startingPosition = getTextValue(formData, 'startingPosition')
+
+  if (!matchDayId || !playerId || !squadStatus) {
+    return { ok: false, reason: 'Match, player and squad status are required.' }
+  }
+
+  if (!squadStatuses.includes(squadStatus as (typeof squadStatuses)[number])) {
+    return { ok: false, reason: 'Squad status is invalid.' }
+  }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches are read-only.' }
+  }
+
+  const player = await prisma.player.findFirst({
+    where: {
+      id: playerId,
+      teamId: match.teamId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      squadNumber: true,
+    },
+  })
+
+  if (!player) {
+    return { ok: false, reason: 'Player was not found for this match team.' }
+  }
+
+  await prisma.matchDayPlayer.upsert({
+    where: {
+      matchDayId_playerId: {
+        matchDayId: match.id,
+        playerId: player.id,
+      },
+    },
+    update: {
+      squadStatus: squadStatus as (typeof squadStatuses)[number],
+      startingPosition: startingPosition || null,
+      shirtNumberSnapshot: player.squadNumber,
+    },
+    create: {
+      matchDayId: match.id,
+      playerId: player.id,
+      squadStatus: squadStatus as (typeof squadStatuses)[number],
+      startingPosition: startingPosition || null,
+      shirtNumberSnapshot: player.squadNumber,
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
 export default async function MatchDayDetailPage({
   params,
 }: {
@@ -63,6 +208,15 @@ export default async function MatchDayDetailPage({
       team: {
         include: {
           club: true,
+          players: {
+            where: { isActive: true },
+            orderBy: [{ surname: 'asc' }, { firstName: 'asc' }],
+          },
+        },
+      },
+      matchDayPlayers: {
+        include: {
+          player: true,
         },
       },
     },
@@ -77,6 +231,23 @@ export default async function MatchDayDetailPage({
     opposition: match.opposition,
     teamName: match.team.name,
     venue: match.venue,
+  })
+  const squadRecordsByPlayerId = new Map(
+    match.matchDayPlayers.map((squadRecord) => [squadRecord.playerId, squadRecord])
+  )
+  const squadPlayers = match.team.players.map((player) => {
+    const squadRecord = squadRecordsByPlayerId.get(player.id)
+
+    return {
+      id: player.id,
+      firstName: player.firstName,
+      surname: player.surname,
+      squadNumber: player.squadNumber,
+      preferredPosition: player.preferredPosition,
+      squadStatus: squadRecord?.squadStatus ?? 'NOT_INVOLVED',
+      startingPosition: squadRecord?.startingPosition ?? '',
+      hasSquadRecord: Boolean(squadRecord),
+    }
   })
 
   return (
@@ -135,11 +306,18 @@ export default async function MatchDayDetailPage({
         </p>
       )}
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <PlaceholderPanel
-          title="Squad"
-          description="Squad selection and match-day availability will be added next."
+      <section className="mt-6">
+        <MatchSquadClient
+          matchDayId={match.id}
+          isReadOnly={match.status === 'COMPLETED'}
+          hasSquadRecords={match.matchDayPlayers.length > 0}
+          players={squadPlayers}
+          setupMatchSquadAction={setupMatchSquad}
+          updateMatchSquadPlayerAction={updateMatchSquadPlayer}
         />
+      </section>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-2">
         <PlaceholderPanel
           title="Match timer"
           description="Live clock controls are coming in a later chunk."
