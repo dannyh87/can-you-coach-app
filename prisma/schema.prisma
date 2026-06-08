@@ -55,6 +55,11 @@ model MatchDay {
   ownScore        Int         @default(0)
   oppositionScore Int         @default(0)
   status          MatchStatus @default(DRAFT)
+  firstHalfStartedAt  DateTime?
+  firstHalfEndedAt    DateTime?
+  secondHalfStartedAt DateTime?
+  secondHalfEndedAt   DateTime?
+  completedAt         DateTime?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)

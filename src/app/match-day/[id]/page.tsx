@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
+import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
@@ -9,6 +10,10 @@ import { prisma } from '@/lib/prisma'
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 
 type SquadActionResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
+type MatchActionResult =
   | { ok: true }
   | { ok: false; reason: string }
 
@@ -188,6 +193,174 @@ async function updateMatchSquadPlayer(
   return { ok: true }
 }
 
+async function startMatch(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches cannot be started.' }
+  }
+  if (match.status !== 'DRAFT' || match.firstHalfStartedAt) {
+    return { ok: false, reason: 'This match cannot be started from its current state.' }
+  }
+
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      status: 'IN_PROGRESS',
+      firstHalfStartedAt: new Date(),
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+  return { ok: true }
+}
+
+async function endFirstHalf(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches are read-only.' }
+  }
+  if (
+    match.status !== 'IN_PROGRESS' ||
+    !match.firstHalfStartedAt ||
+    match.firstHalfEndedAt ||
+    match.secondHalfStartedAt
+  ) {
+    return { ok: false, reason: 'This match is not in the first half.' }
+  }
+
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      status: 'HALF_TIME',
+      firstHalfEndedAt: new Date(),
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+  return { ok: true }
+}
+
+async function startSecondHalf(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed matches are read-only.' }
+  }
+  if (
+    match.status !== 'HALF_TIME' ||
+    !match.firstHalfEndedAt ||
+    match.secondHalfStartedAt
+  ) {
+    return { ok: false, reason: 'This match cannot start the second half yet.' }
+  }
+
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      status: 'IN_PROGRESS',
+      secondHalfStartedAt: new Date(),
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+  return { ok: true }
+}
+
+async function completeMatch(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'This match is already completed.' }
+  }
+  if (
+    match.status !== 'IN_PROGRESS' ||
+    !match.secondHalfStartedAt ||
+    match.secondHalfEndedAt
+  ) {
+    return { ok: false, reason: 'This match is not in the second half.' }
+  }
+
+  const now = new Date()
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      status: 'COMPLETED',
+      secondHalfEndedAt: now,
+      completedAt: now,
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+  return { ok: true }
+}
+
+async function updateMatchScore(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const ownScoreValue = getTextValue(formData, 'ownScore')
+  const oppositionScoreValue = getTextValue(formData, 'oppositionScore')
+
+  if (!matchDayId || !ownScoreValue || !oppositionScoreValue) {
+    return { ok: false, reason: 'Match and score values are required.' }
+  }
+
+  const ownScore = Number(ownScoreValue)
+  const oppositionScore = Number(oppositionScoreValue)
+  if (
+    !Number.isInteger(ownScore) ||
+    !Number.isInteger(oppositionScore) ||
+    ownScore < 0 ||
+    oppositionScore < 0
+  ) {
+    return { ok: false, reason: 'Scores must be whole numbers and cannot be negative.' }
+  }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed match scores are read-only.' }
+  }
+
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      ownScore,
+      oppositionScore,
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+  return { ok: true }
+}
+
 export default async function MatchDayDetailPage({
   params,
 }: {
@@ -275,15 +448,25 @@ export default async function MatchDayDetailPage({
           </span>
         </div>
 
-        <div className="mt-6 rounded-lg border bg-gray-50 p-6 text-center">
-          <p className="text-sm font-medium text-gray-500">Score</p>
-          <p className="mt-2 text-5xl font-bold tabular-nums">
-            {match.ownScore}-{match.oppositionScore}
-          </p>
-          <p className="mt-2 text-sm text-gray-500">
-            {match.team.club.name} · {match.team.name}
-          </p>
-        </div>
+        <MatchControlClient
+          matchDayId={match.id}
+          teamName={match.team.name}
+          opposition={match.opposition}
+          venue={match.venue}
+          status={match.status}
+          ownScore={match.ownScore}
+          oppositionScore={match.oppositionScore}
+          firstHalfStartedAt={match.firstHalfStartedAt?.toISOString() ?? null}
+          firstHalfEndedAt={match.firstHalfEndedAt?.toISOString() ?? null}
+          secondHalfStartedAt={match.secondHalfStartedAt?.toISOString() ?? null}
+          secondHalfEndedAt={match.secondHalfEndedAt?.toISOString() ?? null}
+          completedAt={match.completedAt?.toISOString() ?? null}
+          startMatchAction={startMatch}
+          endFirstHalfAction={endFirstHalf}
+          startSecondHalfAction={startSecondHalf}
+          completeMatchAction={completeMatch}
+          updateMatchScoreAction={updateMatchScore}
+        />
       </section>
 
       <section className="mt-6 rounded-xl border p-6">
@@ -297,6 +480,10 @@ export default async function MatchDayDetailPage({
           <DetailItem label="Status" value={statusLabel} />
           <DetailItem label="Own score" value={String(match.ownScore)} />
           <DetailItem label="Opposition score" value={String(match.oppositionScore)} />
+          <DetailItem
+            label="Completed"
+            value={match.completedAt ? formatDateTime(match.completedAt) : 'Not completed'}
+          />
         </dl>
       </section>
 
@@ -318,10 +505,6 @@ export default async function MatchDayDetailPage({
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <PlaceholderPanel
-          title="Match timer"
-          description="Live clock controls are coming in a later chunk."
-        />
         <PlaceholderPanel
           title="Events"
           description="Goals, substitutions and custom event recording are not enabled yet."
