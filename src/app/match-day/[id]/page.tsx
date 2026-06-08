@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
+import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
 import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import { getLocalUser } from '@/lib/localUser'
@@ -10,6 +11,16 @@ import { prisma } from '@/lib/prisma'
 
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const pitchTargetStates = ['ON', 'OFF'] as const
+const matchEventTypes = [
+  'GOAL',
+  'ASSIST',
+  'SHOT_ON_TARGET',
+  'SHOT_OFF_TARGET',
+  'PASS_COMPLETE',
+  'PASS_INCOMPLETE',
+  'ONE_V_ONE_SUCCESS',
+  'ONE_V_ONE_UNSUCCESSFUL',
+] as const
 
 type SquadActionResult =
   | { ok: true }
@@ -583,6 +594,112 @@ async function togglePlayerOnPitch(formData: FormData): Promise<MatchActionResul
   return { ok: true }
 }
 
+async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
+  const eventType = getTextValue(formData, 'eventType')
+
+  if (!matchDayId || !matchDayPlayerId || !eventType) {
+    return { ok: false, reason: 'Match, player and event type are required.' }
+  }
+
+  if (!matchEventTypes.includes(eventType as (typeof matchEventTypes)[number])) {
+    return { ok: false, reason: 'Event type is invalid.' }
+  }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status !== 'IN_PROGRESS') {
+    return { ok: false, reason: 'Events can only be recorded during live match play.' }
+  }
+
+  const activeHalf = getActiveHalf(match)
+  if (!activeHalf) {
+    return { ok: false, reason: 'No half timer is currently running.' }
+  }
+
+  const squadPlayer = await prisma.matchDayPlayer.findFirst({
+    where: {
+      id: matchDayPlayerId,
+      matchDayId: match.id,
+      matchDay: {
+        teamId: match.teamId,
+      },
+      squadStatus: {
+        not: 'NOT_INVOLVED',
+      },
+    },
+  })
+
+  if (!squadPlayer) {
+    return { ok: false, reason: 'Player is not available in this match squad.' }
+  }
+
+  const openStint = await prisma.matchPlayerStint.findFirst({
+    where: {
+      matchDayId: match.id,
+      matchDayPlayerId: squadPlayer.id,
+      endedAt: null,
+    },
+  })
+
+  if (!openStint) {
+    return { ok: false, reason: 'Events can only be recorded for players on the pitch.' }
+  }
+
+  const now = new Date()
+  const matchSecond = getSecondsBetween(activeHalf.startedAt, now)
+
+  await prisma.matchEvent.create({
+    data: {
+      matchDayId: match.id,
+      playerId: squadPlayer.playerId,
+      eventType: eventType as (typeof matchEventTypes)[number],
+      half: activeHalf.half,
+      matchSecond,
+      ownScoreAtTime: match.ownScore,
+      oppositionScoreAtTime: match.oppositionScore,
+    },
+  })
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
+async function deleteMatchEvent(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const matchEventId = getTextValue(formData, 'matchEventId')
+
+  if (!matchDayId || !matchEventId) {
+    return { ok: false, reason: 'Match and event are required.' }
+  }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status === 'COMPLETED') {
+    return { ok: false, reason: 'Completed match events are read-only.' }
+  }
+
+  const event = await prisma.matchEvent.findFirst({
+    where: {
+      id: matchEventId,
+      matchDayId: match.id,
+    },
+    select: { id: true },
+  })
+
+  if (!event) return { ok: false, reason: 'Event was not found.' }
+
+  await prisma.matchEvent.delete({ where: { id: event.id } })
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
 export default async function MatchDayDetailPage({
   params,
 }: {
@@ -614,6 +731,13 @@ export default async function MatchDayDetailPage({
           player: true,
           stints: true,
         },
+      },
+      matchEvents: {
+        include: {
+          player: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
       },
     },
   })
@@ -667,6 +791,26 @@ export default async function MatchDayDetailPage({
         totalMilliseconds,
       }
     })
+  const eventPlayers = pitchPlayers
+    .filter((player) => player.isOnPitch)
+    .map((player) => ({
+      matchDayPlayerId: player.matchDayPlayerId,
+      playerId: player.playerId,
+      firstName: player.firstName,
+      surname: player.surname,
+      squadNumber: player.squadNumber,
+    }))
+  const recentEvents = match.matchEvents.map((event) => ({
+    id: event.id,
+    eventType: event.eventType,
+    half: event.half,
+    matchSecond: event.matchSecond,
+    ownScoreAtTime: event.ownScoreAtTime,
+    oppositionScoreAtTime: event.oppositionScoreAtTime,
+    playerName: event.player
+      ? `${event.player.firstName} ${event.player.surname}`
+      : 'Unknown player',
+  }))
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
@@ -760,9 +904,13 @@ export default async function MatchDayDetailPage({
       </section>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <PlaceholderPanel
-          title="Events"
-          description="Goals, substitutions and custom event recording are not enabled yet."
+        <MatchEventsClient
+          matchDayId={match.id}
+          status={match.status}
+          players={eventPlayers}
+          events={recentEvents}
+          recordMatchEventAction={recordMatchEvent}
+          deleteMatchEventAction={deleteMatchEvent}
         />
         <PlaceholderPanel
           title="Summary"

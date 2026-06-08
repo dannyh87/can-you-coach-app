@@ -65,6 +65,7 @@ model MatchDay {
   team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
   matchDayPlayers MatchDayPlayer[]
   matchPlayerStints MatchPlayerStint[]
+  matchEvents     MatchEvent[]
 }
 
 model MatchDayPlayer {
@@ -100,6 +101,21 @@ model MatchPlayerStint {
   player           Player         @relation(fields: [playerId], references: [id], onDelete: Cascade)
 }
 
+model MatchEvent {
+  id                    String         @id @default(cuid())
+  matchDayId            String
+  playerId              String?
+  eventType             MatchEventType
+  half                  MatchHalf
+  matchSecond           Int
+  ownScoreAtTime        Int
+  oppositionScoreAtTime Int
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  matchDay              MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
+}
+
 enum MatchType {
   LEAGUE
   CUP
@@ -130,6 +146,17 @@ enum MatchHalf {
   SECOND_HALF
 }
 
+enum MatchEventType {
+  GOAL
+  ASSIST
+  SHOT_ON_TARGET
+  SHOT_OFF_TARGET
+  PASS_COMPLETE
+  PASS_INCOMPLETE
+  ONE_V_ONE_SUCCESS
+  ONE_V_ONE_UNSUCCESSFUL
+}
+
 model Player {
   id                 String              @id @default(cuid())
   teamId             String
@@ -146,6 +173,7 @@ model Player {
   fitnessTestResults FitnessTestResult[]
   matchDayPlayers    MatchDayPlayer[]
   matchPlayerStints  MatchPlayerStint[]
+  matchEvents         MatchEvent[]
 }
 
 model FitnessTestType {
