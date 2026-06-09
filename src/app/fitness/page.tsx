@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 
 import FitnessClient from '@/app/fitness/FitnessClient'
+import Button from '@/components/ui/Button'
+import EmptyState from '@/components/ui/EmptyState'
+import PageHeader from '@/components/ui/PageHeader'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
@@ -218,44 +221,39 @@ export default async function FitnessPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Fitness Testing</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Create fitness test sessions for teams and enter player results.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href="/fitness/progress" className="text-blue-600 hover:underline">
-            View Progress
-          </Link>
-          <Link href="/club-setup" className="text-blue-600 hover:underline">
-            Club Setup
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Fitness Testing"
+        description="Create fitness test sessions for teams and enter player results."
+        actions={(
+          <>
+            <Link href="/fitness/progress" className="text-sm font-semibold text-blue-800 hover:underline">
+              View Progress
+            </Link>
+            <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
+              Club Setup
+            </Link>
+          </>
+        )}
+      />
 
       {teams.length === 0 ? (
-        <section className="mb-8 rounded-lg border p-4">
-          <h2 className="text-xl font-bold">Create a team first</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Fitness test sessions must belong to a team.
-          </p>
+        <EmptyState
+          title="Create a team first"
+          description="Fitness test sessions must belong to a team."
+          action={(
           <Link
             href="/club-setup"
-            className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 font-medium text-white"
+            className="inline-flex"
           >
-            Go to Club Setup
+            <Button>Go to Club Setup</Button>
           </Link>
-        </section>
+          )}
+        />
       ) : fitnessTestTypes.length === 0 ? (
-        <section className="mb-8 rounded-lg border p-4">
-          <h2 className="text-xl font-bold">No fitness test types found</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Run the Prisma seed command to create the default fitness test types.
-          </p>
-        </section>
+        <EmptyState
+          title="No fitness test types found"
+          description="Run the Prisma seed command to create the default fitness test types."
+        />
       ) : (
         <FitnessClient
           sessions={sessionRows}

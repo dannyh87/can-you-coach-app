@@ -3,6 +3,11 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+import SectionCard from '@/components/ui/SectionCard'
+import StatCard from '@/components/ui/StatCard'
+import { fieldClassName } from '@/components/ui/formStyles'
+
 type SetupActionResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -132,7 +137,7 @@ export default function ClubSetupClient({
   return (
     <>
       {clubs.length > 1 && (
-        <section className="mb-6 rounded-lg border p-4">
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <label className="text-sm font-medium">
             Current club
             <select
@@ -143,7 +148,7 @@ export default function ClubSetupClient({
                 setError(null)
                 setModalMode(null)
               }}
-              className="mt-1 w-full rounded border p-2"
+              className={fieldClassName}
             >
               {clubs.map((club) => (
                 <option key={club.id} value={club.id}>
@@ -155,59 +160,55 @@ export default function ClubSetupClient({
         </section>
       )}
 
-      <section className="mb-6 rounded-xl border p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold">{selectedClub.name}</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {selectedClub.location || 'No location set'}
-            </p>
-          </div>
-          <button
+      <SectionCard
+        className="mb-6"
+        title={selectedClub.name}
+        description={selectedClub.location || 'No location set'}
+        actions={(
+          <Button
             type="button"
             onClick={() => openModal('editClub')}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            size="sm"
           >
             Edit Club
-          </button>
-        </div>
+          </Button>
+        )}
+      >
 
         {selectedClub.notes && (
-          <p className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+          <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
             {selectedClub.notes}
           </p>
         )}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <SummaryCard label="Teams" value={teams.length} />
-          <SummaryCard label="Players" value={totalPlayers} />
-          <SummaryCard label="Fitness sessions" value={totalFitnessSessions} />
+          <StatCard label="Teams" value={teams.length} />
+          <StatCard label="Players" value={totalPlayers} />
+          <StatCard label="Fitness sessions" value={totalFitnessSessions} />
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="rounded-xl border">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-          <div>
-            <h2 className="text-xl font-bold">Teams</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Teams belonging to {selectedClub.name}.
-            </p>
-          </div>
-          <button
+      <SectionCard
+        title="Teams"
+        description={`Teams belonging to ${selectedClub.name}.`}
+        actions={(
+          <Button
             type="button"
             onClick={() => openModal('addTeam')}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+            size="sm"
           >
             Add Team
-          </button>
-        </div>
+          </Button>
+        )}
+        bodyClassName="p-0"
+      >
 
         {teams.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No teams created for this club yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Team name</th>
                   <th className="px-4 py-3 font-medium">Age group</th>
@@ -223,7 +224,7 @@ export default function ClubSetupClient({
                   <tr
                     key={team.id}
                     onClick={() => openModal('teamDetail', team)}
-                    className="cursor-pointer hover:bg-blue-50"
+                    className="cursor-pointer hover:bg-blue-50/70"
                   >
                     <td className="px-4 py-3 font-medium">{team.name}</td>
                     <td className="px-4 py-3 text-gray-600">{team.ageGroup}</td>
@@ -244,7 +245,7 @@ export default function ClubSetupClient({
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {modalMode && (
         <div
@@ -341,15 +342,6 @@ export default function ClubSetupClient({
         </div>
       )}
     </>
-  )
-}
-
-function SummaryCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-    </div>
   )
 }
 

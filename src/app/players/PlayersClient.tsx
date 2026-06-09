@@ -3,6 +3,12 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+import SectionCard from '@/components/ui/SectionCard'
+import StatCard from '@/components/ui/StatCard'
+import StatusBadge from '@/components/ui/StatusBadge'
+import { fieldClassName } from '@/components/ui/formStyles'
+
 const positions = [
   'Goalkeeper',
   'Right Back',
@@ -219,45 +225,33 @@ export default function PlayersClient({
   return (
     <>
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border p-4">
-          <p className="text-sm text-gray-500">Total players</p>
-          <p className="mt-1 text-2xl font-bold">{players.length}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm text-gray-500">Active</p>
-          <p className="mt-1 text-2xl font-bold text-green-700">{activeCount}</p>
-        </div>
-        <div className="rounded-lg border p-4">
-          <p className="text-sm text-gray-500">Archived</p>
-          <p className="mt-1 text-2xl font-bold text-gray-700">{archivedCount}</p>
-        </div>
+        <StatCard label="Total players" value={players.length} />
+        <StatCard label="Active" value={activeCount} tone="success" />
+        <StatCard label="Archived" value={archivedCount} />
       </section>
 
-      <section className="rounded-xl border">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-          <div>
-            <h2 className="text-xl font-bold">Player List</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Click a row to view details or edit a player.
-            </p>
-          </div>
-          <button
+      <SectionCard
+        title="Player List"
+        description="Click a row to view details or edit a player."
+        actions={(
+          <Button
             type="button"
             onClick={openAddModal}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           >
             Add Player
-          </button>
-        </div>
+          </Button>
+        )}
+        bodyClassName="p-0"
+      >
 
-        <div className="border-b p-4">
+        <div className="border-b border-slate-100 p-4">
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-5">
             <label className="text-sm font-medium lg:col-span-2">
               Search
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
                 placeholder="Name, team, position or squad number"
               />
             </label>
@@ -267,7 +261,7 @@ export default function PlayersClient({
               <select
                 value={teamFilter}
                 onChange={(event) => setTeamFilter(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="all">All teams</option>
                 {teamFilterOptions.map((team) => (
@@ -283,7 +277,7 @@ export default function PlayersClient({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
@@ -296,7 +290,7 @@ export default function PlayersClient({
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value as PlayerSortOption)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="nameAsc">Name A-Z</option>
                 <option value="nameDesc">Name Z-A</option>
@@ -352,7 +346,7 @@ export default function PlayersClient({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Player name</th>
                   <th className="px-4 py-3 font-medium">Team</th>
@@ -366,7 +360,7 @@ export default function PlayersClient({
                   <tr
                     key={player.id}
                     onClick={() => openDetailModal(player)}
-                    className="cursor-pointer hover:bg-blue-50"
+                    className="cursor-pointer hover:bg-blue-50/70"
                   >
                     <td className="px-4 py-3 font-medium">{getPlayerName(player)}</td>
                     <td className="px-4 py-3 text-gray-600">
@@ -379,15 +373,10 @@ export default function PlayersClient({
                       {formatSquadNumber(player.squadNumber)}
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          player.isActive
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {player.isActive ? 'Active' : 'Archived'}
-                      </span>
+                      <StatusBadge
+                        label={player.isActive ? 'Active' : 'Archived'}
+                        variant={player.isActive ? 'active' : 'archived'}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -395,7 +384,7 @@ export default function PlayersClient({
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {modalMode && (
         <div

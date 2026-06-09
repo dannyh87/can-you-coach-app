@@ -4,6 +4,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+import SectionCard from '@/components/ui/SectionCard'
+import { fieldClassName } from '@/components/ui/formStyles'
+
 type MatchActionResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -78,33 +82,30 @@ export default function MatchDayClient({
         </p>
       )}
 
-      <section className="rounded-xl border">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-          <div>
-            <h2 className="text-xl font-bold">Matches</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Review created match records and open details.
-            </p>
-          </div>
-          <button
+      <SectionCard
+        title="Matches"
+        description="Review created match records and open details."
+        actions={(
+          <Button
             type="button"
             onClick={() => {
               setError(null)
               setMessage(null)
               setIsCreateModalOpen(true)
             }}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           >
             Create match
-          </button>
-        </div>
+          </Button>
+        )}
+        bodyClassName="p-0"
+      >
 
         {matches.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No matches created yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Opposition</th>
@@ -150,7 +151,7 @@ export default function MatchDayClient({
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {isCreateModalOpen && (
         <div
@@ -163,7 +164,7 @@ export default function MatchDayClient({
               <div>
                 <h2 className="text-2xl font-bold">Create match</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Set up the match record. Squad, timer and events come later.
+                  Set up the match record before choosing squad and events.
                 </p>
               </div>
               <button
@@ -211,7 +212,7 @@ function CreateMatchForm({
           name="teamId"
           required
           defaultValue={teams[0]?.id}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
@@ -226,7 +227,7 @@ function CreateMatchForm({
         <input
           name="opposition"
           required
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="e.g. Brereton Social"
         />
       </label>
@@ -238,7 +239,7 @@ function CreateMatchForm({
           type="date"
           required
           defaultValue={new Date().toISOString().split('T')[0]}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
       </label>
 
@@ -249,7 +250,7 @@ function CreateMatchForm({
           type="time"
           required
           defaultValue="10:30"
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
       </label>
 
@@ -259,7 +260,7 @@ function CreateMatchForm({
           name="matchType"
           required
           defaultValue="LEAGUE"
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           <option value="LEAGUE">League</option>
           <option value="CUP">Cup</option>
@@ -273,7 +274,7 @@ function CreateMatchForm({
           name="venue"
           required
           defaultValue="HOME"
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           <option value="HOME">Home</option>
           <option value="AWAY">Away</option>
@@ -283,7 +284,7 @@ function CreateMatchForm({
 
       <div className="flex items-end md:col-span-2">
         <button
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
+          className="w-full rounded-lg bg-blue-800 px-4 py-3 font-semibold text-white disabled:opacity-50"
           disabled={isSubmitting}
         >
           {isSubmitting ? 'Creating...' : 'Create match'}

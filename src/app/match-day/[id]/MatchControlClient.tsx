@@ -138,7 +138,7 @@ export default function MatchControlClient({
     label: string
     action: (formData: FormData) => Promise<MatchActionResult>
   }) => {
-    if (pendingAction || isCompleted || !canUpdateScore) return
+    if (pendingAction || isCompleted) return
 
     setPendingAction(label)
     setMessage(null)
@@ -166,7 +166,7 @@ export default function MatchControlClient({
     nextOwnScore: number
     nextOppositionScore: number
   }) => {
-    if (pendingAction || isCompleted) return
+    if (pendingAction || isCompleted || !canUpdateScore) return
     if (nextOwnScore < 0 || nextOppositionScore < 0) return
 
     setPendingAction('score')

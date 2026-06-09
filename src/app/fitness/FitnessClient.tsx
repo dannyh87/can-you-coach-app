@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+import SectionCard from '@/components/ui/SectionCard'
+import StatCard from '@/components/ui/StatCard'
+import { fieldClassName } from '@/components/ui/formStyles'
+
 type FitnessActionResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -230,36 +235,33 @@ export default function FitnessClient({
       )}
 
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="Total sessions" value={sessions.length} />
-        <SummaryCard label="Live" value={liveCount} />
-        <SummaryCard label="Completed" value={completedCount} />
+        <StatCard label="Total sessions" value={sessions.length} />
+        <StatCard label="Live" value={liveCount} tone="warning" />
+        <StatCard label="Completed" value={completedCount} tone="success" />
       </section>
 
-      <section className="rounded-xl border">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
-          <div>
-            <h2 className="text-xl font-bold">Fitness Test Sessions</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Click a row to view details and available actions.
-            </p>
-          </div>
-          <button
+      <SectionCard
+        title="Fitness Test Sessions"
+        description="Click a row to view details and available actions."
+        actions={(
+          <Button
             type="button"
             onClick={openAddModal}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           >
             Add Fitness Test Session
-          </button>
-        </div>
+          </Button>
+        )}
+        bodyClassName="p-0"
+      >
 
-        <div className="border-b p-4">
+        <div className="border-b border-slate-100 p-4">
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
             <label className="text-sm font-medium lg:col-span-2">
               Search
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
                 placeholder="Team, test type or notes"
               />
             </label>
@@ -269,7 +271,7 @@ export default function FitnessClient({
               <select
                 value={statusFilter}
                 onChange={(event) => setStatusFilter(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="all">All statuses</option>
                 <option value="DRAFT">Created</option>
@@ -283,7 +285,7 @@ export default function FitnessClient({
               <select
                 value={teamFilter}
                 onChange={(event) => setTeamFilter(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="all">All teams</option>
                 {teamFilterOptions.map((team) => (
@@ -299,7 +301,7 @@ export default function FitnessClient({
               <select
                 value={testTypeFilter}
                 onChange={(event) => setTestTypeFilter(event.target.value)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="all">All test types</option>
                 {testTypeFilterOptions.map((testType) => (
@@ -315,7 +317,7 @@ export default function FitnessClient({
               <select
                 value={sortBy}
                 onChange={(event) => setSortBy(event.target.value as FitnessSortOption)}
-                className="mt-1 w-full rounded border p-2"
+                className={fieldClassName}
               >
                 <option value="newest">Newest first</option>
                 <option value="oldest">Oldest first</option>
@@ -370,7 +372,7 @@ export default function FitnessClient({
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-4 py-3 font-medium">Date</th>
                   <th className="px-4 py-3 font-medium">Team</th>
@@ -385,7 +387,7 @@ export default function FitnessClient({
                   <tr
                     key={session.id}
                     onClick={() => openDetailModal(session)}
-                    className="cursor-pointer hover:bg-blue-50"
+                    className="cursor-pointer hover:bg-blue-50/70"
                   >
                     <td className="px-4 py-3 text-gray-600">{session.dateDisplay}</td>
                     <td className="px-4 py-3 text-gray-600">
@@ -409,7 +411,7 @@ export default function FitnessClient({
             </table>
           </div>
         )}
-      </section>
+      </SectionCard>
 
       {modalMode && (
         <div
@@ -480,15 +482,6 @@ export default function FitnessClient({
         </div>
       )}
     </>
-  )
-}
-
-function SummaryCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-    </div>
   )
 }
 

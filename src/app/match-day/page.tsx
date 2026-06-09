@@ -2,6 +2,9 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 
 import MatchDayClient from '@/app/match-day/MatchDayClient'
+import Button from '@/components/ui/Button'
+import EmptyState from '@/components/ui/EmptyState'
+import PageHeader from '@/components/ui/PageHeader'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -164,32 +167,29 @@ export default async function MatchDayPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Match Day</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Create and review match records before live match tracking is added.
-          </p>
-        </div>
-
-        <Link href="/club-setup" className="text-sm text-blue-600 hover:underline">
-          Club Setup
-        </Link>
-      </div>
+      <PageHeader
+        title="Match Day"
+        description="Create, prepare and review match records."
+        actions={(
+          <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
+            Club Setup
+          </Link>
+        )}
+      />
 
       {teams.length === 0 ? (
-        <section className="rounded-lg border p-4">
-          <h2 className="text-xl font-bold">Create a team first</h2>
-          <p className="mt-2 text-sm text-gray-500">
-            Match days must belong to a team.
-          </p>
+        <EmptyState
+          title="Create a team first"
+          description="Match days must belong to a team."
+          action={(
           <Link
             href="/club-setup"
-            className="mt-4 inline-flex rounded bg-blue-600 px-4 py-2 font-medium text-white"
+            className="inline-flex"
           >
-            Go to Club Setup
+            <Button>Go to Club Setup</Button>
           </Link>
-        </section>
+          )}
+        />
       ) : (
         <MatchDayClient
           teams={teamOptions}

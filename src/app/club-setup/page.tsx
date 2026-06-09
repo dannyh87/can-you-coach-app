@@ -1,4 +1,5 @@
 import ClubSetupClient from '@/app/club-setup/ClubSetupClient'
+import PageHeader from '@/components/ui/PageHeader'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
@@ -228,12 +229,10 @@ export default async function ClubSetupPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Club Setup</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Manage your club details and teams in one place.
-        </p>
-      </div>
+      <PageHeader
+        title="Club Setup"
+        description="Manage your club details and teams in one place."
+      />
 
       <ClubSetupClient
         clubs={clubRows}
