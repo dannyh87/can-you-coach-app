@@ -3,24 +3,33 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
+import MatchEventSetupClient from '@/app/match-day/[id]/MatchEventSetupClient'
 import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
 import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
+import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const pitchTargetStates = ['ON', 'OFF'] as const
-const matchEventTypes = [
-  'GOAL',
-  'ASSIST',
-  'SHOT_ON_TARGET',
-  'SHOT_OFF_TARGET',
-  'PASS_COMPLETE',
-  'PASS_INCOMPLETE',
-  'ONE_V_ONE_SUCCESS',
-  'ONE_V_ONE_UNSUCCESSFUL',
+const matchEventCategories = [
+  { value: 'ATTACKING', label: 'Attacking' },
+  { value: 'IN_POSSESSION', label: 'In possession' },
+  { value: 'OUT_OF_POSSESSION', label: 'Out of possession' },
+  { value: 'TRANSITION', label: 'Transition' },
 ] as const
+const matchEventDefinitions = [
+  { value: 'GOAL', label: 'Goal', category: 'ATTACKING' },
+  { value: 'ASSIST', label: 'Assist', category: 'ATTACKING' },
+  { value: 'SHOT_ON_TARGET', label: 'Shot on target', category: 'ATTACKING' },
+  { value: 'SHOT_OFF_TARGET', label: 'Shot off target', category: 'ATTACKING' },
+  { value: 'PASS_COMPLETE', label: 'Pass complete', category: 'IN_POSSESSION' },
+  { value: 'PASS_INCOMPLETE', label: 'Pass incomplete', category: 'IN_POSSESSION' },
+  { value: 'ONE_V_ONE_SUCCESS', label: '1v1 success', category: 'IN_POSSESSION' },
+  { value: 'ONE_V_ONE_UNSUCCESSFUL', label: '1v1 unsuccessful', category: 'IN_POSSESSION' },
+] as const
+const matchEventTypes = matchEventDefinitions.map((eventDefinition) => eventDefinition.value)
 
 type SquadActionResult =
   | { ok: true }
@@ -53,6 +62,14 @@ const formatStatus = (status: string) =>
     .split('_')
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
     .join(' ')
+
+const formatEventType = (eventType: string) =>
+  matchEventDefinitions.find((eventDefinition) => eventDefinition.value === eventType)?.label ??
+  eventType
+
+const getEventCategory = (eventType: (typeof matchEventTypes)[number]) =>
+  matchEventDefinitions.find((eventDefinition) => eventDefinition.value === eventType)?.category ??
+  'ATTACKING'
 
 const getStatusClasses = (status: string) => {
   if (status === 'COMPLETED') return 'bg-green-100 text-green-800'
@@ -149,6 +166,24 @@ async function getOwnedMatch(matchDayId: string) {
   })
 }
 
+async function createDefaultMatchEventSetup(matchDayId: string) {
+  const existingCount = await prisma.matchDayEventType.count({
+    where: { matchDayId },
+  })
+
+  if (existingCount > 0) return []
+
+  return matchEventDefinitions.map((eventDefinition) =>
+    prisma.matchDayEventType.create({
+      data: {
+        matchDayId,
+        eventType: eventDefinition.value,
+        category: eventDefinition.category,
+      },
+    })
+  )
+}
+
 async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
   'use server'
 
@@ -157,8 +192,8 @@ async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
 
   const match = await getOwnedMatch(matchDayId)
   if (!match) return { ok: false, reason: 'Match was not found.' }
-  if (match.status === 'COMPLETED') {
-    return { ok: false, reason: 'Completed matches are read-only.' }
+  if (match.status !== 'DRAFT') {
+    return { ok: false, reason: 'Squad can only be changed before the match starts.' }
   }
 
   const activePlayers = await prisma.player.findMany({
@@ -214,8 +249,8 @@ async function updateMatchSquadPlayer(
 
   const match = await getOwnedMatch(matchDayId)
   if (!match) return { ok: false, reason: 'Match was not found.' }
-  if (match.status === 'COMPLETED') {
-    return { ok: false, reason: 'Completed matches are read-only.' }
+  if (match.status !== 'DRAFT') {
+    return { ok: false, reason: 'Squad can only be changed before the match starts.' }
   }
 
   const player = await prisma.player.findFirst({
@@ -259,6 +294,53 @@ async function updateMatchSquadPlayer(
   return { ok: true }
 }
 
+async function updateMatchEventSetup(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const eventTypes = Array.from(new Set(
+    formData
+      .getAll('eventType')
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  ))
+
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+  if (eventTypes.length === 0) {
+    return { ok: false, reason: 'Select at least one event type.' }
+  }
+
+  const invalidEventType = eventTypes.find(
+    (eventType) => !matchEventTypes.includes(eventType as (typeof matchEventTypes)[number])
+  )
+  if (invalidEventType) return { ok: false, reason: 'Event type is invalid.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status !== 'DRAFT') {
+    return { ok: false, reason: 'Event setup can only be changed before the match starts.' }
+  }
+
+  await prisma.$transaction([
+    prisma.matchDayEventType.deleteMany({ where: { matchDayId: match.id } }),
+    ...eventTypes.map((eventType) => {
+      const typedEventType = eventType as (typeof matchEventTypes)[number]
+
+      return prisma.matchDayEventType.create({
+        data: {
+          matchDayId: match.id,
+          eventType: typedEventType,
+          category: getEventCategory(typedEventType),
+        },
+      })
+    }),
+  ])
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
 async function startMatch(formData: FormData): Promise<MatchActionResult> {
   'use server'
 
@@ -281,8 +363,10 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
       squadStatus: 'STARTER',
     },
   })
+  const defaultEventSetupCreates = await createDefaultMatchEventSetup(match.id)
 
   await prisma.$transaction([
+    ...defaultEventSetupCreates,
     prisma.matchDay.update({
       where: { id: match.id },
       data: {
@@ -615,6 +699,18 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Events can only be recorded during live match play.' }
   }
 
+  const selectedEvent = await prisma.matchDayEventType.findFirst({
+    where: {
+      matchDayId: match.id,
+      eventType: eventType as (typeof matchEventTypes)[number],
+    },
+    select: { id: true },
+  })
+
+  if (!selectedEvent) {
+    return { ok: false, reason: 'This event type was not selected for this match.' }
+  }
+
   const activeHalf = getActiveHalf(match)
   if (!activeHalf) {
     return { ok: false, reason: 'No half timer is currently running.' }
@@ -736,8 +832,10 @@ export default async function MatchDayDetailPage({
         include: {
           player: true,
         },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
+        orderBy: { createdAt: 'asc' },
+      },
+      matchDayEventTypes: {
+        orderBy: { createdAt: 'asc' },
       },
     },
   })
@@ -811,6 +909,97 @@ export default async function MatchDayDetailPage({
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player',
   }))
+  const recentEventsForRecording = [...recentEvents]
+    .sort((firstEvent, secondEvent) => secondEvent.matchSecond - firstEvent.matchSecond)
+    .slice(0, 20)
+  const selectedEventOptions = (match.matchDayEventTypes.length > 0
+    ? match.matchDayEventTypes.map((selectedEventType) => {
+        const eventDefinition = matchEventDefinitions.find(
+          (definition) => definition.value === selectedEventType.eventType
+        )
+
+        return eventDefinition
+          ? {
+              value: eventDefinition.value,
+              label: eventDefinition.label,
+              category: eventDefinition.category,
+            }
+          : null
+      }).filter((eventOption) => eventOption !== null)
+    : matchEventDefinitions.map((eventDefinition) => ({
+        value: eventDefinition.value,
+        label: eventDefinition.label,
+        category: eventDefinition.category,
+      })))
+  const selectedEventTypesForSetup = selectedEventOptions.map(
+    (eventOption) => eventOption.value
+  )
+  const minutesRows = pitchPlayers
+    .map((player) => ({
+      playerId: player.playerId,
+      playerName: `${player.firstName} ${player.surname}`,
+      squadNumber: player.squadNumber,
+      minutesPlayed: Math.round(player.totalMilliseconds / 60000),
+    }))
+    .sort((firstPlayer, secondPlayer) => secondPlayer.minutesPlayed - firstPlayer.minutesPlayed)
+  const teamEventTotals = selectedEventOptions
+    .map((eventOption) => ({
+      key: eventOption.value,
+      label: eventOption.label,
+      count: match.matchEvents.filter((event) => event.eventType === eventOption.value).length,
+    }))
+    .filter((eventTotal) => eventTotal.count > 0)
+  const playerEventCountMap = new Map<
+    string,
+    { playerId: string; playerName: string; eventCounts: Map<string, number> }
+  >()
+
+  for (const event of match.matchEvents) {
+    const playerId = event.playerId ?? 'unknown-player'
+    const playerName = event.player
+      ? `${event.player.firstName} ${event.player.surname}`
+      : 'Unknown player'
+    const currentRow = playerEventCountMap.get(playerId) ?? {
+      playerId,
+      playerName,
+      eventCounts: new Map<string, number>(),
+    }
+
+    currentRow.eventCounts.set(
+      event.eventType,
+      (currentRow.eventCounts.get(event.eventType) ?? 0) + 1
+    )
+    playerEventCountMap.set(playerId, currentRow)
+  }
+
+  const playerEventCounts = Array.from(playerEventCountMap.values())
+    .map((row) => {
+      const eventCounts = Array.from(row.eventCounts.entries()).map(([eventType, count]) => ({
+        key: eventType,
+        label: formatEventType(eventType),
+        count,
+      }))
+
+      return {
+        playerId: row.playerId,
+        playerName: row.playerName,
+        total: eventCounts.reduce((total, eventCount) => total + eventCount.count, 0),
+        eventCounts,
+      }
+    })
+    .sort((firstPlayer, secondPlayer) => secondPlayer.total - firstPlayer.total)
+  const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
+  const timelineEvents = match.matchEvents.map((event) => ({
+    id: event.id,
+    label: formatEventType(event.eventType),
+    half: event.half,
+    matchSecond: event.matchSecond,
+    playerName: event.player
+      ? `${event.player.firstName} ${event.player.surname}`
+      : 'Unknown player',
+    score: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
+  }))
+  const finalScore = `${match.ownScore}-${match.oppositionScore}`
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
@@ -837,25 +1026,27 @@ export default async function MatchDayDetailPage({
           </span>
         </div>
 
-        <MatchControlClient
-          matchDayId={match.id}
-          teamName={match.team.name}
-          opposition={match.opposition}
-          venue={match.venue}
-          status={match.status}
-          ownScore={match.ownScore}
-          oppositionScore={match.oppositionScore}
-          firstHalfStartedAt={match.firstHalfStartedAt?.toISOString() ?? null}
-          firstHalfEndedAt={match.firstHalfEndedAt?.toISOString() ?? null}
-          secondHalfStartedAt={match.secondHalfStartedAt?.toISOString() ?? null}
-          secondHalfEndedAt={match.secondHalfEndedAt?.toISOString() ?? null}
-          completedAt={match.completedAt?.toISOString() ?? null}
-          startMatchAction={startMatch}
-          endFirstHalfAction={endFirstHalf}
-          startSecondHalfAction={startSecondHalf}
-          completeMatchAction={completeMatch}
-          updateMatchScoreAction={updateMatchScore}
-        />
+        {match.status !== 'COMPLETED' && (
+          <MatchControlClient
+            matchDayId={match.id}
+            teamName={match.team.name}
+            opposition={match.opposition}
+            venue={match.venue}
+            status={match.status}
+            ownScore={match.ownScore}
+            oppositionScore={match.oppositionScore}
+            firstHalfStartedAt={match.firstHalfStartedAt?.toISOString() ?? null}
+            firstHalfEndedAt={match.firstHalfEndedAt?.toISOString() ?? null}
+            secondHalfStartedAt={match.secondHalfStartedAt?.toISOString() ?? null}
+            secondHalfEndedAt={match.secondHalfEndedAt?.toISOString() ?? null}
+            completedAt={match.completedAt?.toISOString() ?? null}
+            startMatchAction={startMatch}
+            endFirstHalfAction={endFirstHalf}
+            startSecondHalfAction={startSecondHalf}
+            completeMatchAction={completeMatch}
+            updateMatchScoreAction={updateMatchScore}
+          />
+        )}
       </section>
 
       <section className="mt-6 rounded-xl border p-6">
@@ -876,47 +1067,78 @@ export default async function MatchDayDetailPage({
         </dl>
       </section>
 
-      {match.status === 'COMPLETED' && (
-        <p className="mt-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-          This match is completed and read-only in this skeleton.
+      {match.status === 'DRAFT' && (
+        <section className="mt-6 grid gap-4 lg:grid-cols-2">
+          <MatchSquadClient
+            matchDayId={match.id}
+            isReadOnly={false}
+            hasSquadRecords={match.matchDayPlayers.length > 0}
+            players={squadPlayers}
+            setupMatchSquadAction={setupMatchSquad}
+            updateMatchSquadPlayerAction={updateMatchSquadPlayer}
+          />
+          <MatchEventSetupClient
+            matchDayId={match.id}
+            eventOptions={matchEventDefinitions}
+            categoryOptions={matchEventCategories}
+            selectedEventTypes={selectedEventTypesForSetup}
+            updateMatchEventSetupAction={updateMatchEventSetup}
+          />
+        </section>
+      )}
+
+      {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
+        <p className="mt-6 rounded-lg border p-3 text-sm text-gray-500">
+          Squad was locked when the match started.
         </p>
       )}
 
-      <section className="mt-6">
-        <MatchPitchClient
-          matchDayId={match.id}
-          status={match.status}
-          matchElapsedMilliseconds={matchElapsedMilliseconds}
-          players={pitchPlayers}
-          togglePlayerOnPitchAction={togglePlayerOnPitch}
-        />
-      </section>
+      {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
+        <section className="mt-6">
+          <MatchPitchClient
+            matchDayId={match.id}
+            status={match.status}
+            matchElapsedMilliseconds={matchElapsedMilliseconds}
+            players={pitchPlayers}
+            togglePlayerOnPitchAction={togglePlayerOnPitch}
+          />
+        </section>
+      )}
 
-      <section className="mt-6">
-        <MatchSquadClient
-          matchDayId={match.id}
-          isReadOnly={match.status === 'COMPLETED'}
-          hasSquadRecords={match.matchDayPlayers.length > 0}
-          players={squadPlayers}
-          setupMatchSquadAction={setupMatchSquad}
-          updateMatchSquadPlayerAction={updateMatchSquadPlayer}
-        />
-      </section>
+      {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
+        <section className="mt-6 grid gap-4 md:grid-cols-2">
+          <MatchEventsClient
+            matchDayId={match.id}
+            status={match.status}
+            players={eventPlayers}
+            events={recentEventsForRecording}
+            eventOptions={selectedEventOptions}
+            categoryOptions={matchEventCategories}
+            recordMatchEventAction={recordMatchEvent}
+            deleteMatchEventAction={deleteMatchEvent}
+          />
+          <PlaceholderPanel
+            title="Live summary"
+            description="Complete the match to generate the read-only report."
+          />
+        </section>
+      )}
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2">
-        <MatchEventsClient
-          matchDayId={match.id}
-          status={match.status}
-          players={eventPlayers}
-          events={recentEvents}
-          recordMatchEventAction={recordMatchEvent}
-          deleteMatchEventAction={deleteMatchEvent}
-        />
-        <PlaceholderPanel
-          title="Summary"
-          description="Post-match summary and reporting will use future match events."
-        />
-      </section>
+      {match.status === 'COMPLETED' && (
+        <section className="mt-6">
+          <MatchSummaryReport
+            headline={headline}
+            finalScore={finalScore}
+            statusLabel={statusLabel}
+            matchDate={formatDateTime(match.kickoffAt)}
+            minutesRows={minutesRows}
+            teamEventTotals={teamEventTotals}
+            playerEventCounts={playerEventCounts}
+            mostInvolvedPlayers={mostInvolvedPlayers}
+            timelineEvents={timelineEvents}
+          />
+        </section>
+      )}
 
       <p className="mt-6 rounded-lg border p-4 text-sm text-gray-500">
         TODO: Add an edit match modal in a later Match Day chunk.

@@ -66,6 +66,19 @@ model MatchDay {
   matchDayPlayers MatchDayPlayer[]
   matchPlayerStints MatchPlayerStint[]
   matchEvents     MatchEvent[]
+  matchDayEventTypes MatchDayEventType[]
+}
+
+model MatchDayEventType {
+  id         String             @id @default(cuid())
+  matchDayId String
+  eventType  MatchEventType
+  category   MatchEventCategory
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  matchDay   MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+
+  @@unique([matchDayId, eventType])
 }
 
 model MatchDayPlayer {
@@ -155,6 +168,13 @@ enum MatchEventType {
   PASS_INCOMPLETE
   ONE_V_ONE_SUCCESS
   ONE_V_ONE_UNSUCCESSFUL
+}
+
+enum MatchEventCategory {
+  ATTACKING
+  IN_POSSESSION
+  OUT_OF_POSSESSION
+  TRANSITION
 }
 
 model Player {
