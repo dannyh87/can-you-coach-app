@@ -45,15 +45,9 @@ const formatMinutes = (milliseconds: number) => {
   return `${minutes} min${minutes === 1 ? '' : 's'}`
 }
 
-const getPercentage = (playedMilliseconds: number, matchElapsedMilliseconds: number) => {
-  if (matchElapsedMilliseconds <= 0) return null
-  return Math.round((playedMilliseconds / matchElapsedMilliseconds) * 100)
-}
-
 export default function MatchPitchClient({
   matchDayId,
   status,
-  matchElapsedMilliseconds,
   players,
   togglePlayerOnPitchAction,
 }: MatchPitchClientProps) {
@@ -158,7 +152,6 @@ export default function MatchPitchClient({
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {players.map((player) => {
             const displayedMilliseconds = getDisplayedMilliseconds(player)
-            const percentage = getPercentage(displayedMilliseconds, matchElapsedMilliseconds)
             const targetState = player.isOnPitch ? 'OFF' : 'ON'
 
             return (
@@ -181,17 +174,9 @@ export default function MatchPitchClient({
                   </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-lg border bg-gray-50 p-3">
-                    <p className="text-gray-500">Minutes played</p>
-                    <p className="mt-1 text-xl font-bold">{formatMinutes(displayedMilliseconds)}</p>
-                  </div>
-                  <div className="rounded-lg border bg-gray-50 p-3">
-                    <p className="text-gray-500">Match played</p>
-                    <p className="mt-1 text-xl font-bold">
-                      {percentage === null ? 'N/A' : `${percentage}%`}
-                    </p>
-                  </div>
+                <div className="mt-4 rounded-lg border bg-gray-50 p-3 text-sm">
+                  <p className="text-gray-500">Minutes played</p>
+                  <p className="mt-1 text-xl font-bold">{formatMinutes(displayedMilliseconds)}</p>
                 </div>
 
                 {!isReadOnly && (
