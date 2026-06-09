@@ -1013,7 +1013,7 @@ export default async function MatchDayDetailPage({
         </Link>
       </div>
 
-      <section className="rounded-xl border p-6">
+      <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">{headline}</h1>
@@ -1034,8 +1034,27 @@ export default async function MatchDayDetailPage({
             </span>
           </div>
         </div>
+      </section>
 
-        {match.status !== 'COMPLETED' && (
+      {match.status === 'DRAFT' && (
+        <>
+          <section className="mt-6 grid gap-4 lg:grid-cols-2">
+            <MatchSquadClient
+              matchDayId={match.id}
+              isReadOnly={false}
+              hasSquadRecords={match.matchDayPlayers.length > 0}
+              players={squadPlayers}
+              setupMatchSquadAction={setupMatchSquad}
+              updateMatchSquadPlayerAction={updateMatchSquadPlayer}
+            />
+            <MatchEventSetupClient
+              matchDayId={match.id}
+              eventOptions={matchEventDefinitions}
+              categoryOptions={matchEventCategories}
+              selectedEventTypes={selectedEventTypesForSetup}
+              updateMatchEventSetupAction={updateMatchEventSetup}
+            />
+          </section>
           <MatchControlClient
             matchDayId={match.id}
             teamName={match.team.name}
@@ -1055,34 +1074,36 @@ export default async function MatchDayDetailPage({
             completeMatchAction={completeMatch}
             updateMatchScoreAction={updateMatchScore}
           />
-        )}
-      </section>
+        </>
+      )}
 
-      {match.status === 'DRAFT' && (
-        <section className="mt-6 grid gap-4 lg:grid-cols-2">
-          <MatchSquadClient
-            matchDayId={match.id}
-            isReadOnly={false}
-            hasSquadRecords={match.matchDayPlayers.length > 0}
-            players={squadPlayers}
-            setupMatchSquadAction={setupMatchSquad}
-            updateMatchSquadPlayerAction={updateMatchSquadPlayer}
-          />
-          <MatchEventSetupClient
-            matchDayId={match.id}
-            eventOptions={matchEventDefinitions}
-            categoryOptions={matchEventCategories}
-            selectedEventTypes={selectedEventTypesForSetup}
-            updateMatchEventSetupAction={updateMatchEventSetup}
-          />
-        </section>
+      {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
+        <MatchControlClient
+          matchDayId={match.id}
+          teamName={match.team.name}
+          opposition={match.opposition}
+          venue={match.venue}
+          status={match.status}
+          ownScore={match.ownScore}
+          oppositionScore={match.oppositionScore}
+          firstHalfStartedAt={match.firstHalfStartedAt?.toISOString() ?? null}
+          firstHalfEndedAt={match.firstHalfEndedAt?.toISOString() ?? null}
+          secondHalfStartedAt={match.secondHalfStartedAt?.toISOString() ?? null}
+          secondHalfEndedAt={match.secondHalfEndedAt?.toISOString() ?? null}
+          completedAt={match.completedAt?.toISOString() ?? null}
+          startMatchAction={startMatch}
+          endFirstHalfAction={endFirstHalf}
+          startSecondHalfAction={startSecondHalf}
+          completeMatchAction={completeMatch}
+          updateMatchScoreAction={updateMatchScore}
+        />
       )}
 
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-6 rounded-xl border p-5">
+        <section className="mt-6 rounded-2xl bg-gray-50 p-4 sm:p-5">
           <div>
             <h2 className="text-2xl font-bold">Live match</h2>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-xs text-gray-500">
               Squad and event setup were locked when the match started.
             </p>
           </div>
@@ -1123,10 +1144,6 @@ export default async function MatchDayDetailPage({
           />
         </section>
       )}
-
-      <p className="mt-6 rounded-lg border p-4 text-sm text-gray-500">
-        TODO: Add an edit match modal in a later Match Day chunk.
-      </p>
     </main>
   )
 }

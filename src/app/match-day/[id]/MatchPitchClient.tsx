@@ -101,15 +101,15 @@ export default function MatchPitchClient({
   }
 
   return (
-    <section className="rounded-xl border p-5">
+    <section className="rounded-xl bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">On pitch</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Toggle players on and off during live match play. Minutes are approximate.
+          <h2 className="text-xl font-bold">Players / substitutions</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            Track who is on the pitch and make quick substitutions.
           </p>
         </div>
-        <div className="rounded-lg border bg-gray-50 px-4 py-3 text-sm">
+        <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
           <span className="font-bold">{onPitchCount}</span> on pitch
         </div>
       </div>
@@ -149,17 +149,17 @@ export default function MatchPitchClient({
           Add starters or substitutes in the squad section before tracking on-pitch time.
         </p>
       ) : (
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
           {players.map((player) => {
             const displayedMilliseconds = getDisplayedMilliseconds(player)
             const targetState = player.isOnPitch ? 'OFF' : 'ON'
 
             return (
-              <article key={player.matchDayPlayerId} className="rounded-xl border p-4">
+              <article key={player.matchDayPlayerId} className="rounded-xl bg-gray-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-bold">{getPlayerName(player)}</h3>
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-1 text-sm text-gray-400">
                       {formatSquadNumber(player.squadNumber)} · {formatSquadStatus(player.squadStatus)}
                     </p>
                   </div>
@@ -174,7 +174,7 @@ export default function MatchPitchClient({
                   </span>
                 </div>
 
-                <div className="mt-4 rounded-lg border bg-gray-50 p-3 text-sm">
+                <div className="mt-4 rounded-lg bg-white p-3 text-sm">
                   <p className="text-gray-500">Minutes played</p>
                   <p className="mt-1 text-xl font-bold">{formatMinutes(displayedMilliseconds)}</p>
                 </div>

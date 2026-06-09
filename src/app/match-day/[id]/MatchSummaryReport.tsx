@@ -66,13 +66,21 @@ export default function MatchSummaryReport({
   timelineEvents,
 }: MatchSummaryReportProps) {
   return (
-    <section className="rounded-xl border p-6">
-      <div>
+    <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
+      <div className="rounded-2xl bg-white p-5 shadow-sm">
         <p className="text-sm font-bold uppercase tracking-wide text-green-700">Match report</p>
-        <h2 className="mt-1 text-2xl font-bold">{headline}</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          {matchDate} · {statusLabel} · Final score {finalScore}
-        </p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold">{headline}</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {matchDate} · {statusLabel}
+            </p>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="text-sm font-medium text-gray-500">Final score</p>
+            <p className="text-5xl font-bold tabular-nums">{finalScore}</p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -88,7 +96,7 @@ export default function MatchSummaryReport({
           ) : (
             <div className="space-y-2">
               {minutesRows.map((row) => (
-                <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm">
+                <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3 text-sm">
                   <div>
                     <p className="font-bold">{row.playerName}</p>
                     <p className="text-gray-500">{formatSquadNumber(row.squadNumber)}</p>
@@ -106,7 +114,7 @@ export default function MatchSummaryReport({
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {teamEventTotals.map((row) => (
-                <div key={row.key} className="rounded-lg border p-3">
+                <div key={row.key} className="rounded-lg bg-gray-50 p-3">
                   <p className="text-sm text-gray-500">{row.label}</p>
                   <p className="mt-1 text-2xl font-bold">{row.count}</p>
                 </div>
@@ -123,7 +131,7 @@ export default function MatchSummaryReport({
           ) : (
             <div className="space-y-3">
               {playerEventCounts.map((row) => (
-                <div key={row.playerId} className="rounded-lg border p-3">
+                <div key={row.playerId} className="rounded-lg bg-gray-50 p-3">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-bold">{row.playerName}</p>
                     <p className="text-lg font-bold">{row.total}</p>
@@ -143,7 +151,7 @@ export default function MatchSummaryReport({
           ) : (
             <div className="space-y-2">
               {mostInvolvedPlayers.map((row, index) => (
-                <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-lg bg-gray-50 p-3">
                   <p className="font-bold">{index + 1}. {row.playerName}</p>
                   <p className="text-lg font-bold">{row.total}</p>
                 </div>
@@ -159,7 +167,7 @@ export default function MatchSummaryReport({
         ) : (
           <div className="space-y-2">
             {timelineEvents.map((event) => (
-              <article key={event.id} className="rounded-lg border p-3">
+              <article key={event.id} className="rounded-lg bg-gray-50 p-3">
                 <p className="font-bold">{event.label}</p>
                 <p className="mt-1 text-sm text-gray-500">
                   {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {event.playerName} · {event.score}
@@ -175,7 +183,7 @@ export default function MatchSummaryReport({
 
 function ReportCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border bg-gray-50 p-4">
+    <div className="rounded-xl bg-white p-4 shadow-sm">
       <p className="text-sm text-gray-500">{label}</p>
       <p className="mt-1 text-3xl font-bold">{value}</p>
     </div>
@@ -192,7 +200,7 @@ function ReportPanel({
   children: ReactNode
 }) {
   return (
-    <section className={`rounded-xl border p-4 ${className}`}>
+    <section className={`rounded-xl bg-white p-4 shadow-sm ${className}`}>
       <h3 className="text-lg font-bold">{title}</h3>
       <div className="mt-3">{children}</div>
     </section>
@@ -200,5 +208,5 @@ function ReportPanel({
 }
 
 function EmptyText({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border p-4 text-sm text-gray-500">{children}</p>
+  return <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-500">{children}</p>
 }

@@ -89,18 +89,18 @@ export default function MatchEventSetupClient({
   }
 
   return (
-    <section className="rounded-xl border p-5">
+    <section className="rounded-2xl bg-gray-50 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold">Event setup</h2>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-400">
             Choose the standard event types available for this match before kick-off.
           </p>
         </div>
         <button
           type="button"
           onClick={useDefaultSet}
-          className="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50"
+          className="rounded-lg bg-white px-4 py-2 text-sm font-medium shadow-sm disabled:opacity-50"
           disabled={isSaving}
         >
           Use default event set
@@ -126,12 +126,12 @@ export default function MatchEventSetupClient({
           )
 
           return (
-            <div key={category.value} className="rounded-lg border bg-gray-50 p-4">
+            <div key={category.value} className="rounded-xl bg-white p-4 shadow-sm">
               <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
                 {category.label}
               </h3>
               {categoryEvents.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-500">No standard events yet.</p>
+                <p className="mt-2 text-sm text-gray-400">No standard events yet.</p>
               ) : (
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {categoryEvents.map((eventOption) => {

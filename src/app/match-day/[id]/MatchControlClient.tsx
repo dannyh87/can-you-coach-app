@@ -206,22 +206,64 @@ export default function MatchControlClient({
     return null
   })()
 
+  if (status === 'DRAFT') {
+    return (
+      <section className="mt-6 rounded-2xl bg-gray-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold">Ready to start?</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Check the squad and event setup, then start the match when kick-off begins.
+            </p>
+          </div>
+          {lifecycleButton && (
+            <button
+              type="button"
+              onClick={() => runLifecycleAction(lifecycleButton)}
+              className="w-full rounded-lg bg-green-700 px-5 py-4 text-lg font-bold text-white disabled:opacity-50 sm:w-auto"
+              disabled={Boolean(pendingAction)}
+            >
+              {pendingAction === lifecycleButton.label ? 'Starting...' : lifecycleButton.label}
+            </button>
+          )}
+        </div>
+
+        {message && (
+          <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+            {message}
+          </p>
+        )}
+
+        {error && (
+          <p className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+            {error}
+          </p>
+        )}
+      </section>
+    )
+  }
+
   return (
-    <section className="mt-6 space-y-5 rounded-xl border bg-gray-50 p-5">
-      <div className="rounded-lg border bg-white p-5 text-center">
+    <section className="mt-6 space-y-4 rounded-2xl bg-gray-50 p-5">
+      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      <div className="rounded-xl bg-white p-5 text-center shadow-sm">
         <p className="text-sm font-medium text-gray-500">Score</p>
         <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <p className="text-lg font-bold">{homeLabel}</p>
-          <p className="text-5xl font-bold tabular-nums">
+          <p className="text-base font-bold sm:text-lg">{homeLabel}</p>
+          <p className="text-5xl font-bold tabular-nums sm:text-6xl">
             {homeScore}-{awayScore}
           </p>
-          <p className="text-lg font-bold">{awayLabel}</p>
+          <p className="text-base font-bold sm:text-lg">{awayLabel}</p>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <TimerCard label="Current half" value={currentHalfLabel} />
-        <TimerCard label="Elapsed time" value={formatDuration(currentElapsed)} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <TimerCard label="Current half" value={currentHalfLabel} highlight />
+          <TimerCard label="Elapsed time" value={formatDuration(currentElapsed)} highlight />
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <TimerCard label="First half duration" value={formatDuration(firstHalfDuration)} />
         <TimerCard label="Second half duration" value={formatDuration(secondHalfDuration)} />
       </div>
@@ -246,16 +288,13 @@ export default function MatchControlClient({
 
       {!isCompleted && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-lg border bg-white p-4">
+          <div className="rounded-xl bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Match lifecycle</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Move through first half, half-time, second half and full-time.
-            </p>
             {lifecycleButton ? (
               <button
                 type="button"
                 onClick={() => runLifecycleAction(lifecycleButton)}
-                className="mt-4 w-full rounded bg-green-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+                className="mt-3 w-full rounded-lg bg-green-700 px-4 py-4 text-lg font-bold text-white disabled:opacity-50"
                 disabled={Boolean(pendingAction)}
               >
                 {pendingAction === lifecycleButton.label
@@ -270,7 +309,7 @@ export default function MatchControlClient({
           </div>
 
           {canUpdateScore && (
-            <div className="rounded-lg border bg-white p-4">
+            <div className="rounded-xl bg-white p-4 shadow-sm">
               <h2 className="text-lg font-bold">Score controls</h2>
               <p className="mt-1 text-sm text-gray-500">
                 Correct the score during live play or half-time.
@@ -331,11 +370,21 @@ export default function MatchControlClient({
   )
 }
 
-function TimerCard({ label, value }: { label: string; value: string }) {
+function TimerCard({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string
+  value: string
+  highlight?: boolean
+}) {
   return (
-    <div className="rounded-lg border bg-white p-4">
+    <div className="rounded-xl bg-white p-4 shadow-sm">
       <p className="text-sm text-gray-500">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+      <p className={`mt-1 font-bold tabular-nums ${highlight ? 'text-3xl' : 'text-xl'}`}>
+        {value}
+      </p>
     </div>
   )
 }
@@ -353,7 +402,7 @@ function ScoreButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border px-4 py-3 text-sm font-semibold disabled:opacity-50"
+      className="rounded-lg border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
       disabled={disabled}
     >
       {label}

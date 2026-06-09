@@ -173,11 +173,11 @@ export default function MatchEventsClient({
   }
 
   return (
-    <section className="rounded-xl border p-5">
+    <section className="rounded-xl bg-white p-4 shadow-sm">
       <div>
         <h2 className="text-xl font-bold">Events</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Use the selected match event set to record live player events immediately.
+        <p className="mt-1 text-sm text-gray-400">
+          Record selected match events as they happen.
         </p>
       </div>
 
@@ -247,9 +247,9 @@ export default function MatchEventsClient({
                         )
                         if (firstCategoryEvent) setSelectedEventType(firstCategoryEvent.value)
                       }}
-                      className={`rounded-lg border px-3 py-3 text-sm font-bold disabled:opacity-40 ${
+                      className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-40 ${
                         isSelected
-                          ? 'border-blue-600 bg-blue-600 text-white'
+                          ? 'border-blue-600 bg-blue-50 text-blue-900'
                           : 'bg-white text-gray-900'
                       }`}
                       disabled={!hasEvents || Boolean(pendingAction)}
@@ -322,6 +322,11 @@ export default function MatchEventsClient({
                 <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
                   2. Tap event
                 </h3>
+                {selectedPlayer && (
+                  <p className="mt-1 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
+                    Selected player: <span className="font-bold">{formatPlayerName(selectedPlayer)}</span>. Now tap an event.
+                  </p>
+                )}
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {categoryEvents.map((eventOption) => {
                     const pendingKey = selectedPlayer
@@ -376,8 +381,8 @@ export default function MatchEventsClient({
                   2. Tap player
                 </h3>
                 {selectedEvent && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    Recording: <span className="font-medium text-gray-900">{selectedEvent.label}</span>
+                  <p className="mt-1 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
+                    Selected event: <span className="font-bold">{selectedEvent.label}</span>. Now tap a player.
                   </p>
                 )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -417,14 +422,15 @@ export default function MatchEventsClient({
             No match events recorded yet.
           </p>
         ) : (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 divide-y rounded-lg border">
             {events.map((event) => (
-              <article key={event.id} className="rounded-lg border p-3">
+              <article key={event.id} className="p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold">{formatEventType(eventOptions, event.eventType)}</p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} ·{' '}
+                    <p className="text-sm font-bold">
+                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {formatEventType(eventOptions, event.eventType)}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500">
                       {event.playerName} · {event.ownScoreAtTime}-{event.oppositionScoreAtTime}
                     </p>
                   </div>
@@ -432,7 +438,7 @@ export default function MatchEventsClient({
                     <button
                       type="button"
                       onClick={() => undoEvent(event.id)}
-                      className="rounded border px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+                      className="rounded px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
                       disabled={Boolean(pendingAction)}
                     >
                       {pendingAction === event.id ? 'Undoing...' : 'Undo'}
@@ -445,9 +451,6 @@ export default function MatchEventsClient({
         )}
       </div>
 
-      <p className="mt-4 text-xs text-gray-500">
-        TODO: Team-level and opposition events will come later.
-      </p>
     </section>
   )
 }
