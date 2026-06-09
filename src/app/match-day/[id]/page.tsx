@@ -573,8 +573,8 @@ async function updateMatchScore(formData: FormData): Promise<MatchActionResult> 
 
   const match = await getOwnedMatch(matchDayId)
   if (!match) return { ok: false, reason: 'Match was not found.' }
-  if (match.status === 'COMPLETED') {
-    return { ok: false, reason: 'Completed match scores are read-only.' }
+  if (match.status !== 'IN_PROGRESS' && match.status !== 'HALF_TIME') {
+    return { ok: false, reason: 'Scores can only be changed during live play or half-time.' }
   }
 
   await prisma.matchDay.update({
@@ -1000,6 +1000,7 @@ export default async function MatchDayDetailPage({
     score: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
   const finalScore = `${match.ownScore}-${match.oppositionScore}`
+  const showHeaderScore = match.status !== 'DRAFT'
 
   return (
     <main className="mx-auto w-full max-w-6xl p-6">
@@ -1021,9 +1022,17 @@ export default async function MatchDayDetailPage({
               {statusLabel}
             </p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(match.status)}`}>
-            {statusLabel}
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {showHeaderScore && (
+              <div className="rounded-lg border bg-gray-50 px-4 py-2 text-center">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Score</p>
+                <p className="text-2xl font-bold tabular-nums">{finalScore}</p>
+              </div>
+            )}
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(match.status)}`}>
+              {statusLabel}
+            </span>
+          </div>
         </div>
 
         {match.status !== 'COMPLETED' && (
@@ -1049,24 +1058,6 @@ export default async function MatchDayDetailPage({
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border p-6">
-        <h2 className="text-xl font-bold">Match details</h2>
-        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <DetailItem label="Team" value={`${match.team.club.name} / ${match.team.name}`} />
-          <DetailItem label="Opposition" value={match.opposition} />
-          <DetailItem label="Kick-off" value={formatDateTime(match.kickoffAt)} />
-          <DetailItem label="Match type" value={matchTypeLabel} />
-          <DetailItem label="Venue" value={venueLabel} />
-          <DetailItem label="Status" value={statusLabel} />
-          <DetailItem label="Own score" value={String(match.ownScore)} />
-          <DetailItem label="Opposition score" value={String(match.oppositionScore)} />
-          <DetailItem
-            label="Completed"
-            value={match.completedAt ? formatDateTime(match.completedAt) : 'Not completed'}
-          />
-        </dl>
-      </section>
-
       {match.status === 'DRAFT' && (
         <section className="mt-6 grid gap-4 lg:grid-cols-2">
           <MatchSquadClient
@@ -1087,40 +1078,33 @@ export default async function MatchDayDetailPage({
         </section>
       )}
 
-      {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
-        <p className="mt-6 rounded-lg border p-3 text-sm text-gray-500">
-          Squad was locked when the match started.
-        </p>
-      )}
-
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-6">
-          <MatchPitchClient
-            matchDayId={match.id}
-            status={match.status}
-            matchElapsedMilliseconds={matchElapsedMilliseconds}
-            players={pitchPlayers}
-            togglePlayerOnPitchAction={togglePlayerOnPitch}
-          />
-        </section>
-      )}
-
-      {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-6 grid gap-4 md:grid-cols-2">
-          <MatchEventsClient
-            matchDayId={match.id}
-            status={match.status}
-            players={eventPlayers}
-            events={recentEventsForRecording}
-            eventOptions={selectedEventOptions}
-            categoryOptions={matchEventCategories}
-            recordMatchEventAction={recordMatchEvent}
-            deleteMatchEventAction={deleteMatchEvent}
-          />
-          <PlaceholderPanel
-            title="Live summary"
-            description="Complete the match to generate the read-only report."
-          />
+        <section className="mt-6 rounded-xl border p-5">
+          <div>
+            <h2 className="text-2xl font-bold">Live match</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Squad and event setup were locked when the match started.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <MatchPitchClient
+              matchDayId={match.id}
+              status={match.status}
+              matchElapsedMilliseconds={matchElapsedMilliseconds}
+              players={pitchPlayers}
+              togglePlayerOnPitchAction={togglePlayerOnPitch}
+            />
+            <MatchEventsClient
+              matchDayId={match.id}
+              status={match.status}
+              players={eventPlayers}
+              events={recentEventsForRecording}
+              eventOptions={selectedEventOptions}
+              categoryOptions={matchEventCategories}
+              recordMatchEventAction={recordMatchEvent}
+              deleteMatchEventAction={deleteMatchEvent}
+            />
+          </div>
         </section>
       )}
 
@@ -1144,32 +1128,5 @@ export default async function MatchDayDetailPage({
         TODO: Add an edit match modal in a later Match Day chunk.
       </p>
     </main>
-  )
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border p-4">
-      <dt className="font-medium text-gray-500">{label}</dt>
-      <dd className="mt-1 font-semibold text-gray-950">{value}</dd>
-    </div>
-  )
-}
-
-function PlaceholderPanel({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
-  return (
-    <div className="rounded-xl border border-dashed p-5">
-      <h2 className="text-xl font-bold">{title}</h2>
-      <p className="mt-2 text-sm text-gray-500">{description}</p>
-      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-gray-400">
-        Coming next
-      </p>
-    </div>
   )
 }

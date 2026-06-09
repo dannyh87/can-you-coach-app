@@ -97,7 +97,7 @@ export default function MatchPitchClient({
     const result = await togglePlayerOnPitchAction(formData)
 
     if (result.ok) {
-      setMessage(`${getPlayerName(player)} marked ${targetState === 'ON' ? 'on' : 'off'} pitch.`)
+      setMessage(`${getPlayerName(player)} subbed ${targetState === 'ON' ? 'on' : 'off'}.`)
       router.refresh()
     } else {
       setError(result.reason)
@@ -206,8 +206,8 @@ export default function MatchPitchClient({
                     {pendingPlayerId === player.matchDayPlayerId
                       ? 'Saving...'
                       : player.isOnPitch
-                        ? 'Off'
-                        : 'On'}
+                        ? 'Sub off'
+                        : 'Sub on'}
                   </button>
                 )}
               </article>

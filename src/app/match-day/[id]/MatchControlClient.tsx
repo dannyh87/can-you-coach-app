@@ -89,6 +89,7 @@ export default function MatchControlClient({
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isCompleted = status === 'COMPLETED'
+  const canUpdateScore = status === 'IN_PROGRESS' || status === 'HALF_TIME'
   const isFirstHalfActive =
     status === 'IN_PROGRESS' && Boolean(firstHalfStartedAt) && !firstHalfEndedAt
   const isSecondHalfActive =
@@ -137,7 +138,7 @@ export default function MatchControlClient({
     label: string
     action: (formData: FormData) => Promise<MatchActionResult>
   }) => {
-    if (pendingAction || isCompleted) return
+    if (pendingAction || isCompleted || !canUpdateScore) return
 
     setPendingAction(label)
     setMessage(null)
@@ -268,54 +269,56 @@ export default function MatchControlClient({
             )}
           </div>
 
-          <div className="rounded-lg border bg-white p-4">
-            <h2 className="text-lg font-bold">Score controls</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Correct the score during draft, live play or half-time.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <ScoreButton
-                label={`${teamName} +1`}
-                disabled={Boolean(pendingAction)}
-                onClick={() =>
-                  updateScore({
-                    nextOwnScore: ownScore + 1,
-                    nextOppositionScore: oppositionScore,
-                  })
-                }
-              />
-              <ScoreButton
-                label={`${opposition} +1`}
-                disabled={Boolean(pendingAction)}
-                onClick={() =>
-                  updateScore({
-                    nextOwnScore: ownScore,
-                    nextOppositionScore: oppositionScore + 1,
-                  })
-                }
-              />
-              <ScoreButton
-                label={`${teamName} -1`}
-                disabled={Boolean(pendingAction) || ownScore <= 0}
-                onClick={() =>
-                  updateScore({
-                    nextOwnScore: ownScore - 1,
-                    nextOppositionScore: oppositionScore,
-                  })
-                }
-              />
-              <ScoreButton
-                label={`${opposition} -1`}
-                disabled={Boolean(pendingAction) || oppositionScore <= 0}
-                onClick={() =>
-                  updateScore({
-                    nextOwnScore: ownScore,
-                    nextOppositionScore: oppositionScore - 1,
-                  })
-                }
-              />
+          {canUpdateScore && (
+            <div className="rounded-lg border bg-white p-4">
+              <h2 className="text-lg font-bold">Score controls</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Correct the score during live play or half-time.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <ScoreButton
+                  label={`${teamName} +1`}
+                  disabled={Boolean(pendingAction)}
+                  onClick={() =>
+                    updateScore({
+                      nextOwnScore: ownScore + 1,
+                      nextOppositionScore: oppositionScore,
+                    })
+                  }
+                />
+                <ScoreButton
+                  label={`${opposition} +1`}
+                  disabled={Boolean(pendingAction)}
+                  onClick={() =>
+                    updateScore({
+                      nextOwnScore: ownScore,
+                      nextOppositionScore: oppositionScore + 1,
+                    })
+                  }
+                />
+                <ScoreButton
+                  label={`${teamName} -1`}
+                  disabled={Boolean(pendingAction) || ownScore <= 0}
+                  onClick={() =>
+                    updateScore({
+                      nextOwnScore: ownScore - 1,
+                      nextOppositionScore: oppositionScore,
+                    })
+                  }
+                />
+                <ScoreButton
+                  label={`${opposition} -1`}
+                  disabled={Boolean(pendingAction) || oppositionScore <= 0}
+                  onClick={() =>
+                    updateScore({
+                      nextOwnScore: ownScore,
+                      nextOppositionScore: oppositionScore - 1,
+                    })
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
