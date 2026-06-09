@@ -88,6 +88,7 @@ model MatchDayPlayer {
   squadStatus         MatchSquadStatus @default(NOT_INVOLVED)
   startingPosition    String?
   shirtNumberSnapshot Int?
+  isTracked           Boolean          @default(true)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   matchDay            MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)

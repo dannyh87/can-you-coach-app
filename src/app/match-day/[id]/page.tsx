@@ -8,6 +8,7 @@ import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
 import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
 import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
+import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -221,6 +222,7 @@ async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
         playerId: player.id,
         squadStatus: 'NOT_INVOLVED',
         shirtNumberSnapshot: player.squadNumber,
+        isTracked: false,
       },
     })
   }
@@ -269,6 +271,25 @@ async function updateMatchSquadPlayer(
     return { ok: false, reason: 'Player was not found for this match team.' }
   }
 
+  const existingSquadPlayer = await prisma.matchDayPlayer.findUnique({
+    where: {
+      matchDayId_playerId: {
+        matchDayId: match.id,
+        playerId: player.id,
+      },
+    },
+    select: {
+      squadStatus: true,
+      isTracked: true,
+    },
+  })
+  const isTracked =
+    squadStatus === 'NOT_INVOLVED'
+      ? false
+      : existingSquadPlayer?.squadStatus === 'NOT_INVOLVED' || !existingSquadPlayer
+        ? true
+        : existingSquadPlayer.isTracked
+
   await prisma.matchDayPlayer.upsert({
     where: {
       matchDayId_playerId: {
@@ -280,6 +301,7 @@ async function updateMatchSquadPlayer(
       squadStatus: squadStatus as (typeof squadStatuses)[number],
       startingPosition: startingPosition || null,
       shirtNumberSnapshot: player.squadNumber,
+      isTracked,
     },
     create: {
       matchDayId: match.id,
@@ -287,8 +309,51 @@ async function updateMatchSquadPlayer(
       squadStatus: squadStatus as (typeof squadStatuses)[number],
       startingPosition: startingPosition || null,
       shirtNumberSnapshot: player.squadNumber,
+      isTracked,
     },
   })
+
+  revalidatePath(`/match-day/${match.id}`)
+  return { ok: true }
+}
+
+async function updateMatchTrackingFocus(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const trackedMatchDayPlayerIds = new Set(
+    formData
+      .getAll('trackedMatchDayPlayerId')
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  )
+
+  if (!matchDayId) return { ok: false, reason: 'Missing match.' }
+
+  const match = await getOwnedMatch(matchDayId)
+  if (!match) return { ok: false, reason: 'Match was not found.' }
+  if (match.status !== 'DRAFT') {
+    return { ok: false, reason: 'Tracking focus can only be changed before the match starts.' }
+  }
+
+  const squadPlayers = await prisma.matchDayPlayer.findMany({
+    where: { matchDayId: match.id },
+    select: { id: true, squadStatus: true },
+  })
+
+  await prisma.$transaction(
+    squadPlayers.map((squadPlayer) =>
+      prisma.matchDayPlayer.update({
+        where: { id: squadPlayer.id },
+        data: {
+          isTracked:
+            squadPlayer.squadStatus !== 'NOT_INVOLVED' &&
+            trackedMatchDayPlayerIds.has(squadPlayer.id),
+        },
+      })
+    )
+  )
 
   revalidatePath(`/match-day/${match.id}`)
   return { ok: true }
@@ -726,11 +791,12 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
       squadStatus: {
         not: 'NOT_INVOLVED',
       },
+      isTracked: true,
     },
   })
 
   if (!squadPlayer) {
-    return { ok: false, reason: 'Player is not available in this match squad.' }
+    return { ok: false, reason: 'Player is not available for event tracking in this match.' }
   }
 
   const openStint = await prisma.matchPlayerStint.findFirst({
@@ -864,9 +930,21 @@ export default async function MatchDayDetailPage({
       preferredPosition: player.preferredPosition,
       squadStatus: squadRecord?.squadStatus ?? 'NOT_INVOLVED',
       startingPosition: squadRecord?.startingPosition ?? '',
+      isTracked: squadRecord?.isTracked ?? true,
+      matchDayPlayerId: squadRecord?.id ?? null,
       hasSquadRecord: Boolean(squadRecord),
     }
   })
+  const trackingPlayers = match.matchDayPlayers
+    .filter((squadPlayer) => squadPlayer.squadStatus !== 'NOT_INVOLVED')
+    .map((squadPlayer) => ({
+      matchDayPlayerId: squadPlayer.id,
+      firstName: squadPlayer.player.firstName,
+      surname: squadPlayer.player.surname,
+      squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
+      squadStatus: squadPlayer.squadStatus as 'STARTER' | 'SUBSTITUTE',
+      isTracked: squadPlayer.isTracked,
+    }))
   const matchElapsedMilliseconds = getMatchElapsedMilliseconds(match)
   const pitchPlayers = match.matchDayPlayers
     .filter((squadPlayer) => squadPlayer.squadStatus !== 'NOT_INVOLVED')
@@ -884,13 +962,14 @@ export default async function MatchDayDetailPage({
         surname: squadPlayer.player.surname,
         squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
         squadStatus: squadPlayer.squadStatus as 'STARTER' | 'SUBSTITUTE',
+        isTracked: squadPlayer.isTracked,
         isOnPitch: Boolean(openStint),
         openStintStartedAt: openStint?.startedAt.toISOString() ?? null,
         totalMilliseconds,
       }
     })
   const eventPlayers = pitchPlayers
-    .filter((player) => player.isOnPitch)
+    .filter((player) => player.isOnPitch && player.isTracked)
     .map((player) => ({
       matchDayPlayerId: player.matchDayPlayerId,
       playerId: player.playerId,
@@ -1046,6 +1125,14 @@ export default async function MatchDayDetailPage({
               players={squadPlayers}
               setupMatchSquadAction={setupMatchSquad}
               updateMatchSquadPlayerAction={updateMatchSquadPlayer}
+            />
+            <MatchTrackingFocusClient
+              key={trackingPlayers
+                .map((player) => `${player.matchDayPlayerId}:${player.isTracked}`)
+                .join('|')}
+              matchDayId={match.id}
+              players={trackingPlayers}
+              updateMatchTrackingFocusAction={updateMatchTrackingFocus}
             />
             <MatchEventSetupClient
               matchDayId={match.id}

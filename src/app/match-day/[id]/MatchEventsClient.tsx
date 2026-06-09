@@ -177,7 +177,7 @@ export default function MatchEventsClient({
       <div>
         <h2 className="text-xl font-bold">Events</h2>
         <p className="mt-1 text-sm text-gray-400">
-          Record selected match events as they happen.
+          Record selected match events for tracked players.
         </p>
       </div>
 
@@ -213,7 +213,7 @@ export default function MatchEventsClient({
 
       {canRecord && players.length === 0 && (
         <p className="mt-4 rounded-lg border p-4 text-sm text-gray-500">
-          Put a player on the pitch before recording events.
+          Only tracked players currently on the pitch are shown.
         </p>
       )}
 
@@ -291,7 +291,7 @@ export default function MatchEventsClient({
             <>
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
-                  1. Select player
+                  1. Players available for event tracking
                 </h3>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {players.map((player) => {
@@ -378,7 +378,7 @@ export default function MatchEventsClient({
 
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
-                  2. Tap player
+                  2. Players available for event tracking
                 </h3>
                 {selectedEvent && (
                   <p className="mt-1 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
