@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react'
 
+import MatchSummaryCsvButtons, {
+  type MatchCsvMetadata,
+  type MatchEventCsvRow,
+  type MatchSummaryCsvRow,
+} from '@/app/match-day/[id]/MatchSummaryCsvButtons'
+
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
 
 type SummaryMinuteRow = {
@@ -41,6 +47,9 @@ type MatchSummaryReportProps = {
   playerEventCounts: PlayerEventCountRow[]
   mostInvolvedPlayers: PlayerEventCountRow[]
   timelineEvents: TimelineEvent[]
+  csvMetadata: MatchCsvMetadata
+  summaryCsvRows: MatchSummaryCsvRow[]
+  eventCsvRows: MatchEventCsvRow[]
 }
 
 const formatSquadNumber = (squadNumber: number | null) =>
@@ -64,6 +73,9 @@ export default function MatchSummaryReport({
   playerEventCounts,
   mostInvolvedPlayers,
   timelineEvents,
+  csvMetadata,
+  summaryCsvRows,
+  eventCsvRows,
 }: MatchSummaryReportProps) {
   return (
     <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
@@ -76,9 +88,16 @@ export default function MatchSummaryReport({
               {matchDate} · {statusLabel}
             </p>
           </div>
-          <div className="text-left sm:text-right">
-            <p className="text-sm font-medium text-gray-500">Final score</p>
-            <p className="text-5xl font-bold tabular-nums">{finalScore}</p>
+          <div className="space-y-3 text-left sm:text-right">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Final score</p>
+              <p className="text-5xl font-bold tabular-nums">{finalScore}</p>
+            </div>
+            <MatchSummaryCsvButtons
+              metadata={csvMetadata}
+              summaryRows={summaryCsvRows}
+              eventRows={eventCsvRows}
+            />
           </div>
         </div>
       </div>

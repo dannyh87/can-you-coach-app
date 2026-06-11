@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
 
+import FitnessResultsCsvButton from '@/app/fitness/sessions/[id]/FitnessResultsCsvButton'
 import { getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
@@ -39,7 +40,16 @@ const getStatusValue = (formData: FormData, key: string) => {
 }
 
 const formatResultStatus = (status: FitnessResultStatus) =>
-  statusOptions.find((option) => option.value === status)?.label ?? status
+  status === 'ABSENT'
+    ? 'Missed'
+    : statusOptions.find((option) => option.value === status)?.label ?? status
+
+const formatSessionStatusForCsv = (status: string) => {
+  if (status === 'DRAFT') return 'Draft'
+  if (status === 'IN_PROGRESS') return 'In progress'
+  if (status === 'COMPLETED') return 'Completed session'
+  return status
+}
 
 async function saveFitnessResults(formData: FormData) {
   'use server'
@@ -163,6 +173,8 @@ async function startFitnessTestSession(formData: FormData) {
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
+const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
+
 const formatDateTime = (date: Date | null) =>
   date
     ? new Intl.DateTimeFormat('en-GB', {
@@ -225,6 +237,33 @@ export default async function FitnessSessionPage({
   const resultsByPlayerId = new Map(
     existingResults.map((result) => [result.playerId, result])
   )
+  const resultRanks = new Map<string, number>()
+  existingResults
+    .filter((result) => result.resultValue !== null)
+    .sort((firstResult, secondResult) => {
+      const firstValue = firstResult.resultValue ?? 0
+      const secondValue = secondResult.resultValue ?? 0
+
+      return session.fitnessTestType.higherIsBetter
+        ? secondValue - firstValue
+        : firstValue - secondValue
+    })
+    .forEach((result, index) => {
+      resultRanks.set(result.id, index + 1)
+    })
+  const fitnessCsvResults = existingResults.map((result) => ({
+    playerName: `${result.player.firstName} ${result.player.surname}`,
+    squadNumber: result.player.squadNumber,
+    result:
+      result.resultText ||
+      (result.resultValue !== null
+        ? `${result.resultValue} ${session.fitnessTestType.resultUnit}`
+        : ''),
+    resultValue: result.resultValue,
+    resultStatus: formatResultStatus(result.status),
+    rank: resultRanks.get(result.id) ?? null,
+    notes: result.notes,
+  }))
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
@@ -374,6 +413,18 @@ export default async function FitnessSessionPage({
               </Link>
             </>
           )}
+          {session.status !== 'COMPLETED' && existingResults.length > 0 && (
+            <FitnessResultsCsvButton
+              sessionName={session.fitnessTestType.name}
+              dateLabel={formatDate(session.date)}
+              dateForFilename={formatDateForFilename(session.date)}
+              teamName={session.team.name}
+              clubName={session.team.club.name}
+              testTypeName={session.fitnessTestType.name}
+              sessionStatusLabel={formatSessionStatusForCsv(session.status)}
+              results={fitnessCsvResults}
+            />
+          )}
         </div>
       </section>
 
@@ -393,6 +444,18 @@ export default async function FitnessSessionPage({
             >
               Rankings
             </Link>
+            {existingResults.length > 0 && (
+              <FitnessResultsCsvButton
+                sessionName={session.fitnessTestType.name}
+                dateLabel={formatDate(session.date)}
+                dateForFilename={formatDateForFilename(session.date)}
+                teamName={session.team.name}
+                clubName={session.team.club.name}
+                testTypeName={session.fitnessTestType.name}
+                sessionStatusLabel={formatSessionStatusForCsv(session.status)}
+                results={fitnessCsvResults}
+              />
+            )}
           </div>
 
           {existingResults.length === 0 ? (

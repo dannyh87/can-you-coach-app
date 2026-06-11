@@ -46,6 +46,7 @@ const getTextValue = (formData: FormData, key: string) => {
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
 const formatDateTime = (date: Date) =>
   new Intl.DateTimeFormat('en-GB', {
     dateStyle: 'short',
@@ -63,6 +64,21 @@ const formatStatus = (status: string) =>
     .split('_')
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
     .join(' ')
+
+const formatSquadStatus = (status: string) => {
+  if (status === 'STARTER') return 'Starter'
+  if (status === 'SUBSTITUTE') return 'Substitute'
+  return 'Not involved'
+}
+
+const formatHalfLabel = (half: string) =>
+  half === 'FIRST_HALF' ? 'First half' : 'Second half'
+
+const formatMatchTime = (matchSecond: number) => {
+  const minutes = Math.floor(matchSecond / 60)
+  const seconds = matchSecond % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
 
 const formatEventType = (eventType: string) =>
   matchEventDefinitions.find((eventDefinition) => eventDefinition.value === eventType)?.label ??
@@ -1066,6 +1082,31 @@ export default async function MatchDayDetailPage({
       }
     })
     .sort((firstPlayer, secondPlayer) => secondPlayer.total - firstPlayer.total)
+  const getPlayerEventCount = (playerId: string, eventType: string) =>
+    playerEventCountMap.get(playerId)?.eventCounts.get(eventType) ?? 0
+  const summaryCsvRows = pitchPlayers.map((player) => {
+    const totalEvents = matchEventTypes.reduce(
+      (total, eventType) => total + getPlayerEventCount(player.playerId, eventType),
+      0
+    )
+
+    return {
+      playerName: `${player.firstName} ${player.surname}`,
+      squadNumber: player.squadNumber,
+      squadStatus: formatSquadStatus(player.squadStatus),
+      trackedForEvents: player.isTracked,
+      minutesPlayed: Math.round(player.totalMilliseconds / 60000),
+      totalEvents,
+      goals: getPlayerEventCount(player.playerId, 'GOAL'),
+      assists: getPlayerEventCount(player.playerId, 'ASSIST'),
+      shotsOnTarget: getPlayerEventCount(player.playerId, 'SHOT_ON_TARGET'),
+      shotsOffTarget: getPlayerEventCount(player.playerId, 'SHOT_OFF_TARGET'),
+      passComplete: getPlayerEventCount(player.playerId, 'PASS_COMPLETE'),
+      passIncomplete: getPlayerEventCount(player.playerId, 'PASS_INCOMPLETE'),
+      oneVOneSuccess: getPlayerEventCount(player.playerId, 'ONE_V_ONE_SUCCESS'),
+      oneVOneUnsuccessful: getPlayerEventCount(player.playerId, 'ONE_V_ONE_UNSUCCESSFUL'),
+    }
+  })
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = match.matchEvents.map((event) => ({
     id: event.id,
@@ -1078,6 +1119,25 @@ export default async function MatchDayDetailPage({
     score: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
   const finalScore = `${match.ownScore}-${match.oppositionScore}`
+  const csvMetadata = {
+    match: headline,
+    dateLabel: formatDate(match.kickoffAt),
+    dateForFilename: formatDateForFilename(match.kickoffAt),
+    teamName: match.team.name,
+    opposition: match.opposition,
+    venue: venueLabel,
+    matchType: matchTypeLabel,
+    finalScore,
+  }
+  const eventCsvRows = match.matchEvents.map((event) => ({
+    half: formatHalfLabel(event.half),
+    matchTime: formatMatchTime(event.matchSecond),
+    playerName: event.player
+      ? `${event.player.firstName} ${event.player.surname}`
+      : 'Unknown player',
+    event: formatEventType(event.eventType),
+    scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
+  }))
   const showHeaderScore = match.status !== 'DRAFT'
 
   return (
@@ -1227,6 +1287,9 @@ export default async function MatchDayDetailPage({
             playerEventCounts={playerEventCounts}
             mostInvolvedPlayers={mostInvolvedPlayers}
             timelineEvents={timelineEvents}
+            csvMetadata={csvMetadata}
+            summaryCsvRows={summaryCsvRows}
+            eventCsvRows={eventCsvRows}
           />
         </section>
       )}
