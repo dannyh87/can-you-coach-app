@@ -222,7 +222,6 @@ async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
         playerId: player.id,
         squadStatus: 'NOT_INVOLVED',
         shirtNumberSnapshot: player.squadNumber,
-        isTracked: false,
       },
     })
   }
