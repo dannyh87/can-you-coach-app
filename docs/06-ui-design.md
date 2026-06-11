@@ -1,401 +1,138 @@
-# Can You Coach - UI Design
+# Can You Coach - Current UI Design
 
-## Purpose
+The UI is mobile-first and touchline-friendly. It uses Tailwind CSS and a small set of shared primitives under `src/components/ui/`.
 
-This document defines the intended user experience and screen layouts for the MVP.
+## Shared UI Primitives
 
-The application should prioritise speed, simplicity and usability.
+Built components include:
 
-Most users will be coaches using a mobile phone while coaching, managing players or conducting fitness testing.
+- `Button`
+- `PageHeader`
+- `SectionCard`
+- `StatusBadge`
+- `Alert`
+- `EmptyState`
+- `ModalShell`
+- `StatCard`
+- form style helpers
 
-The UI should be designed mobile-first.
+The app still contains some feature-specific styling where it is simpler than abstracting everything.
 
----
+## Global Navigation
 
-# Design Principles
+The top navigation links to:
 
-## Fast
+- Home
+- Club Setup
+- Players
+- Fitness
+- Match Day
 
-Users should be able to record information quickly.
+The old `/track` prototype is not linked as a primary MVP workflow.
 
-Reduce the number of taps wherever possible.
+## Home
 
----
+Purpose: navigation and overview of the MVP areas.
 
-## Simple
+Current behaviour:
 
-Avoid unnecessary screens and configuration.
+- Links users into Club Setup, Players, Fitness, and Match Day.
+- Does not yet show a full analytics dashboard.
 
-The app should feel intuitive without training.
+## Club Setup
 
----
+Purpose: manage clubs and teams.
 
-## Mobile First
+Current UI:
 
-All MVP screens must work well on:
+- Club/team setup cards and forms.
+- Delete guards surface why a team cannot be removed.
 
-* Mobile phones
-* Tablets
+## Players
 
-Desktop support is desirable but secondary.
+Purpose: manage active and archived players.
 
----
+Current UI:
 
-## Large Touch Targets
+- Player list with add/edit flows.
+- Player profile/detail page.
+- Archived players are handled through active status.
 
-Buttons should be easy to press on a touchline.
+## Fitness
 
-Avoid small icons where possible.
+Purpose: create sessions, record results, and review outputs.
 
----
+Current UI:
 
-## Consistent Navigation
+- Fitness session list and creation modal.
+- Session detail page with metadata, lifecycle status, recording links, saved results, and CSV download when results exist.
+- Live dropout and timer pages with large controls.
+- Rankings table.
+- Progress reporting with Recharts.
+- Completed summary panels.
 
-Navigation should remain consistent throughout the application.
+## Match Day List
 
----
+Purpose: create and find matches.
 
-# Main Navigation
+Current UI:
 
-Bottom navigation bar:
+- Match list cards/table.
+- Create match modal.
+- Status and score summaries.
 
-```text
-Dashboard
-Players
-Fitness
-Matches
-Settings
-```
+## Match Day Detail
 
----
+### Draft State
 
-# Dashboard Screen
+Order is:
 
-Purpose:
+1. Squad setup
+2. Tracking focus
+3. Event setup
+4. Start match
 
-Provide a quick overview of activity.
+Draft UI rules:
 
-Display:
+- Squad setup controls starter/substitute/not involved status.
+- Tracking focus explains that event tracking does not affect squad involvement or substitutions.
+- Event setup chooses standard event types available for the match.
 
-* Total players
-* Total teams
-* Recent fitness tests
-* Recent matches
-* Quick actions
+### Live State
 
-Quick Action Buttons:
+Live match UI contains:
 
-* Add Player
-* Create Fitness Test
-* Create Match
+- Score and half/timer controls.
+- Player/substitution controls.
+- Event recording controls.
 
----
+Event recording supports player-first and event-first modes. Only tracked players currently on the pitch are shown.
 
-# Players Screen
+### Completed State
 
-Purpose:
+Completed matches show a report only:
 
-Manage players.
+- Final score.
+- Minutes played.
+- Team event totals.
+- Player event counts.
+- Most involved players.
+- Timeline.
+- CSV export buttons.
 
-Display:
+## CSV Export UI
 
-* Search bar
-* Player list
-* Active players only by default
+Fitness:
 
-Each player card displays:
+- `Download results CSV` appears when a fitness session has saved results.
 
-* Name
-* Squad number
-* Position
+Match Day:
 
-Actions:
+- `Download summary CSV` and `Download events CSV` appear on completed match reports.
 
-* View
-* Edit
-* Archive
+## Design Constraints
 
-Floating action button:
-
-```text
-+ Add Player
-```
-
----
-
-# Player Profile Screen
-
-Display:
-
-* Player details
-* Fitness history
-* Match statistics
-* Recent activity
-
-Tabs:
-
-```text
-Overview
-Fitness
-Matches
-```
-
-Overview should be the default tab.
-
----
-
-# Fitness Screen
-
-Purpose:
-
-Manage fitness testing.
-
-Display:
-
-* Recent test sessions
-* Test history
-* Rankings
-* Quick actions
-
-Buttons:
-
-```text
-Create Test Session
-View Rankings
-```
-
----
-
-# Create Fitness Test Session Screen
-
-Step 1:
-
-Select:
-
-* Team
-* Test Type
-* Date
-
-Step 2:
-
-Select players
-
-Default:
-
-All active players selected
-
-Step 3:
-
-Enter results
-
-Display:
-
-```text
-Player Name
-Result Field
-```
-
-Large input fields.
-
-Fast data entry.
-
----
-
-# Fitness Rankings Screen
-
-Purpose:
-
-Compare player performance.
-
-Filters:
-
-* Team
-* Test Type
-* Date Range
-
-Display:
-
-Ranking table
-
-Example:
-
-```text
-1 Tom Jones      1140m
-2 Jack Smith     1090m
-3 Ben Taylor     1030m
-```
-
----
-
-# Fitness Progress Screen
-
-Purpose:
-
-Show player improvement.
-
-Display:
-
-* Best result
-* Latest result
-* Improvement amount
-
-Charts:
-
-* Line chart
-
-Example:
-
-```text
-May      980m
-June    1080m
-July    1140m
-```
-
----
-
-# Matches Screen
-
-Purpose:
-
-Manage matches.
-
-Display:
-
-* Upcoming matches
-* Previous matches
-
-Actions:
-
-```text
-Create Match
-Track Match
-```
-
----
-
-# Create Match Screen
-
-Fields:
-
-* Team
-* Opposition
-* Match Date
-* Venue
-* Match Type
-* Home/Away
-
-Button:
-
-```text
-Create Match
-```
-
----
-
-# Match Tracking Screen
-
-Purpose:
-
-Allow rapid event recording during a match.
-
-Display:
-
-Current Match
-
-Player List
-
-Event Buttons
-
-Example:
-
-```text
-Pass +
-Pass -
-
-Dribble +
-Dribble -
-
-Shot
-
-Goal
-
-Tackle
-
-Interception
-```
-
-Buttons should be large and easy to press.
-
-Each action should require no more than:
-
-1. Select Player
-2. Tap Event
-
----
-
-# Match Event Configuration Screen
-
-Purpose:
-
-Manage custom event types.
-
-Users can:
-
-* Create custom event
-* Edit custom event
-* Archive custom event
-
-Fields:
-
-* Name
-* Category
-* Positive / Negative
-* Description
-
----
-
-# Settings Screen
-
-Purpose:
-
-Manage system configuration.
-
-Sections:
-
-## Clubs
-
-* Create Club
-* Edit Club
-
-## Teams
-
-* Create Team
-* Edit Team
-
-## Fitness Test Types
-
-* Create custom test type
-
-## Match Event Types
-
-* Create custom event type
-
----
-
-# MVP UI Rules
-
-Always prefer:
-
-* Fewer screens
-* Fewer clicks
-* Larger buttons
-* Simpler forms
-
-Avoid:
-
-* Complex workflows
-* Pop-up overload
-* Hidden navigation
-* Enterprise-style admin screens
-
-The application should feel like a coaching tool, not business software.
+- Keep live recording controls large and direct.
+- Avoid adding modal-heavy flows during live play.
+- Keep completed reports read-only.
+- Prefer clear labels over internal enum names.

@@ -1,310 +1,80 @@
-# Can You Coach - MVP Scope
-
-## Purpose
-
-The MVP exists to prove that coaches will record measurable player actions and find value in reviewing the resulting data.
-
-The MVP is not intended to be a complete coaching platform.
-
-Success is defined by coaches being able to:
-
-* Create players
-* Create matches
-* Record actions during matches
-* Review data afterwards
-* Identify development trends
-
----
-
-# In Scope
-
-## Authentication
-
-Users can:
-
-* Create an account
-* Sign in
-* Sign out
-
-Simple email and password authentication is sufficient.
-
----
-
-## Teams
-
-Users can:
-
-* Create a team
-* Edit a team
-* Delete a team
-
-A team contains:
-
-* Team name
-* Age group
-* Season
-
----
-
-## Players
-
-Users can:
-
-* Add players
-* Edit players
-* Remove players
-
-Player fields:
-
-* First name
-* Surname
-* Preferred position
-* Squad number
-
----
-
-## Matches
-
-Users can:
-
-* Create matches
-* Record opposition
-* Record date
-* Record venue
-* Record final score
-
-Match types:
-
-* League
-* Cup
-* Friendly
-
----
-
-## Match Tracking
-
-Users can track actions during a match.
-
-Initial tracked actions:
-
-* Successful pass
-* Unsuccessful pass
-* Successful dribble
-* Unsuccessful dribble
-* Shot
-* Shot on target
-* Goal
-* Tackle won
-* Interception
-
-Each event records:
-
-* Player
-* Event type
-* Timestamp
-* Match
-
----
-
-## Dashboards
-
-The current `/` page is a Home/navigation page for the MVP. A future Dashboard
-should contain informative player and team data, graphs, trends and stats.
-
-### Player Dashboard
-
-Show:
-
-* Total events
-* Per match averages
-* Trends over time
-
-### Team Dashboard
-
-Show:
-
-* Team totals
-* Team averages
-* Match comparisons
-
-
-## Fitness Testing
-
-Users can create fitness testing sessions.
-
-A testing session contains:
-
-* Test type
-* Date
-* Notes
-
-Supported MVP tests:
-
-* Yo-Yo Test
-* Gacon Test
-* Bronco Test
-* Custom Test
-
-Users can record a result for each player.
-
-Examples:
-
-* Distance achieved
-* Level reached
-* Time completed
-* Stage reached
-
-The system should store historical results.
-
----
-
-## Fitness Dashboard
-
-Show:
-
-* Best result
-* Latest result
-* Improvement over time
-* Team ranking
-* Historical trend
-
-Users should be able to compare players within the same test.
-
-Examples:
-
-* Gacon rankings
-* Yo-Yo rankings
-* Bronco rankings
-
-Charts should display performance changes across multiple testing dates.
-
----
-
-## Charts
-
-Use simple charts only.
-
-Examples:
-
-* Bar charts
-* Line charts
-
-Avoid complex visualisations.
-
----
-
-## Data Storage
-
-Use:
-
-* Prisma
-* SQLite
-
-Database must run locally.
-
-No cloud database required.
-
----
-
-# Out Of Scope
-
-The following must NOT be built for MVP.
-
-## Premium Features
-
-Do not build:
-
-* Payments
-* Subscriptions
-* Stripe integration
-
----
-
-## Parent Accounts
-
-Do not build:
-
-* Parent login
-* Parent portals
-
----
-
-## Assistant Coaches
-
-Do not build:
-
-* Multi-user collaboration
-
----
-
-## Video
-
-Do not build:
-
-* Video upload
-* Video analysis
-* Video storage
-
----
-
-## AI Features
-
-Do not build:
-
-* Recommendations
-* Session generation
-* Coaching advice
-
----
-
-## Notifications
-
-Do not build:
-
-* Email notifications
-* Push notifications
-
----
-
-## Mobile Apps
-
-Do not build:
-
-* iOS app
-* Android app
-
-Use responsive web design only.
-
----
-
-## Benchmarking
-
-Do not build:
-
-* Age-group benchmarks
-* Comparison against national averages
-
----
-
-## Training Sessions
-
-Do not build:
-
-* Session planning
-* Training tracking
-* Session libraries
-
----
-
-# Definition Of Done
-
-The MVP is complete when a coach can:
-
-1. Create a team
-2. Add players
-3. Create a match
-4. Track actions during a match
-5. Review player statistics
-6. Review team statistics
-
-Nothing else is required before initial testing.
+# Can You Coach - Built MVP Scope
+
+This document reflects what has actually been built so far.
+
+## In Scope And Built
+
+### Local MVP User
+
+- The app uses `getLocalUser()` to create/use a local demo user.
+- A default `Demo Club` can be created automatically for the local MVP user.
+- Production sign up, sign in, sign out, roles, and permissions are not built.
+
+### Club Setup
+
+- Create and manage clubs and teams.
+- Teams include name, age group, season, league, and football pyramid step.
+- Team delete is guarded when teams have players, fitness sessions, or match days.
+
+### Players
+
+- Add, edit, view, and archive players.
+- Player fields include first name, surname, squad number, preferred position, date of birth, joined club date, and active status.
+- Archived players are excluded from active recording lists.
+
+### Fitness Testing
+
+- Create fitness sessions for a team and test type.
+- Session statuses: `DRAFT`, `IN_PROGRESS`, `COMPLETED`.
+- Recording modes include manual entry, live dropout, and timed finish flows.
+- Results support numeric value, display text, result status, and notes.
+- Completed sessions are read-only.
+- Rankings and progress reporting are built.
+- Completed summaries show metadata, result count, top/bottom performers, rankings links, and progress links.
+- CSV export is available for saved fitness results.
+
+### Match Day
+
+- Create matches with team, opposition, kickoff date/time, match type, venue, score, and status.
+- Match statuses: `DRAFT`, `IN_PROGRESS`, `HALF_TIME`, `COMPLETED`.
+- Draft setup includes squad setup, tracking focus, event setup, and start match controls.
+- Squad setup marks players as starter, substitute, or not involved.
+- Tracking focus chooses which involved players are available for event recording.
+- Event setup selects from the built-in standard event set.
+- Live match controls include score, first/second half lifecycle, and completed match state.
+- Substitution/minutes tracking uses player stints and includes all involved players.
+- Event recording is limited to tracked players who are currently on the pitch.
+- Completed matches show a read-only report.
+- CSV exports are available for completed match summary and event timeline data.
+
+### Reporting And Export
+
+- Fitness rankings and progress reports are built.
+- Match completed report includes final score, minutes, team event totals, player event counts, most involved players, and timeline.
+- CSV exports are client-side and do not mutate data.
+
+## Built Standard Match Events
+
+- Goal
+- Assist
+- Shot on target
+- Shot off target
+- Pass complete
+- Pass incomplete
+- 1v1 success
+- 1v1 unsuccessful
+
+## Out Of Scope For Current MVP
+
+- Production auth.
+- Payments/subscriptions.
+- Parent portals.
+- Assistant coach roles.
+- Cloud hosting.
+- Video.
+- AI recommendations.
+- Custom match event definitions.
+- Team/opposition-only events.
+- Multi-coach live sync.
+- XLSX/PDF export.
+- Migrating old `/track` localStorage data.

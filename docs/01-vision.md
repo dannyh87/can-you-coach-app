@@ -1,166 +1,51 @@
-# Can You Coach? - Product Vision
+# Can You Coach - Current Product Vision
+
+Can You Coach helps grassroots football coaches capture objective player development data without needing enterprise analysis tools.
+
+The current MVP focuses on two practical coaching workflows:
+
+- Fitness testing: record results, rank players, track progress, and export results.
+- Match Day: set up a squad, manage minutes/substitutions, record selected events for tracked players, review a completed match report, and export match data.
 
 ## Mission
 
-Can You Coach exists to help grassroots coaches measure player development through objective data rather than relying solely on results, opinions, or memory.
+Help coaches answer whether players and teams are improving by giving them a simple way to record measurable information and review it later.
 
-The platform allows coaches to track meaningful actions during matches and training sessions, identify trends over time, and make better coaching decisions.
+The app is intentionally pragmatic. It is designed for volunteer and grassroots coaches who may be using a phone on the touchline or during training.
 
-The goal is to create a simple, affordable and accessible player development platform for grassroots sport.
+## Built MVP Principles
 
----
+- Simple: avoid deep configuration and keep data entry direct.
+- Mobile-first: large buttons and card-based layouts are used throughout live workflows.
+- Objective: focus on recorded results, minutes, scores, and events rather than subjective ratings.
+- Development-focused: support improvement conversations, not just match outcomes.
+- Local-first MVP: Prisma and SQLite run locally while the product shape is proven.
 
-## The Problem
+## Built Product Areas
 
-Grassroots coaches often answer questions such as:
+- Club and team setup.
+- Player management.
+- Fitness session creation, recording, rankings, progress, summaries, and CSV downloads.
+- Match creation, squad setup, tracking focus, event setup, live match controls, substitutions, minutes, completed reports, and CSV downloads.
 
-* Are my players improving?
-* Which players are developing fastest?
-* Which areas of the game need attention?
-* Are our coaching sessions having an impact?
+## Current Users
 
-Most coaches currently rely on:
+- Grassroots football coaches.
+- Assistant coaches.
+- Team managers or volunteers helping with data entry.
+- Parents or injured players helping record events for selected players.
 
-* Memory
-* Match results
-* Subjective opinions
-* Informal observations
+## What The MVP Does Not Yet Do
 
-Very little measurable player development data is collected.
+- Production authentication or user roles.
+- Parent accounts or portals.
+- Payments or subscriptions.
+- Video upload or analysis.
+- Custom match event definitions.
+- AI coaching recommendations.
+- Cloud hosting.
+- Multi-coach live collaboration.
 
-This makes it difficult to demonstrate improvement over time.
+## Long-Term Direction
 
----
-
-## The Solution
-
-Can You Coach allows coaches to record key actions during matches and training sessions.
-
-Examples include:
-
-* Successful dribbles
-* Successful passes
-* Tackles won
-* Interceptions
-* Shots on target
-* Crosses completed
-* Goalkeeper saves
-
-The platform then converts this information into meaningful insights.
-
-Coaches can view:
-
-* Individual player statistics
-* Team statistics
-* Unit statistics (defence, midfield, attack)
-* Match trends
-* Season trends
-
-### Fitness Testing
-
-Can You Coach also allows coaches to record and monitor physical performance testing.
-
-Examples include:
-
-* Yo-Yo Test
-* Gacon Test
-* Bronco Test
-* 505 Agility Test
-* Sprint Tests
-* Custom Club Tests
-
-Coaches can compare players against teammates and track improvements over time.
-
-The aim is to provide a simple way to measure physical development alongside technical and tactical development.
-
----
-
-## Target Users
-
-### Primary Users
-
-Grassroots football coaches.
-
-Examples:
-
-* Youth football coaches
-* Adult football coaches
-* Volunteer coaches
-* Assistant coaches
-
-### Secondary Users
-
-People supporting the coaching process.
-
-Examples:
-
-* Parents
-* Analysts
-* Club volunteers
-* Team managers
-
----
-
-## Core Principles
-
-### Simple
-
-The platform must be usable during a live match.
-
-Data entry should require as few taps as possible.
-
-### Objective
-
-The focus is on measurable actions rather than subjective opinions.
-
-### Development Focused
-
-The aim is player improvement, not simply winning matches.
-
-### Affordable
-
-The product should remain accessible to grassroots clubs and volunteers.
-
-### Mobile First
-
-Most usage will occur on a phone or tablet.
-
----
-
-## Initial Sport
-
-The MVP will support football only.
-
-Future expansion may include:
-
-* Rugby
-* Hockey
-* Netball
-* Basketball
-* Other team sports
-
----
-
-## Long-Term Vision
-
-Can You Coach becomes the leading grassroots player development platform.
-
-A coach should be able to answer:
-
-* Is this player improving?
-* What should this player work on next?
-* Which sessions will help?
-* How does this player compare against expected benchmarks?
-
-Over time the platform will provide:
-
-* Benchmark data by age group
-* Development recommendations
-* Session plans
-* Training interventions
-* Progress reports
-* Club-wide development tracking
-
-The focus will always remain on helping coaches develop players rather than simply recording results.
-
-Physical development should be tracked alongside technical and tactical development, giving coaches a complete picture of player progress.
+The long-term product can grow into player development reporting across fitness, technical, tactical, and match involvement data. The current build establishes the data model and workflows needed to test that direction with real coaches.

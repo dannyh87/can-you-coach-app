@@ -1,184 +1,72 @@
-# Can You Coach - Agent Instructions
-
-## Purpose
-
-You are building the MVP version of Can You Coach.
-
-Your goal is to create a simple, maintainable application that can be used by grassroots football coaches.
-
-Do not attempt to build enterprise-grade solutions.
-
-Do not add features that are not explicitly requested.
-
-Always favour simplicity over complexity.
-
----
-
-# Technology Stack
-
-Use:
-
-* Next.js (App Router)
-* TypeScript
-* Tailwind CSS
-* Prisma
-* SQLite
-* Recharts
-
-Do not replace these technologies without approval.
-
----
-
-# Database
-
-Use Prisma with SQLite.
-
-Database should be stored locally.
-
-Create migrations using Prisma.
-
-Create seed data where useful.
-
-Do not use:
-
-* AWS
-* Azure
-* Google Cloud
-* MongoDB
-* Firebase
-* Supabase
-
-unless specifically requested.
-
----
-
-# Design Principles
-
-The application is mobile-first.
-
-Primary users will often be standing on the touchline using a phone.
-
-Large buttons are preferred.
-
-Fast data entry is preferred.
-
-Reduce the number of clicks required wherever possible.
-
----
-
-# User Experience
-
-Optimise for:
-
-1. Speed
-2. Simplicity
-3. Readability
-
-Avoid:
-
-* Complex menus
-* Deep navigation structures
-* Excessive configuration
-
----
-
-# Code Standards
-
-Use TypeScript throughout.
-
-Use reusable components.
-
-Keep files reasonably small.
-
-Avoid unnecessary abstraction.
-
-Avoid premature optimisation.
-
-Use clear naming conventions.
-
----
-
-# Charts
-
-Use Recharts.
-
-Supported chart types:
-
-* Line charts
-* Bar charts
-
-Do not introduce advanced chart libraries.
-
----
-
-# MVP Priorities
-
-Highest Priority:
-
-1. Players
-2. Fitness Testing
-3. Fitness Dashboards
-
-Second Priority:
-
-4. Teams
-5. Matches
-6. Match Tracking
-
-Third Priority:
-
-7. Player Analytics
-8. Team Analytics
-
----
-
-# Fitness Testing Requirements
-
-The fitness testing module is a core MVP feature.
-
-Support:
-
-* Gacon Test
-* Yo-Yo Test
-* Bronco Test
-* Custom Tests
-
-Users must be able to:
-
-* Create test sessions
-* Enter player results
-* View rankings
-* View improvement over time
-
-Historical results must be retained.
-
----
-
-# Future Features
-
-The following are planned future features but must not be implemented yet:
-
-* Payments
-* Subscriptions
-* Parent accounts
-* Video analysis
-* AI recommendations
-* Training session plans
-* Notifications
-* Mobile apps
-
-Only create architecture that allows future expansion.
-
-Do not build future features now.
-
----
-
-# Development Philosophy
-
-The product should be built iteratively.
-
-A working simple feature is better than a perfect unfinished feature.
-
-Deliver working functionality first.
-
-Refine later.
+# Can You Coach - Current Agent Instructions
+
+Build on the existing MVP. Do not treat these docs as greenfield requirements.
+
+## Stack
+
+- Next.js App Router.
+- TypeScript.
+- Tailwind CSS.
+- Prisma.
+- SQLite.
+- Recharts.
+
+Do not replace these without explicit approval.
+
+## Current Architecture
+
+- Prisma schema and migrations live in `prisma/`.
+- Local MVP user logic lives in `src/lib/localUser.ts`.
+- Prisma client singleton lives in `src/lib/prisma.ts`.
+- Fitness shared actions/helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
+- Shared UI primitives live in `src/components/ui/`.
+- Fitness routes live under `src/app/fitness/`.
+- Match Day routes live under `src/app/match-day/`.
+- Legacy `/track` exists but should not be changed unless explicitly requested.
+
+## Development Rules
+
+- Prefer the smallest correct change.
+- Preserve current recording behaviours unless explicitly asked to change them.
+- Do not add Prisma schema changes or migrations unless the requested feature requires persisted data.
+- Run `npm run lint` and `npm run build` after meaningful changes.
+- Check `package.json` before running `npm run typecheck`; there is currently no typecheck script.
+
+## Product Rules To Preserve
+
+- Completed fitness sessions are read-only.
+- Completed matches are read-only/report-only.
+- Squad involvement, on-pitch state, and tracked-for-events are separate concepts.
+- Tracking focus affects event recording only.
+- Substitution and minutes tracking must include all involved players, not just tracked players.
+- Match events do not automatically update the score.
+- Score controls are separate from event recording.
+
+## Do Not Add Without Approval
+
+- Production auth.
+- Payments.
+- Hosting/deployment setup.
+- Video.
+- Custom match event definitions.
+- Parent portals.
+- Roles/permissions.
+- Multi-coach live sync.
+- AI recommendations.
+- XLSX/PDF exports.
+
+## Verification Expectations
+
+For normal code changes:
+
+```bash
+npm run lint
+npm run build
+```
+
+For schema changes:
+
+```bash
+npx prisma migrate dev --name <migration-name>
+git diff -- prisma/schema.prisma prisma/migrations
+```

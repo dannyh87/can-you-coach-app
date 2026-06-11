@@ -1,447 +1,145 @@
-# Can You Coach - MVP Workflows
+# Can You Coach - Current Workflows
 
-## Purpose
+This document describes the workflows currently supported by the built MVP.
 
-This document defines the key workflows the MVP must support.
+## Workflow 1: Set Up A Club, Team, And Players
 
-The AI coding agent should use this document to understand how coaches will actually use the product in real life.
+1. Open `/club-setup`.
+2. Create or update club details.
+3. Create a team with age group, season, league, and pyramid step if needed.
+4. Open `/players`.
+5. Add active players with squad number and preferred position.
 
-The first MVP should prioritise workflows that can be used during preseason.
+Notes:
 
----
+- Players belong to one team in the MVP.
+- Archived players are excluded from active recording lists.
 
-# Workflow 1: Preseason Fitness Testing
+## Workflow 2: Create A Fitness Session
 
-## User Goal
+1. Open `/fitness`.
+2. Create a fitness session for a team and test type.
+3. Add date and optional notes.
+4. Start the session when ready.
 
-As a coach, I want to run a fitness test with my squad and record results immediately, so that I can compare players and track improvement over time.
+Supported lifecycle:
 
----
+- Draft
+- In progress
+- Completed
 
-## Real-World Scenario
+## Workflow 3: Record Fitness Results
 
-A coach is running a preseason fitness session.
+The app supports multiple recording modes depending on the test type.
 
-Around 20 to 25 players are present.
+Manual entry:
 
-The coach selects a test, starts a testing session, and records each player's result either:
+1. Open the session detail page.
+2. Enter numeric result, display result, status, and notes for players.
+3. Save results.
 
-* live during the test
-* immediately after the test
+Dropout tests:
 
-The system then produces rankings and stores results for future comparison.
+1. Open the live dropout page.
+2. Track the current level/stage.
+3. Mark players as dropped out at their final level.
 
----
+Timed finish tests:
 
-## Supported Fitness Test Styles
+1. Open the timer page.
+2. Start timing.
+3. Record each player's finish result.
 
-The app must support different styles of fitness tests.
+Completed sessions:
 
-### Drop-Out Tests
+- Hide recording controls.
+- Show read-only summaries/results.
+- Link to rankings and progress.
+- Allow CSV download when results exist.
 
-Players drop out at different points.
+## Workflow 4: Review Fitness Data
 
-Examples:
+Rankings:
 
-* Gacon Test
-* Yo-Yo Test
-* Bleep Test
+1. Open a session's rankings page.
+2. Numeric results are ranked by the test type's `higherIsBetter` rule.
+3. Missing or invalid numeric results are shown separately.
 
-The coach records the point where each player drops out.
+Progress:
 
-Example results:
+1. Open `/fitness/progress`.
+2. Review historical results and charts.
 
-* 980 metres
-* Level 17.2
-* Stage 8
+Exports:
 
----
+- Use `Download results CSV` on a session with saved results.
 
-### Distance-Based Tests
+## Workflow 5: Create A Match
 
-Players complete a fixed time period and the distance achieved is recorded.
+1. Open `/match-day`.
+2. Create a match with team, opposition, kickoff, venue, and match type.
+3. Open the match detail page.
 
-Examples:
+Matches start as draft records.
 
-* 12-minute run
-* Cooper Test
-* 6-minute run
+## Workflow 6: Set Up A Draft Match
 
-Example results:
+Draft setup order:
 
-* 2250 metres
-* 2.4 km
+1. Squad setup.
+2. Tracking focus.
+3. Event setup.
+4. Start match.
 
----
+Squad setup:
 
-### Time-Based Tests
+- Pull active team players into the match.
+- Mark each player as starter, substitute, or not involved.
 
-Players complete a fixed distance or course and the time taken is recorded.
+Tracking focus:
 
-Examples:
+- Choose all on-pitch players or selected players only for event recording.
+- This does not affect squad involvement, substitutions, or minutes.
 
-* Bronco Test
-* 505 Agility Test
-* 20m Sprint
-* 40m Sprint
+Event setup:
 
-Example results:
+- Choose from the standard event types available for the match.
 
-* 5 minutes 12 seconds
-* 2.41 seconds
-* 6.1 seconds
+## Workflow 7: Run A Live Match
 
----
+1. Start the match.
+2. Starters are put on the pitch for first-half minutes.
+3. Update score manually when needed.
+4. Record selected events for tracked players currently on the pitch.
+5. Sub players on/off to track stints and minutes.
+6. End first half.
+7. Start second half.
+8. Complete the match.
 
-### Repetition-Based Tests
+Important rules:
 
-Players complete as many repetitions as possible.
+- Score changes are separate from event recording.
+- Events do not update score automatically.
+- Event recording is paused at half-time.
+- Completed matches become read-only.
 
-Examples:
+## Workflow 8: Review A Completed Match
 
-* Press-ups in 60 seconds
-* Sit-ups in 60 seconds
+Completed match report includes:
 
-Example results:
+- Final score.
+- Match metadata.
+- Minutes played.
+- Team event totals.
+- Player event counts.
+- Most involved players.
+- Match timeline.
 
-* 42 reps
+CSV exports:
 
----
+- `Download summary CSV` gives one row per involved player.
+- `Download events CSV` gives one row per recorded event.
 
-# Workflow 2: Create Fitness Test Type
+## Legacy Workflow
 
-## User Goal
-
-As a coach, I want to create custom fitness tests, so that the app can support any test my club uses.
-
----
-
-## Required Fields
-
-A custom fitness test type should include:
-
-* Test name
-* Description
-* Result unit
-* Whether higher or lower is better
-
-Example result units:
-
-* metres
-* kilometres
-* seconds
-* minutes
-* level
-* reps
-* points
-
-Examples:
-
-```text
-Test name: 12-minute run
-Result unit: metres
-Higher is better: yes
-```
-
-```text
-Test name: Bronco
-Result unit: seconds
-Higher is better: no
-```
-
----
-
-# Workflow 3: Run Fitness Test Session
-
-## User Goal
-
-As a coach, I want to select a fitness test and enter player results quickly.
-
----
-
-## Steps
-
-1. Select club
-2. Select team
-3. Select fitness test type
-4. Select date
-5. Select players
-6. Enter results
-7. Save session
-8. View rankings
-
----
-
-## Player Selection
-
-Default behaviour:
-
-* All active players in the selected team should be included
-
-The coach should be able to remove unavailable players.
-
-Examples of unavailable players:
-
-* Injured
-* Absent
-* Did not start
-
----
-
-## Result Entry
-
-The result entry screen should show one row per player.
-
-Each row should include:
-
-* Player name
-* Result input
-* Notes input
-* Status option
-
-Possible statuses:
-
-* Completed
-* Did not start
-* Injured
-* Absent
-* Dropped out
-
-The interface should be quick enough to use during the test.
-
----
-
-# Workflow 4: View Fitness Rankings
-
-## User Goal
-
-As a player or coach, I want to see current rankings, so that performance can be compared across the squad.
-
----
-
-## Ranking Rules
-
-Rankings should be based on the selected fitness test type.
-
-If higher is better:
-
-* Highest result ranks first
-
-If lower is better:
-
-* Lowest result ranks first
-
-Players with no valid result should appear separately or at the bottom.
-
----
-
-## Ranking View Should Display
-
-* Rank
-* Player name
-* Result
-* Result unit
-* Notes or status where relevant
-
-Example:
-
-```text
-1. Tom Jones - 1140 metres
-2. Jack Smith - 1090 metres
-3. Ben Taylor - 1030 metres
-```
-
----
-
-# Workflow 5: View Fitness Improvement Over Time
-
-## User Goal
-
-As a coach, I want to see whether players are improving across preseason.
-
----
-
-## Progress View Should Display
-
-For a selected player and test type:
-
-* First recorded result
-* Latest recorded result
-* Best recorded result
-* Improvement from first to latest
-* Simple line chart
-
----
-
-## Team Progress View
-
-For a selected team and test type:
-
-* All player results over time
-* Biggest improvers
-* Current rankings
-* Average team improvement
-
----
-
-# Workflow 6: Match Tracking During Friendlies
-
-## User Goal
-
-As a coach, assistant, parent or injured player, I want to record a small number of key match events during preseason friendlies.
-
----
-
-## Real-World Scenario
-
-During a preseason friendly, the team may be experimenting with different formations.
-
-The coach wants to track a small number of meaningful events.
-
-The aim is not to record everything.
-
-The aim is to capture useful coaching information without distracting from the match.
-
----
-
-## Event Tracking Rules
-
-The MVP should support custom match event types.
-
-A match should typically use around 5 event types.
-
-Too many event types makes the process slow and unreliable.
-
-The app should encourage simple tracking.
-
----
-
-## Positive And Negative Events
-
-The system must support positive and negative events.
-
-This allows success percentages to be calculated.
-
-Examples:
-
-```text
-Successful pass
-Unsuccessful pass
-```
-
-```text
-Successful dribble
-Unsuccessful dribble
-```
-
-```text
-Press won
-Press failed
-```
-
----
-
-# Workflow 7: Track Match Events
-
-## User Goal
-
-As a match tracker, I want to record player events quickly during a match.
-
----
-
-## Steps
-
-1. Select match
-2. Select player
-3. Select event type
-4. Event is saved with timestamp
-
-Each recorded event should store:
-
-* Match
-* Player
-* Event type
-* Timestamp
-* Notes if added
-
----
-
-## UX Rule
-
-Recording an event should require no more than two taps after the match screen is open:
-
-1. Select player
-2. Select event
-
----
-
-# Workflow 8: Match Analysis
-
-## User Goal
-
-As a coach, I want to review match data so that I can understand player and team performance.
-
----
-
-## Required Views
-
-### Player Match View
-
-Display:
-
-* Events recorded
-* Positive events
-* Negative events
-* Success percentage where applicable
-* Comparison against players in the same general position
-
----
-
-### Team Match View
-
-Display:
-
-* Total events
-* Success percentage by event type
-* Trends across matches
-* Formation notes where available
-
----
-
-# Buyer And User Assumption
-
-The likely buyer is a football club rather than an individual coach.
-
-The app should support club-level structure from the beginning.
-
-However, the MVP does not need complex permissions.
-
-Future versions may support:
-
-* Club admins
-* Team coaches
-* Assistant coaches
-* Parents
-* Analysts
-* Players
-
-Do not build complex role-based permissions in the MVP.
-
----
-
-# MVP Priority Order
-
-Build in this order:
-
-1. Club, team and player setup
-2. Fitness test types
-3. Fitness test sessions
-4. Fitness result entry
-5. Fitness rankings
-6. Fitness progress charts
-7. Match setup
-8. Custom match event types
-9. Match tracking
-10. Match analysis
-
-The first usable version should allow Brereton Social First Team to record preseason fitness testing.
+`/track` remains a legacy localStorage prototype. It is not connected to the Prisma Match Day MVP and should not be used as the source of truth for new features.

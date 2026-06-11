@@ -1,258 +1,157 @@
-# Can You Coach - Default Data
+# Can You Coach - Current Default Data
 
-## Purpose
+This document reflects the default data and standard values currently used by the app.
 
-This document defines the default data that should be created when a new club is set up.
+## Local MVP User And Club
 
-The aim is to provide sensible defaults while still allowing clubs to customise the platform.
+The app uses a local MVP user helper.
 
----
+Current behaviour:
 
-# Default Fitness Test Types
+- `getLocalUser()` creates or returns a local demo user.
+- A default `Demo Club` can be created for that user when needed.
 
-The following fitness tests should be available immediately.
+Production authentication is not built.
 
-Users may edit, archive or replace these tests.
+## Fitness Test Types
 
----
+Fitness test types are stored in `FitnessTestType`.
 
-## Yo-Yo Test
+Important fields:
 
-Name:
+- `name`
+- `description`
+- `resultUnit`
+- `higherIsBetter`
+- `isDefault`
+- optional `userId`
 
-Yo-Yo Test
+The database supports both default and user-owned test types. Seed/default values are managed through the Prisma seed and app data, not hard-coded UI-only state.
 
-Description:
+Examples supported by the product direction:
 
-Intermittent fitness test used to assess endurance and recovery ability.
+- Gacon Test
+- Yo-Yo Test
+- Bronco Test
+- 505 Agility Test
+- Sprint tests
+- Club-specific tests
 
-Result Unit:
+## Fitness Result Statuses
 
-Metres
+Stored enum values:
 
-Higher Is Better:
+- `COMPLETED`
+- `DID_NOT_START`
+- `INJURED`
+- `ABSENT`
+- `DROPPED_OUT`
 
-True
+Coach-facing labels include:
 
----
+- Completed
+- Did not start
+- Injured
+- Missed/Absent
+- Dropped out
 
-## Gacon Test
+## Match Types
 
-Name:
+Stored enum values:
 
-Gacon Test
+- `LEAGUE`
+- `CUP`
+- `FRIENDLY`
 
-Description:
+Coach-facing labels:
 
-Progressive running test used to assess aerobic fitness.
+- League
+- Cup
+- Friendly
 
-Result Unit:
+## Match Venues
 
-Metres
+Stored enum values:
 
-Higher Is Better:
+- `HOME`
+- `AWAY`
+- `NEUTRAL`
 
-True
+Coach-facing labels:
 
----
+- Home
+- Away
+- Neutral
 
-## Bleep Test
+## Match Statuses
 
-Name:
+Stored enum values:
 
-Bleep Test
+- `DRAFT`
+- `IN_PROGRESS`
+- `HALF_TIME`
+- `COMPLETED`
 
-Description:
+## Match Squad Statuses
 
-Multi-stage shuttle run test.
+Stored enum values:
 
-Result Unit:
+- `STARTER`
+- `SUBSTITUTE`
+- `NOT_INVOLVED`
 
-Level
+Coach-facing labels:
 
-Higher Is Better:
+- Starter
+- Substitute
+- Not involved
 
-True
+## Standard Match Event Types
 
----
+The app currently uses a fixed standard event set. Custom event definitions are not built.
 
-## Bronco Test
+Stored values and labels:
 
-Name:
+- `GOAL` - Goal
+- `ASSIST` - Assist
+- `SHOT_ON_TARGET` - Shot on target
+- `SHOT_OFF_TARGET` - Shot off target
+- `PASS_COMPLETE` - Pass complete
+- `PASS_INCOMPLETE` - Pass incomplete
+- `ONE_V_ONE_SUCCESS` - 1v1 success
+- `ONE_V_ONE_UNSUCCESSFUL` - 1v1 unsuccessful
 
-Bronco Test
+## Event Categories
 
-Description:
+Stored values:
 
-Repeated shuttle run completed as quickly as possible.
+- `ATTACKING`
+- `IN_POSSESSION`
+- `OUT_OF_POSSESSION`
+- `TRANSITION`
 
-Result Unit:
+Current standard categorisation:
 
-Seconds
+- Attacking: goal, assist, shots.
+- In possession: passes and 1v1 events.
+- Out of possession: no standard events yet.
+- Transition: no standard events yet.
 
-Higher Is Better:
+## CSV Exports
 
-False
+CSV export filenames are generated client-side using readable slugs.
 
----
+Examples:
 
-# Default Match Event Types
+- `fitness-results-gacon-test-brereton-social-2026-06-09.csv`
+- `match-summary-brereton-social-vs-uttoxeter-2026-06-09.csv`
+- `match-events-brereton-social-vs-uttoxeter-2026-06-09.csv`
 
-The following event types should be created automatically.
+## Future Default Data Not Built
 
-These are intended as sensible starting points only.
-
-Users may customise them.
-
----
-
-## Successful Pass
-
-Category:
-
-Passing
-
-Positive:
-
-True
-
----
-
-## Unsuccessful Pass
-
-Category:
-
-Passing
-
-Positive:
-
-False
-
----
-
-## Successful Dribble
-
-Category:
-
-Dribbling
-
-Positive:
-
-True
-
----
-
-## Unsuccessful Dribble
-
-Category:
-
-Dribbling
-
-Positive:
-
-False
-
----
-
-## Shot On Target
-
-Category:
-
-Shooting
-
-Positive:
-
-True
-
----
-
-## Shot Off Target
-
-Category:
-
-Shooting
-
-Positive:
-
-False
-
----
-
-## Goal
-
-Category:
-
-Shooting
-
-Positive:
-
-True
-
----
-
-## Tackle Won
-
-Category:
-
-Defending
-
-Positive:
-
-True
-
----
-
-## Tackle Lost
-
-Category:
-
-Defending
-
-Positive:
-
-False
-
----
-
-## Interception
-
-Category:
-
-Defending
-
-Positive:
-
-True
-
----
-
-# Default Positions
-
-The following positions should be available.
-
-* Goalkeeper
-* Right Back
-* Centre Back
-* Left Back
-* Defensive Midfielder
-* Central Midfielder
-* Attacking Midfielder
-* Right Wing
-* Left Wing
-* Striker
-
----
-
-# Future Default Data
-
-Not required for MVP.
-
-Future versions may include:
-
-* Benchmark data
-* Age-group standards
-* Coaching templates
-* Session plans
-* Development pathways
-
-Do not build these features in the MVP.
+- Benchmark data.
+- Age-group standards.
+- Coaching templates.
+- Session plans.
+- Development pathways.
+- Custom match event libraries.

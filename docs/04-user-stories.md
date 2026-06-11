@@ -1,261 +1,118 @@
-# Can You Coach - User Stories
+# Can You Coach - Built User Stories
 
-## Purpose
+This document records the user stories currently supported by the MVP.
 
-This document describes what users need to do in the MVP.
+## Club And Team Setup
 
-The AI coding agent should build features based on these user stories and acceptance criteria.
+As a coach, I can create a club and team so that players, fitness sessions, and matches are organised.
 
----
+Built acceptance criteria:
 
-# Priority 1: Players
+- Create club and team records.
+- Capture team name, age group, season, league, and football pyramid step.
+- Prevent deleting teams that still have related players, fitness sessions, or match days.
 
-## Add Player
+## Player Management
 
-As a coach,
-I want to add a player,
-So that I can track their development.
+As a coach, I can manage players so that my active squad is available for testing and matches.
 
-### Acceptance Criteria
+Built acceptance criteria:
 
-* Coach can enter first name
-* Coach can enter surname
-* Coach can enter squad number
-* Coach can select preferred position
-* Player is saved
-* Player appears in the player list
+- Add and edit player details.
+- Capture first name, surname, squad number, preferred position, date of birth, and joined club date.
+- Archive players with `isActive` rather than hard-deleting active history.
+- View player detail pages.
 
----
+## Fitness Session Creation
 
-## Edit Player
+As a coach, I can create a fitness session so that I can record a squad test.
 
-As a coach,
-I want to edit a player,
-So that I can keep player details accurate.
+Built acceptance criteria:
 
-### Acceptance Criteria
+- Select team, test type, date, and notes.
+- Save sessions as draft.
+- Start sessions and mark sessions complete through supported recording flows.
+- Display sessions in the Fitness area.
 
-* Coach can update player details
-* Changes are saved
-* Updated details appear in the player list
+## Fitness Result Recording
 
----
+As a coach, I can record fitness results so that I can compare player performance.
 
-## Delete Player
+Built acceptance criteria:
 
-As a coach,
-I want to delete a player,
-So that inactive players do not clutter the app.
+- Manual entry for suitable tests.
+- Live dropout recording for dropout-style tests.
+- Timed finish recording for timed tests.
+- Result statuses include completed, did not start, injured, absent/missed, and dropped out.
+- Results support numeric values, display text, and notes.
+- Completed sessions hide recording controls and become read-only.
 
-### Acceptance Criteria
+## Fitness Rankings And Progress
 
-* Coach can delete a player
-* App asks for confirmation
-* Player is removed from active lists
+As a coach, I can review rankings and progress so that I can understand performance and improvement.
 
----
+Built acceptance criteria:
 
-# Priority 2: Fitness Testing
+- Session rankings sort by the test type ranking direction.
+- Missing or invalid numeric results are shown separately.
+- Progress reporting shows historical results and simple charts.
+- Completed summary panels show key session metadata and top/bottom performers.
+- Fitness results can be downloaded as CSV.
 
-## Create Fitness Test Session
+## Match Creation
 
-As a coach,
-I want to create a fitness testing session,
-So that I can record preseason fitness data.
+As a coach, I can create a match so that I can prepare a Match Day record.
 
-### Acceptance Criteria
+Built acceptance criteria:
 
-* Coach can select test type
-* Coach can select test date
-* Coach can add notes
-* Session is saved
-* Session appears in fitness test history
+- Select team.
+- Enter opposition and kickoff date/time.
+- Select venue and match type.
+- Match starts in draft state.
 
-Supported MVP test types:
+## Match Squad Setup
 
-* Gacon Test
-* Yo-Yo Test
-* Bronco Test
-* 505 Agility Test
-* Custom Test
+As a coach, I can set up a match squad so that involvement and substitutions are tracked.
 
----
+Built acceptance criteria:
 
-## Enter Fitness Test Results
+- Pull active team players into a match squad.
+- Mark players as starter, substitute, or not involved.
+- Lock squad editing once the match starts.
+- Keep not-involved players out of live substitution/event workflows.
 
-As a coach,
-I want to enter fitness results for each player,
-So that I can compare player fitness levels.
+## Match Tracking Focus
 
-### Acceptance Criteria
+As a coach or parent helper, I can select which involved players are tracked for events so that recording can focus on one player or a small group.
 
-* Coach can select a fitness test session
-* Coach can see all active players
-* Coach can enter each player's result
-* Result can store distance, time, level, stage, or notes
-* Results are saved against the correct player and test session
+Built acceptance criteria:
 
----
+- Choose all on-pitch players or selected players only.
+- Tracking focus is draft-only.
+- Tracking focus does not remove players from the squad.
+- Tracking focus does not affect substitutions or minutes.
+- Event recording only shows tracked players currently on the pitch.
 
-## View Fitness Test Rankings
+## Match Live Recording
 
-As a coach,
-I want to rank players by fitness test result,
-So that I can compare performance across the squad.
+As a coach, I can run a live match so that score, halves, minutes, substitutions, and events are captured.
 
-### Acceptance Criteria
+Built acceptance criteria:
 
-* Coach can select a test session
-* App displays player results in ranked order
-* Best performer appears at the top
-* Missing results are clearly shown
-* Results can be viewed in a table
+- Start first half, end first half, start second half, complete match.
+- Update score during live play or half-time.
+- Sub players on and off during active halves.
+- Track player stints and minutes played.
+- Record selected standard events for tracked on-pitch players.
+- Undo events before completion.
 
----
+## Completed Match Report
 
-## View Player Fitness Progress
+As a coach, I can review a completed match so that I can share and analyse what happened.
 
-As a coach,
-I want to view a player's fitness progress over time,
-So that I can see whether they are improving.
+Built acceptance criteria:
 
-### Acceptance Criteria
-
-* Coach can select a player
-* Coach can select a test type
-* App displays historical results
-* App shows latest result
-* App shows best result
-* App shows improvement from first to latest result
-* App displays a simple line chart
-
----
-
-## Compare Players Across Fitness Tests
-
-As a coach,
-I want to compare players across different fitness tests,
-So that I can understand different physical strengths.
-
-### Acceptance Criteria
-
-* Coach can view player results by test type
-* Coach can compare players in a table
-* Coach can identify who performs best in each test
-* App should support comparison over multiple test dates
-
----
-
-# Priority 3: Teams
-
-## Create Team
-
-As a coach,
-I want to create a team,
-So that players and results can be organised.
-
-### Acceptance Criteria
-
-* Coach can enter team name
-* Coach can enter age group
-* Coach can enter season
-* Team is saved
-
----
-
-## Assign Player To Team
-
-As a coach,
-I want to assign players to a team,
-So that I can manage my squad.
-
-### Acceptance Criteria
-
-* Coach can select a player
-* Coach can select a team
-* Player is linked to that team
-
----
-
-# Priority 4: Match Tracking
-
-## Create Match
-
-As a coach,
-I want to create a match,
-So that I can track player actions during a game.
-
-### Acceptance Criteria
-
-* Coach can enter opposition
-* Coach can enter match date
-* Coach can select home or away
-* Coach can select match type
-* Coach can enter final score
-* Match is saved
-
----
-
-## Record Match Event
-
-As a coach,
-I want to record player actions during a match,
-So that I can measure technical and tactical performance.
-
-### Acceptance Criteria
-
-* Coach can select a match
-* Coach can select a player
-* Coach can select an event type
-* Event is timestamped
-* Event is saved
-
-Supported MVP event types:
-
-* Successful pass
-* Unsuccessful pass
-* Successful dribble
-* Unsuccessful dribble
-* Shot
-* Shot on target
-* Goal
-* Tackle won
-* Interception
-
----
-
-## View Player Match Stats
-
-As a coach,
-I want to view a player's match statistics,
-So that I can understand their performance over time.
-
-### Acceptance Criteria
-
-* Coach can select a player
-* App shows total events
-* App shows per-match averages
-* App shows match-by-match history
-* App displays simple charts
-
----
-
-## View Team Match Stats
-
-As a coach,
-I want to view team match statistics,
-So that I can understand team performance trends.
-
-### Acceptance Criteria
-
-* Coach can select a team
-* App shows team totals
-* App shows match comparisons
-* App displays simple charts
-
----
-
-# MVP Rule
-
-If a feature is not covered by these user stories, do not build it without approval.
-
+- Completed report shows final score, minutes, team event totals, player event counts, most involved players, and timeline.
+- Completed matches are read-only.
+- Download summary CSV.
+- Download events CSV.
