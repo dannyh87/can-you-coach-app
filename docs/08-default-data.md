@@ -10,6 +10,7 @@ Current behaviour:
 
 - `getLocalUser()` creates or returns a local demo user.
 - A default `Demo Club` can be created for that user when needed.
+- `prisma/seed.mjs` also seeds safe local development data: local user, Demo Club, Brereton Social demo team, demo players, and default fitness test types.
 
 Production authentication is not built.
 

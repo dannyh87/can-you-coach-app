@@ -8,14 +8,15 @@ Build on the existing MVP. Do not treat these docs as greenfield requirements.
 - TypeScript.
 - Tailwind CSS.
 - Prisma.
-- SQLite.
+- PostgreSQL.
 - Recharts.
 
 Do not replace these without explicit approval.
 
 ## Current Architecture
 
-- Prisma schema and migrations live in `prisma/`.
+- Prisma schema and current PostgreSQL migrations live in `prisma/`.
+- Previous SQLite migrations are archived in `prisma/migrations_sqlite_archive/` for reference and should not be deleted.
 - Local MVP user logic lives in `src/lib/localUser.ts`.
 - Prisma client singleton lives in `src/lib/prisma.ts`.
 - Fitness shared actions/helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
@@ -69,4 +70,10 @@ For schema changes:
 ```bash
 npx prisma migrate dev --name <migration-name>
 git diff -- prisma/schema.prisma prisma/migrations
+```
+
+Use a PostgreSQL `DATABASE_URL`, for example:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
 ```

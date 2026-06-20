@@ -2,6 +2,52 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+const localUser = {
+  email: 'local-coach@can-you-coach.local',
+  passwordHash: 'local-mvp-user',
+}
+
+const demoClub = {
+  name: 'Demo Club',
+  location: 'Local development',
+  notes: 'Seeded demo club for local MVP development.',
+}
+
+const demoTeam = {
+  name: 'Brereton Social',
+  ageGroup: 'Open Age',
+  season: '2026',
+  league: 'Demo League',
+  footballPyramidStep: 'Grassroots',
+}
+
+const demoPlayers = [
+  {
+    firstName: 'Alex',
+    surname: 'Taylor',
+    squadNumber: 1,
+    preferredPosition: 'Goalkeeper',
+  },
+  {
+    firstName: 'Sam',
+    surname: 'Jones',
+    squadNumber: 4,
+    preferredPosition: 'Centre Back',
+  },
+  {
+    firstName: 'Charlie',
+    surname: 'Morgan',
+    squadNumber: 8,
+    preferredPosition: 'Central Midfielder',
+  },
+  {
+    firstName: 'Riley',
+    surname: 'Smith',
+    squadNumber: 10,
+    preferredPosition: 'Striker',
+  },
+]
+
 const fitnessTestTypes = [
   {
     name: 'Yo-Yo Test',
@@ -34,6 +80,82 @@ const fitnessTestTypes = [
 ]
 
 async function main() {
+  const user = await prisma.user.upsert({
+    where: { email: localUser.email },
+    update: {},
+    create: localUser,
+  })
+
+  let club = await prisma.club.findFirst({
+    where: {
+      userId: user.id,
+      name: demoClub.name,
+    },
+  })
+
+  if (club) {
+    club = await prisma.club.update({
+      where: { id: club.id },
+      data: demoClub,
+    })
+  } else {
+    club = await prisma.club.create({
+      data: {
+        ...demoClub,
+        userId: user.id,
+      },
+    })
+  }
+
+  let team = await prisma.team.findFirst({
+    where: {
+      clubId: club.id,
+      name: demoTeam.name,
+      season: demoTeam.season,
+    },
+  })
+
+  if (team) {
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: demoTeam,
+    })
+  } else {
+    team = await prisma.team.create({
+      data: {
+        ...demoTeam,
+        clubId: club.id,
+      },
+    })
+  }
+
+  for (const demoPlayer of demoPlayers) {
+    const existingPlayer = await prisma.player.findFirst({
+      where: {
+        teamId: team.id,
+        firstName: demoPlayer.firstName,
+        surname: demoPlayer.surname,
+      },
+    })
+
+    if (existingPlayer) {
+      await prisma.player.update({
+        where: { id: existingPlayer.id },
+        data: {
+          ...demoPlayer,
+          isActive: true,
+        },
+      })
+    } else {
+      await prisma.player.create({
+        data: {
+          ...demoPlayer,
+          teamId: team.id,
+        },
+      })
+    }
+  }
+
   for (const fitnessTestType of fitnessTestTypes) {
     const existingFitnessTestType = await prisma.fitnessTestType.findFirst({
       where: {

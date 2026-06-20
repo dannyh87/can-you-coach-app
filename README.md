@@ -2,7 +2,7 @@
 
 Can You Coach is a local MVP for grassroots football coaches to manage squads, record fitness testing, run Match Day tracking, and review/download useful reports.
 
-The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and SQLite. It currently uses a local demo user flow rather than production authentication.
+The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and PostgreSQL. It currently uses a local demo user flow rather than production authentication.
 
 ## What Is Built
 
@@ -14,7 +14,8 @@ The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and 
 - Fitness rankings, progress reports, completed summaries, and CSV result downloads.
 - Match Day setup, squad selection, tracking focus, event setup, live match controls, substitutions, score controls, completed reports, and CSV downloads.
 - Shared UI primitives under `src/components/ui/`.
-- Prisma SQLite database with migrations in `prisma/migrations`.
+- Prisma PostgreSQL database with migrations in `prisma/migrations`.
+- Archived SQLite migration history in `prisma/migrations_sqlite_archive` for reference.
 
 ## Main Routes
 
@@ -40,10 +41,17 @@ Install dependencies:
 npm install
 ```
 
-Apply migrations and generate Prisma Client:
+Create `.env` from `.env.example` and set a PostgreSQL connection string:
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
+```
+
+Apply migrations, seed default data, and generate Prisma Client:
 
 ```bash
 npx prisma migrate dev
+npx prisma db seed
 npx prisma generate
 ```
 
@@ -68,7 +76,7 @@ There is currently no `typecheck` script in `package.json`.
 
 ## Data And Auth Status
 
-- Database: local SQLite via Prisma.
+- Database: PostgreSQL via Prisma.
 - Auth: local MVP helper creates/uses a demo user and default club.
 - Hosting: not configured.
 - Payments: not implemented.
