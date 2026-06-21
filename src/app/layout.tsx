@@ -25,19 +25,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} min-h-full flex flex-col bg-slate-50 text-slate-950`}>
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <Link href="/" className="text-lg font-extrabold tracking-tight text-slate-950">
+      <body className={`${inter.className} min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 antialiased`}>
+        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <Link href="/" className="text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
               Can You Coach
             </Link>
 
-            <nav className="flex flex-wrap gap-2 text-sm">
+            <nav
+              className="-mx-1 flex gap-1 overflow-x-auto pb-1 text-sm sm:mx-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+              aria-label="Main navigation"
+            >
               {navigationLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="rounded-full px-3 py-2 font-semibold text-slate-600 transition hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                  className="shrink-0 rounded-full px-3 py-2 font-semibold text-slate-600 transition hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
                 >
                   {link.label}
                 </Link>

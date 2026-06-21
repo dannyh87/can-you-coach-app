@@ -305,7 +305,7 @@ export default async function FitnessSessionPage({
   ]
 
   return (
-    <main className="mx-auto w-full max-w-5xl p-6">
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:p-6">
       <Link href="/fitness" className="text-sm text-blue-600 hover:underline">
         Back to Fitness
       </Link>

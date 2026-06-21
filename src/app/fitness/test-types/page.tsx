@@ -170,10 +170,10 @@ export default async function FitnessTestTypesPage() {
   })
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Fitness Test Types"
-        description="Manage result units, ranking direction and allowed recording modes."
+        description="Choose how each test should be recorded, which unit it uses and whether higher or lower scores are better."
         actions={(
           <Link href="/fitness" className="text-sm font-semibold text-blue-800 hover:underline">
             Back to Fitness

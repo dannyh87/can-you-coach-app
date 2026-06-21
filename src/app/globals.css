@@ -18,6 +18,10 @@ body {
   color: var(--foreground);
 }
 
+main {
+  min-width: 0;
+}
+
 ::selection {
   background: #bfdbfe;
   color: #0f172a;
@@ -34,6 +38,7 @@ input,
 select,
 textarea {
   background: #ffffff;
+  font-size: 16px;
 }
 
 button,
@@ -47,4 +52,12 @@ textarea {
 table,
 dialog {
   color: var(--foreground);
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 14px;
+  }
 }

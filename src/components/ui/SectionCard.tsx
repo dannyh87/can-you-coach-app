@@ -20,14 +20,14 @@ export default function SectionCard({
   const hasHeader = title || description || actions
 
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
       {hasHeader && (
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-4 sm:p-5">
-          <div>
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+          <div className="min-w-0">
             {title && <h2 className="text-xl font-bold text-slate-950">{title}</h2>}
-            {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+            {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}
           </div>
-          {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap gap-2 sm:justify-end">{actions}</div>}
         </div>
       )}
       <div className={`${hasHeader ? 'p-4 sm:p-5' : 'p-4 sm:p-5'} ${bodyClassName}`}>{children}</div>

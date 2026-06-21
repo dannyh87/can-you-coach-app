@@ -228,10 +228,10 @@ export default async function ClubSetupPage() {
   }))
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Club Setup"
-        description="Manage your club details and teams in one place."
+        description="Add your club and teams once so the rest of the app is ready to use."
       />
 
       <ClubSetupClient

@@ -247,10 +247,10 @@ export default async function PlayersPage() {
   }))
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Players"
-        description="Manage players inside the club and team hierarchy."
+        description="Keep your squad list ready for training, fitness testing and match day tracking."
         actions={(
           <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
             Club Setup
@@ -261,7 +261,7 @@ export default async function PlayersPage() {
       {teams.length === 0 ? (
         <EmptyState
           title="Create a team first"
-          description="Players must belong to a team. Create a team before adding players."
+          description="Players need a team before they can be added. Set up your club and team first."
           action={(
           <Link
             href="/club-setup"

@@ -225,10 +225,10 @@ export default async function FitnessPage() {
   })
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Fitness Testing"
-        description="Create fitness test sessions for teams and enter player results."
+        description="Create a test session, record results using the right mode, then review rankings and progress with the squad."
         actions={(
           <>
             <Link href="/fitness/progress" className="text-sm font-semibold text-blue-800 hover:underline">
@@ -260,7 +260,7 @@ export default async function FitnessPage() {
       ) : fitnessTestTypes.length === 0 ? (
         <EmptyState
           title="No fitness test types found"
-          description="Run the Prisma seed command to create the default fitness test types."
+          description="Add or seed fitness test types before creating a test session."
         />
       ) : (
         <FitnessClient

@@ -166,10 +166,10 @@ export default async function MatchDayPage() {
   }))
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Match Day"
-        description="Create, prepare and review match records."
+        description="Set up fixtures, prepare the squad, track minutes and capture the moments that matter."
         actions={(
           <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
             Club Setup

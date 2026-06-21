@@ -1141,7 +1141,7 @@ export default async function MatchDayDetailPage({
   const showHeaderScore = match.status !== 'DRAFT'
 
   return (
-    <main className="mx-auto w-full max-w-6xl p-6">
+    <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <div className="mb-6 flex flex-wrap gap-3 text-sm">
         <Link href="/match-day" className="text-blue-600 hover:underline">
           Match Day

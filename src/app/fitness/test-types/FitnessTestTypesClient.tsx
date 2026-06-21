@@ -117,7 +117,7 @@ export default function FitnessTestTypesClient({
 
       <SectionCard
         title="Test Types"
-        description="Click a row to edit recording-mode settings."
+        description="Create custom tests or tap a row to edit how a test is recorded."
         actions={(
           <Button type="button" onClick={openCreateModal} size="sm">
             New Fitness Test Type
@@ -171,7 +171,7 @@ export default function FitnessTestTypesClient({
           role="dialog"
           aria-modal="true"
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold">
@@ -188,7 +188,7 @@ export default function FitnessTestTypesClient({
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded border px-3 py-1 text-sm font-medium"
+              className="rounded border px-3 py-2 text-sm font-medium"
                 disabled={isSubmitting}
               >
                 Close
@@ -311,7 +311,7 @@ function FitnessTestTypeForm({
         <legend className="px-1 text-sm font-medium">Allowed recording modes</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
           {fitnessRecordingModeOptions.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 text-sm font-medium">
+            <label key={option.value} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium">
               <input
                 type="checkbox"
                 name="allowedRecordingMode"
@@ -326,7 +326,7 @@ function FitnessTestTypeForm({
       </fieldset>
 
       <div className="flex justify-end md:col-span-2">
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting} fullWidth>
           {isSubmitting ? 'Saving...' : submitLabel}
         </Button>
       </div>

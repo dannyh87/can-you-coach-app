@@ -246,16 +246,16 @@ export default function MatchControlClient({
   return (
     <section className="mt-6 space-y-4 rounded-2xl bg-gray-50 p-5">
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-      <div className="rounded-xl bg-white p-5 text-center shadow-sm">
-        <p className="text-sm font-medium text-gray-500">Score</p>
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <p className="text-base font-bold sm:text-lg">{homeLabel}</p>
-          <p className="text-5xl font-bold tabular-nums sm:text-6xl">
-            {homeScore}-{awayScore}
-          </p>
-          <p className="text-base font-bold sm:text-lg">{awayLabel}</p>
+        <div className="rounded-xl bg-white p-5 text-center shadow-sm">
+          <p className="text-sm font-medium text-gray-500">Score</p>
+          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
+            <p className="break-words text-sm font-bold sm:text-lg">{homeLabel}</p>
+            <p className="text-4xl font-bold tabular-nums sm:text-6xl">
+              {homeScore}-{awayScore}
+            </p>
+            <p className="break-words text-sm font-bold sm:text-lg">{awayLabel}</p>
+          </div>
         </div>
-      </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
           <TimerCard label="Current half" value={currentHalfLabel} highlight />
