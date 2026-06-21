@@ -54,6 +54,8 @@ const fitnessTestTypes = [
     description: 'Intermittent fitness test used to assess endurance and recovery ability.',
     resultUnit: 'Metres',
     higherIsBetter: true,
+    allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
+    preferredRecordingMode: 'LIVE_DROPOUT',
     isDefault: true,
   },
   {
@@ -61,6 +63,8 @@ const fitnessTestTypes = [
     description: 'Progressive running test used to assess aerobic fitness.',
     resultUnit: 'Metres',
     higherIsBetter: true,
+    allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
+    preferredRecordingMode: 'LIVE_DROPOUT',
     isDefault: true,
   },
   {
@@ -68,6 +72,8 @@ const fitnessTestTypes = [
     description: 'Multi-stage shuttle run test.',
     resultUnit: 'Level',
     higherIsBetter: true,
+    allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
+    preferredRecordingMode: 'LIVE_DROPOUT',
     isDefault: true,
   },
   {
@@ -75,6 +81,8 @@ const fitnessTestTypes = [
     description: 'Repeated shuttle run completed as quickly as possible.',
     resultUnit: 'Seconds',
     higherIsBetter: false,
+    allowedRecordingModes: 'MANUAL,LIVE_TIMED_FINISH',
+    preferredRecordingMode: 'LIVE_TIMED_FINISH',
     isDefault: true,
   },
 ]

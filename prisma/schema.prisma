@@ -204,6 +204,8 @@ model FitnessTestType {
   description         String?
   resultUnit          String
   higherIsBetter      Boolean
+  allowedRecordingModes String           @default("MANUAL")
+  preferredRecordingMode String          @default("MANUAL")
   isDefault           Boolean              @default(false)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt

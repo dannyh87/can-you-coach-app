@@ -187,11 +187,16 @@ export default async function FitnessPage() {
     clubName: team.club.name,
   }))
 
-  const fitnessTestTypeOptions = fitnessTestTypes.map((fitnessTestType) => ({
-    id: fitnessTestType.id,
-    name: fitnessTestType.name,
-    resultUnit: fitnessTestType.resultUnit,
-  }))
+  const fitnessTestTypeOptions = fitnessTestTypes.map((fitnessTestType) => {
+    const recordingModes = getFitnessRecordingModes(fitnessTestType)
+
+    return {
+      id: fitnessTestType.id,
+      name: fitnessTestType.name,
+      resultUnit: fitnessTestType.resultUnit,
+      recordingModeLabel: recordingModes.label,
+    }
+  })
 
   const sessionRows = sessions.map((session) => {
     const recordingModes = getFitnessRecordingModes(session.fitnessTestType)

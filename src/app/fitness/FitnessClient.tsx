@@ -26,6 +26,7 @@ type FitnessTestTypeOption = {
   id: string
   name: string
   resultUnit: string
+  recordingModeLabel: string
 }
 
 type FitnessSessionRow = {
@@ -526,7 +527,8 @@ function CreateSessionForm({
         >
           {fitnessTestTypes.map((fitnessTestType) => (
             <option key={fitnessTestType.id} value={fitnessTestType.id}>
-              {fitnessTestType.name} ({fitnessTestType.resultUnit})
+              {fitnessTestType.name} ({fitnessTestType.resultUnit}) -{' '}
+              {fitnessTestType.recordingModeLabel}
             </option>
           ))}
         </select>
