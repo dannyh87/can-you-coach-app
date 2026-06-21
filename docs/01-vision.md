@@ -19,14 +19,14 @@ The app is intentionally pragmatic. It is designed for volunteer and grassroots 
 - Mobile-first: large buttons and card-based layouts are used throughout live workflows.
 - Objective: focus on recorded results, minutes, scores, and events rather than subjective ratings.
 - Development-focused: support improvement conversations, not just match outcomes.
-- Local-first MVP: Prisma and SQLite run locally while the product shape is proven.
+- PostgreSQL-backed MVP: Prisma uses PostgreSQL locally and is ready for Vercel with a managed Postgres `DATABASE_URL`.
 
 ## Built Product Areas
 
 - Club and team setup.
 - Player management.
-- Fitness session creation, recording, rankings, progress, summaries, and CSV downloads.
-- Match creation, squad setup, tracking focus, event setup, live match controls, substitutions, minutes, completed reports, and CSV downloads.
+- Fitness Test Types management, session creation, recording, rankings, progress, completed locked summaries, Reopen for Correction, and CSV downloads.
+- Match creation, squad setup, tracking focus, event setup, live match controls, goal controls, substitutions, minutes, completed reports, and CSV downloads.
 
 ## Current Users
 
@@ -43,7 +43,7 @@ The app is intentionally pragmatic. It is designed for volunteer and grassroots 
 - Video upload or analysis.
 - Custom match event definitions.
 - AI coaching recommendations.
-- Cloud hosting.
+- Production authentication and multi-user account separation.
 - Multi-coach live collaboration.
 
 ## Long-Term Direction

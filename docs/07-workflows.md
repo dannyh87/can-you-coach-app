@@ -19,8 +19,9 @@ Notes:
 
 1. Open `/fitness`.
 2. Create a fitness session for a team and test type.
-3. Add date and optional notes.
-4. Start the session when ready.
+3. Choose from test types whose allowed recording modes are configured in `/fitness/test-types`.
+4. Add date and optional notes.
+5. Start the session when ready.
 
 Supported lifecycle:
 
@@ -56,6 +57,20 @@ Completed sessions:
 - Show read-only summaries/results.
 - Link to rankings and progress.
 - Allow CSV download when results exist.
+- Allow Reopen for Correction to return a completed session to in-progress while preserving saved results.
+
+## Workflow 3A: Manage Fitness Test Types
+
+1. Open `/fitness/test-types`.
+2. Create a custom test type or tap an existing row to edit it.
+3. Set name, unit, ranking direction, allowed recording modes, and preferred recording mode.
+4. Save the modal form.
+
+Supported recording modes:
+
+- `MANUAL` - manual result entry.
+- `LIVE_DROPOUT` - live dropout/level recording.
+- `LIVE_TIMED_FINISH` - live timer/finish recording.
 
 ## Workflow 4: Review Fitness Data
 
@@ -109,7 +124,7 @@ Event setup:
 
 1. Start the match.
 2. Starters are put on the pitch for first-half minutes.
-3. Update score manually when needed.
+3. Add or undo goals for either team during live play.
 4. Record selected events for tracked players currently on the pitch.
 5. Sub players on/off to track stints and minutes.
 6. End first half.
@@ -120,7 +135,7 @@ Important rules:
 
 - Score changes are separate from event recording.
 - Events do not update score automatically.
-- Event recording is paused at half-time.
+- Goal recording and event recording are paused at half-time.
 - Completed matches become read-only.
 
 ## Workflow 8: Review A Completed Match

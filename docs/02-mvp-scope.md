@@ -24,11 +24,17 @@ This document reflects what has actually been built so far.
 
 ### Fitness Testing
 
+- Manage default and custom fitness test types at `/fitness/test-types`.
+- Create custom user-owned fitness test types.
+- Edit test type name, unit, ranking direction, allowed recording modes, and preferred recording mode.
+- Persisted recording modes are stored on `FitnessTestType` as `allowedRecordingModes` and `preferredRecordingMode`.
+- Supported recording modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
 - Create fitness sessions for a team and test type.
 - Session statuses: `DRAFT`, `IN_PROGRESS`, `COMPLETED`.
 - Recording modes include manual entry, live dropout, and timed finish flows.
 - Results support numeric value, display text, result status, and notes.
 - Completed sessions are read-only.
+- Completed sessions have an admin-style Reopen for Correction action that returns the session to in-progress while preserving saved results.
 - Rankings and progress reporting are built.
 - Completed summaries show metadata, result count, top/bottom performers, rankings links, and progress links.
 - CSV export is available for saved fitness results.
@@ -41,7 +47,8 @@ This document reflects what has actually been built so far.
 - Squad setup marks players as starter, substitute, or not involved.
 - Tracking focus chooses which involved players are available for event recording.
 - Event setup selects from the built-in standard event set.
-- Live match controls include score, first/second half lifecycle, and completed match state.
+- Live match controls include score display, GOAL/undo goal controls, first/second half lifecycle, and completed match state.
+- Goals can be added or undone during live play only; goal recording is paused at half-time.
 - Substitution/minutes tracking uses player stints and includes all involved players.
 - Event recording is limited to tracked players who are currently on the pitch.
 - Completed matches show a read-only report.
@@ -70,7 +77,6 @@ This document reflects what has actually been built so far.
 - Payments/subscriptions.
 - Parent portals.
 - Assistant coach roles.
-- Cloud hosting.
 - Video.
 - AI recommendations.
 - Custom match event definitions.

@@ -2,7 +2,7 @@
 
 The app uses Prisma with PostgreSQL. The schema is defined in `prisma/schema.prisma` and current migrations are stored in `prisma/migrations`.
 
-Previous SQLite migrations are preserved in `prisma/migrations_sqlite_archive` for reference. Do not delete `prisma/dev.db` or the archive unless there is an explicit data-retention decision.
+Previous SQLite migrations are preserved in `prisma/migrations_sqlite_archive` for reference. Current development and deployment use PostgreSQL migrations in `prisma/migrations`.
 
 Expected local `DATABASE_URL` format:
 
@@ -13,8 +13,8 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema
 Postgres compatibility notes:
 
 - The current schema uses `String @id @default(cuid())`, Prisma enums, booleans, `DateTime`, `Float`, and referential actions that are compatible with Postgres.
-- No model fields or defaults required changes during the provider switch beyond changing the datasource provider.
 - The fresh Postgres baseline migration creates native Postgres enum types.
+- Vercel deployment uses a managed Postgres `DATABASE_URL`. `DIRECT_URL` is not currently required because the Prisma schema only uses `env("DATABASE_URL")`.
 
 ## Core Hierarchy
 
@@ -108,9 +108,18 @@ Key fields:
 - `description`
 - `resultUnit`
 - `higherIsBetter`
+- `allowedRecordingModes`
+- `preferredRecordingMode`
 - `isDefault`
 
 Ranking uses `higherIsBetter`.
+
+Recording-mode configuration:
+
+- `allowedRecordingModes` stores comma-separated modes.
+- `preferredRecordingMode` stores the preferred mode.
+- Valid modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
+- Helper logic in `src/lib/fitnessRecordingModes.ts` safely falls back to `MANUAL` when stored allowed modes are missing, empty, or invalid.
 
 ## FitnessTestSession
 

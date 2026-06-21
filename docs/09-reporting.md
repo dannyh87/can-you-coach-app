@@ -6,7 +6,7 @@ Reporting currently focuses on simple, useful outputs coaches can review or shar
 
 ### Session Summary
 
-Completed sessions show:
+Completed fitness sessions are locked/read-only and show:
 
 - Test type.
 - Team.
@@ -17,6 +17,8 @@ Completed sessions show:
 - Top performer.
 - Bottom performer.
 - Links to rankings and progress.
+
+Completed sessions also keep CSV export available when saved results exist and include a Reopen for Correction action for controlled result corrections.
 
 ### Rankings
 

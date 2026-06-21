@@ -34,6 +34,19 @@ Built acceptance criteria:
 - Start sessions and mark sessions complete through supported recording flows.
 - Display sessions in the Fitness area.
 
+## Fitness Test Type Management
+
+As a coach, I can manage fitness test type settings so that each test uses the correct recording workflow.
+
+Built acceptance criteria:
+
+- View default and custom fitness test types at `/fitness/test-types`.
+- Create custom user-owned fitness test types.
+- Edit test name, unit, higher/lower-is-better ranking direction, allowed recording modes, and preferred recording mode.
+- Allowed modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
+- At least one allowed recording mode is required.
+- Preferred mode must be one of the allowed modes, or it falls back to the first allowed mode.
+
 ## Fitness Result Recording
 
 As a coach, I can record fitness results so that I can compare player performance.
@@ -46,6 +59,7 @@ Built acceptance criteria:
 - Result statuses include completed, did not start, injured, absent/missed, and dropped out.
 - Results support numeric values, display text, and notes.
 - Completed sessions hide recording controls and become read-only.
+- Completed sessions can be reopened for correction, preserving saved results.
 
 ## Fitness Rankings And Progress
 
@@ -100,11 +114,13 @@ As a coach, I can run a live match so that score, halves, minutes, substitutions
 Built acceptance criteria:
 
 - Start first half, end first half, start second half, complete match.
-- Update score during live play or half-time.
+- Add or undo team/opposition goals during live play.
+- Pause goal recording at half-time.
 - Sub players on and off during active halves.
 - Track player stints and minutes played.
 - Record selected standard events for tracked on-pitch players.
 - Undo events before completion.
+- Keep goal controls separate from event recording; events do not update the score automatically.
 
 ## Completed Match Report
 

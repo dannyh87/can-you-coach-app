@@ -20,6 +20,7 @@ Do not replace these without explicit approval.
 - Local MVP user logic lives in `src/lib/localUser.ts`.
 - Prisma client singleton lives in `src/lib/prisma.ts`.
 - Fitness shared actions/helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
+- Fitness Test Types management lives under `src/app/fitness/test-types/`.
 - Shared UI primitives live in `src/components/ui/`.
 - Fitness routes live under `src/app/fitness/`.
 - Match Day routes live under `src/app/match-day/`.
@@ -29,6 +30,7 @@ Do not replace these without explicit approval.
 
 - Prefer the smallest correct change.
 - Preserve current recording behaviours unless explicitly asked to change them.
+- Fitness recording-mode labels, parsing, validation, and serialisation should stay centralised in `src/lib/fitnessRecordingModes.ts`.
 - Do not add Prisma schema changes or migrations unless the requested feature requires persisted data.
 - Run `npm run lint` and `npm run build` after meaningful changes.
 - Check `package.json` before running `npm run typecheck`; there is currently no typecheck script.
@@ -36,18 +38,20 @@ Do not replace these without explicit approval.
 ## Product Rules To Preserve
 
 - Completed fitness sessions are read-only.
+- Reopen for Correction should preserve saved fitness results and only reopen completed sessions.
 - Completed matches are read-only/report-only.
 - Squad involvement, on-pitch state, and tracked-for-events are separate concepts.
 - Tracking focus affects event recording only.
 - Substitution and minutes tracking must include all involved players, not just tracked players.
 - Match events do not automatically update the score.
 - Score controls are separate from event recording.
+- Goals can be added/undone during live play only; goal recording is paused at half-time.
 
 ## Do Not Add Without Approval
 
 - Production auth.
 - Payments.
-- Hosting/deployment setup.
+- Production auth or deployment architecture changes beyond the current Vercel-ready setup.
 - Video.
 - Custom match event definitions.
 - Parent portals.
@@ -77,3 +81,11 @@ Use a PostgreSQL `DATABASE_URL`, for example:
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
 ```
+
+For production migrations on Vercel-managed Postgres, use:
+
+```bash
+npm run db:migrate:deploy
+```
+
+Do not run `prisma migrate dev` against production. Seed production deliberately and only when wanted with `npm run db:seed`.

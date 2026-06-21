@@ -18,6 +18,8 @@ Built components include:
 
 The app still contains some feature-specific styling where it is simpler than abstracting everything.
 
+Recent polish made shared page headers, section cards, empty states, mobile spacing, and the top navigation more consistent and phone-friendly.
+
 ## Global Navigation
 
 The top navigation links to:
@@ -65,11 +67,12 @@ Purpose: create sessions, record results, and review outputs.
 Current UI:
 
 - Fitness session list and creation modal.
+- Fitness Test Types settings page at `/fitness/test-types` for custom test type creation/editing and persisted recording-mode settings.
 - Session detail page with metadata, lifecycle status, recording links, saved results, and CSV download when results exist.
 - Live dropout and timer pages with large controls.
 - Rankings table.
 - Progress reporting with Recharts.
-- Completed summary panels.
+- Completed locked/read-only summary panels with rankings/progress links and Reopen for Correction.
 
 ## Match Day List
 
@@ -102,11 +105,13 @@ Draft UI rules:
 
 Live match UI contains:
 
-- Score and half/timer controls.
+- Score display, live GOAL/undo goal controls, and half/timer controls.
 - Player/substitution controls.
 - Event recording controls.
 
 Event recording supports player-first and event-first modes. Only tracked players currently on the pitch are shown.
+
+Goal controls are separate from event recording. Goals can be added or undone during live play only, and goal recording is paused at half-time.
 
 ### Completed State
 

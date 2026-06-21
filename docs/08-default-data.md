@@ -24,10 +24,25 @@ Important fields:
 - `description`
 - `resultUnit`
 - `higherIsBetter`
+- `allowedRecordingModes`
+- `preferredRecordingMode`
 - `isDefault`
 - optional `userId`
 
-The database supports both default and user-owned test types. Seed/default values are managed through the Prisma seed and app data, not hard-coded UI-only state.
+The database supports both default and user-owned test types. Seed/default values are managed through the Prisma seed and app data, not hard-coded UI-only state. Coaches can create and edit custom user-owned test types at `/fitness/test-types`.
+
+Recording mode values:
+
+- `MANUAL`
+- `LIVE_DROPOUT`
+- `LIVE_TIMED_FINISH`
+
+Seeded default recording modes:
+
+- Yo-Yo Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
+- Bleep Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
+- Gacon Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
+- Bronco Test: `allowedRecordingModes = MANUAL,LIVE_TIMED_FINISH`, `preferredRecordingMode = LIVE_TIMED_FINISH`.
 
 Examples supported by the product direction:
 
