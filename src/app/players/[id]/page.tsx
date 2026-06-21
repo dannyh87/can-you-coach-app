@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const formatDate = (date: Date | null) => {
   if (!date) return 'Not set'
   return new Intl.DateTimeFormat('en-GB').format(date)

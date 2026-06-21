@@ -4,6 +4,8 @@ import FitnessProgressChart from '@/components/FitnessProgressChart'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 type SearchParams = {
   teamId?: string
   fitnessTestTypeId?: string

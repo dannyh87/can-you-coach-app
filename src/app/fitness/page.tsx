@@ -13,6 +13,8 @@ import {
 } from '@/lib/fitnessSessionStatus'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
   return typeof value === 'string' ? value.trim() : ''

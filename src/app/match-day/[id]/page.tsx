@@ -12,6 +12,8 @@ import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusCli
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const pitchTargetStates = ['ON', 'OFF'] as const
 const matchEventCategories = [

@@ -4,6 +4,8 @@ import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
+export const dynamic = 'force-dynamic'
+
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
   return typeof value === 'string' ? value.trim() : ''

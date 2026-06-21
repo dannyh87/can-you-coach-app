@@ -8,6 +8,8 @@ import PageHeader from '@/components/ui/PageHeader'
 import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const matchTypes = ['LEAGUE', 'CUP', 'FRIENDLY'] as const
 const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 

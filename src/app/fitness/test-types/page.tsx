@@ -14,6 +14,8 @@ import {
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 type FitnessTestTypeActionResult =
   | { ok: true }
   | { ok: false; reason: string }

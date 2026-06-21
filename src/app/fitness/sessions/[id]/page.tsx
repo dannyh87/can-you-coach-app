@@ -14,6 +14,8 @@ import {
 } from '@/lib/fitnessSessionStatus'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const statusOptions: { label: string; value: FitnessResultStatus }[] = [
   { label: 'Completed', value: 'COMPLETED' },
   { label: 'Did not start', value: 'DID_NOT_START' },

@@ -5,6 +5,8 @@ import { notFound } from 'next/navigation'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
 const formatStatus = (status: FitnessResultStatus) => {
