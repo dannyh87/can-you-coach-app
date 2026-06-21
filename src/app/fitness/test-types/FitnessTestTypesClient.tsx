@@ -30,29 +30,62 @@ type FitnessTestTypeRow = {
 
 type FitnessTestTypesClientProps = {
   testTypes: FitnessTestTypeRow[]
+  createFitnessTestTypeAction: (formData: FormData) => Promise<FitnessTestTypeActionResult>
   updateFitnessTestTypeAction: (formData: FormData) => Promise<FitnessTestTypeActionResult>
 }
 
+type ModalMode = 'create' | 'edit' | null
+
 export default function FitnessTestTypesClient({
   testTypes,
+  createFitnessTestTypeAction,
   updateFitnessTestTypeAction,
 }: FitnessTestTypesClientProps) {
   const router = useRouter()
+  const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [selectedTestType, setSelectedTestType] = useState<FitnessTestTypeRow | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const openCreateModal = () => {
+    setSelectedTestType(null)
+    setError(null)
+    setMessage(null)
+    setModalMode('create')
+  }
+
   const openEditModal = (testType: FitnessTestTypeRow) => {
     setSelectedTestType(testType)
     setError(null)
     setMessage(null)
+    setModalMode('edit')
   }
 
   const closeModal = () => {
     if (isSubmitting) return
+    setModalMode(null)
     setSelectedTestType(null)
     setError(null)
+  }
+
+  const createTestType = async (formData: FormData) => {
+    setIsSubmitting(true)
+    setError(null)
+    setMessage(null)
+
+    const result = await createFitnessTestTypeAction(formData)
+
+    if (result.ok) {
+      setModalMode(null)
+      setSelectedTestType(null)
+      setMessage('Fitness test type created.')
+      router.refresh()
+    } else {
+      setError(result.reason)
+    }
+
+    setIsSubmitting(false)
   }
 
   const updateTestType = async (formData: FormData) => {
@@ -63,6 +96,7 @@ export default function FitnessTestTypesClient({
     const result = await updateFitnessTestTypeAction(formData)
 
     if (result.ok) {
+      setModalMode(null)
       setSelectedTestType(null)
       setMessage('Fitness test type updated.')
       router.refresh()
@@ -84,6 +118,11 @@ export default function FitnessTestTypesClient({
       <SectionCard
         title="Test Types"
         description="Click a row to edit recording-mode settings."
+        actions={(
+          <Button type="button" onClick={openCreateModal} size="sm">
+            New Fitness Test Type
+          </Button>
+        )}
         bodyClassName="p-0"
       >
         {testTypes.length === 0 ? (
@@ -126,7 +165,7 @@ export default function FitnessTestTypesClient({
         )}
       </SectionCard>
 
-      {selectedTestType && (
+      {modalMode && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="dialog"
@@ -135,9 +174,15 @@ export default function FitnessTestTypesClient({
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold">Edit Fitness Test Type</h2>
+                <h2 className="text-2xl font-bold">
+                  {modalMode === 'create'
+                    ? 'New Fitness Test Type'
+                    : 'Edit Fitness Test Type'}
+                </h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Update result settings and allowed recording modes.
+                  {modalMode === 'create'
+                    ? 'Create a custom test type for this local coach profile.'
+                    : 'Update result settings and allowed recording modes.'}
                 </p>
               </div>
               <button
@@ -156,12 +201,22 @@ export default function FitnessTestTypesClient({
               </p>
             )}
 
-            <FitnessTestTypeForm
-              key={selectedTestType.id}
-              testType={selectedTestType}
-              isSubmitting={isSubmitting}
-              onSubmit={updateTestType}
-            />
+            {modalMode === 'create' ? (
+              <FitnessTestTypeForm
+                key="create"
+                isSubmitting={isSubmitting}
+                submitLabel="Create Fitness Test Type"
+                onSubmit={createTestType}
+              />
+            ) : selectedTestType ? (
+              <FitnessTestTypeForm
+                key={selectedTestType.id}
+                testType={selectedTestType}
+                isSubmitting={isSubmitting}
+                submitLabel="Save Fitness Test Type"
+                onSubmit={updateTestType}
+              />
+            ) : null}
           </div>
         </div>
       )}
@@ -172,17 +227,19 @@ export default function FitnessTestTypesClient({
 function FitnessTestTypeForm({
   testType,
   isSubmitting,
+  submitLabel,
   onSubmit,
 }: {
-  testType: FitnessTestTypeRow
+  testType?: FitnessTestTypeRow
   isSubmitting: boolean
+  submitLabel: string
   onSubmit: (formData: FormData) => Promise<void>
 }) {
   const [allowedModes, setAllowedModes] = useState<FitnessRecordingMode[]>(
-    testType.allowedModes
+    testType?.allowedModes ?? ['MANUAL']
   )
   const [preferredMode, setPreferredMode] = useState<FitnessRecordingMode>(
-    testType.preferredMode
+    testType?.preferredMode ?? 'MANUAL'
   )
 
   const updateAllowedMode = (mode: FitnessRecordingMode, isChecked: boolean) => {
@@ -200,14 +257,14 @@ function FitnessTestTypeForm({
 
   return (
     <form action={onSubmit} className="grid gap-4 md:grid-cols-2">
-      <input type="hidden" name="id" value={testType.id} />
+      {testType && <input type="hidden" name="id" value={testType.id} />}
 
       <label className="text-sm font-medium">
         Name
         <input
           name="name"
           required
-          defaultValue={testType.name}
+          defaultValue={testType?.name ?? ''}
           className={fieldClassName}
         />
       </label>
@@ -217,7 +274,7 @@ function FitnessTestTypeForm({
         <input
           name="resultUnit"
           required
-          defaultValue={testType.resultUnit}
+          defaultValue={testType?.resultUnit ?? ''}
           className={fieldClassName}
         />
       </label>
@@ -226,7 +283,7 @@ function FitnessTestTypeForm({
         Ranking direction
         <select
           name="higherIsBetter"
-          defaultValue={testType.higherIsBetter ? 'true' : 'false'}
+          defaultValue={testType?.higherIsBetter === false ? 'false' : 'true'}
           className={fieldClassName}
         >
           <option value="true">Higher is better</option>
@@ -270,7 +327,7 @@ function FitnessTestTypeForm({
 
       <div className="flex justify-end md:col-span-2">
         <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Saving...' : 'Save Fitness Test Type'}
+          {isSubmitting ? 'Saving...' : submitLabel}
         </Button>
       </div>
     </form>

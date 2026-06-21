@@ -23,6 +23,70 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getAllowedRecordingModes = (formData: FormData) => {
+  const allowedModes = formData
+    .getAll('allowedRecordingMode')
+    .filter((value): value is string => typeof value === 'string')
+    .filter(isFitnessRecordingMode)
+
+  return Array.from(new Set<FitnessRecordingMode>(allowedModes))
+}
+
+async function createFitnessTestType(
+  formData: FormData
+): Promise<FitnessTestTypeActionResult> {
+  'use server'
+
+  const user = await getLocalUser()
+  const name = getTextValue(formData, 'name')
+  const resultUnit = getTextValue(formData, 'resultUnit')
+  const higherIsBetter = getTextValue(formData, 'higherIsBetter') === 'true'
+  const allowedModes = getAllowedRecordingModes(formData)
+
+  if (!name || !resultUnit) {
+    return { ok: false, reason: 'Name and unit are required.' }
+  }
+
+  if (allowedModes.length === 0) {
+    return { ok: false, reason: 'Select at least one recording mode.' }
+  }
+
+  const existingFitnessTestType = await prisma.fitnessTestType.findFirst({
+    where: {
+      name,
+      OR: [{ isDefault: true }, { userId: user.id }],
+    },
+    select: { id: true },
+  })
+
+  if (existingFitnessTestType) {
+    return { ok: false, reason: 'A fitness test type with this name already exists.' }
+  }
+
+  const preferredRecordingMode = parsePreferredRecordingMode(
+    getTextValue(formData, 'preferredRecordingMode'),
+    allowedModes
+  )
+
+  await prisma.fitnessTestType.create({
+    data: {
+      userId: user.id,
+      name,
+      resultUnit,
+      higherIsBetter,
+      isDefault: false,
+      allowedRecordingModes: serializeAllowedRecordingModes(allowedModes),
+      preferredRecordingMode,
+    },
+  })
+
+  revalidatePath('/fitness')
+  revalidatePath('/fitness/test-types')
+  revalidatePath('/fitness/progress')
+
+  return { ok: true }
+}
+
 async function updateFitnessTestType(
   formData: FormData
 ): Promise<FitnessTestTypeActionResult> {
@@ -33,19 +97,13 @@ async function updateFitnessTestType(
   const name = getTextValue(formData, 'name')
   const resultUnit = getTextValue(formData, 'resultUnit')
   const higherIsBetter = getTextValue(formData, 'higherIsBetter') === 'true'
-  const allowedModes = formData
-    .getAll('allowedRecordingMode')
-    .filter((value): value is string => typeof value === 'string')
-    .filter(isFitnessRecordingMode)
-  const uniqueAllowedModes = Array.from(
-    new Set<FitnessRecordingMode>(allowedModes)
-  )
+  const allowedModes = getAllowedRecordingModes(formData)
 
   if (!id || !name || !resultUnit) {
     return { ok: false, reason: 'Name and unit are required.' }
   }
 
-  if (uniqueAllowedModes.length === 0) {
+  if (allowedModes.length === 0) {
     return { ok: false, reason: 'Select at least one recording mode.' }
   }
 
@@ -63,7 +121,7 @@ async function updateFitnessTestType(
 
   const preferredRecordingMode = parsePreferredRecordingMode(
     getTextValue(formData, 'preferredRecordingMode'),
-    uniqueAllowedModes
+    allowedModes
   )
 
   await prisma.fitnessTestType.update({
@@ -72,7 +130,7 @@ async function updateFitnessTestType(
       name,
       resultUnit,
       higherIsBetter,
-      allowedRecordingModes: serializeAllowedRecordingModes(uniqueAllowedModes),
+      allowedRecordingModes: serializeAllowedRecordingModes(allowedModes),
       preferredRecordingMode,
     },
   })
@@ -125,6 +183,7 @@ export default async function FitnessTestTypesPage() {
 
       <FitnessTestTypesClient
         testTypes={testTypes}
+        createFitnessTestTypeAction={createFitnessTestType}
         updateFitnessTestTypeAction={updateFitnessTestType}
       />
     </main>
