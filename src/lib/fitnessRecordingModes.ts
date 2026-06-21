@@ -17,16 +17,31 @@ export type FitnessRecordingModes = {
   label: string
 }
 
+export const fitnessRecordingModeOptions: {
+  value: FitnessRecordingMode
+  label: string
+}[] = [
+  { value: 'MANUAL', label: 'Manual Entry' },
+  { value: 'LIVE_DROPOUT', label: 'Live Dropout Mode' },
+  { value: 'LIVE_TIMED_FINISH', label: 'Live Timed Finish Mode' },
+]
+
 const validRecordingModes = new Set<FitnessRecordingMode>([
   'MANUAL',
   'LIVE_DROPOUT',
   'LIVE_TIMED_FINISH',
 ])
 
-const recordingModeLabels: Record<FitnessRecordingMode, string> = {
-  MANUAL: 'Manual Entry',
-  LIVE_DROPOUT: 'Live Dropout Mode',
-  LIVE_TIMED_FINISH: 'Live Timed Finish Mode',
+export function isFitnessRecordingMode(value: string): value is FitnessRecordingMode {
+  return validRecordingModes.has(value as FitnessRecordingMode)
+}
+
+const recordingModeLabels = Object.fromEntries(
+  fitnessRecordingModeOptions.map((option) => [option.value, option.label])
+) as Record<FitnessRecordingMode, string>
+
+export function formatFitnessRecordingMode(mode: FitnessRecordingMode) {
+  return recordingModeLabels[mode]
 }
 
 export function parseAllowedRecordingModes(
@@ -35,9 +50,7 @@ export function parseAllowedRecordingModes(
   const modes = (value ?? '')
     .split(',')
     .map((mode) => mode.trim())
-    .filter((mode): mode is FitnessRecordingMode =>
-      validRecordingModes.has(mode as FitnessRecordingMode)
-    )
+    .filter(isFitnessRecordingMode)
 
   return modes.length > 0 ? Array.from(new Set(modes)) : ['MANUAL']
 }
@@ -49,6 +62,10 @@ export function parsePreferredRecordingMode(
   return allowedModes.includes(value as FitnessRecordingMode)
     ? (value as FitnessRecordingMode)
     : allowedModes[0]
+}
+
+export function serializeAllowedRecordingModes(modes: FitnessRecordingMode[]) {
+  return modes.filter((mode, index) => modes.indexOf(mode) === index).join(',')
 }
 
 export function canUseManualEntry(fitnessTestType: FitnessTestTypeLike) {

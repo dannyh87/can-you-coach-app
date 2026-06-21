@@ -234,6 +234,9 @@ export default async function FitnessPage() {
             <Link href="/fitness/progress" className="text-sm font-semibold text-blue-800 hover:underline">
               View Progress
             </Link>
+            <Link href="/fitness/test-types" className="text-sm font-semibold text-blue-800 hover:underline">
+              Fitness Test Types
+            </Link>
             <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
               Club Setup
             </Link>
