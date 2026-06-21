@@ -10,9 +10,10 @@ The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and 
 - Club Setup for creating clubs and teams.
 - Player management for adding, editing, viewing, and archiving players.
 - Fitness testing sessions with draft, in-progress, and completed states.
-- Fitness recording modes for manual entry, dropout-style tests, and timed finish tests.
-- Fitness rankings, progress reports, completed summaries, and CSV result downloads.
-- Match Day setup, squad selection, tracking focus, event setup, live match controls, substitutions, score controls, completed reports, and CSV downloads.
+- Fitness Test Types management for custom test types and persisted recording-mode settings.
+- Fitness recording modes for manual entry, live dropout tests, and live timed finish tests.
+- Fitness rankings, progress reports, completed read-only summaries, Reopen for Correction, and CSV result downloads.
+- Match Day setup, squad selection, tracking focus, event setup, live match controls, substitutions, goal controls, completed reports, and CSV downloads.
 - Shared UI primitives under `src/components/ui/`.
 - Prisma PostgreSQL database with migrations in `prisma/migrations`.
 - Archived SQLite migration history in `prisma/migrations_sqlite_archive` for reference.
@@ -24,6 +25,7 @@ The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, and 
 - `/players` - player list and player management.
 - `/players/[id]` - player profile/details.
 - `/fitness` - fitness session list and creation.
+- `/fitness/test-types` - manage default and custom fitness test type settings.
 - `/fitness/sessions/[id]` - fitness session detail, manual results, completed result view, CSV export.
 - `/fitness/sessions/[id]/live` - live dropout recording.
 - `/fitness/sessions/[id]/timer` - live timed finish recording.
@@ -68,6 +70,8 @@ Open `http://localhost:3000`.
 ```bash
 npm run lint
 npm run build
+npm run db:migrate:deploy
+npm run db:seed
 npx prisma migrate dev
 npx prisma studio
 ```
@@ -112,7 +116,7 @@ Do not auto-seed on every deployment. `.env` is for local development only and s
 - Production authentication and roles.
 - Parent portals.
 - Payments/subscriptions.
-- Cloud hosting setup.
+- Production multi-user account separation and hardening.
 - Video upload or analysis.
 - AI recommendations.
 - Multi-coach live sync.
