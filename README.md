@@ -74,11 +74,35 @@ npx prisma studio
 
 There is currently no `typecheck` script in `package.json`.
 
+## Vercel Deployment
+
+Use a managed Postgres provider on or with Vercel and set this required environment variable in Vercel:
+
+```env
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+```
+
+`DIRECT_URL` is not currently required because `prisma/schema.prisma` only uses `env("DATABASE_URL")`.
+
+Production migrations should be applied deliberately with:
+
+```bash
+npm run db:migrate:deploy
+```
+
+Do not use `prisma migrate dev` against production. Seed demo/default data only deliberately, usually once:
+
+```bash
+npm run db:seed
+```
+
+Do not auto-seed on every deployment. `.env` is for local development only and should not be committed.
+
 ## Data And Auth Status
 
 - Database: PostgreSQL via Prisma.
 - Auth: local MVP helper creates/uses a demo user and default club.
-- Hosting: not configured.
+- Hosting: ready for Vercel with a managed Postgres `DATABASE_URL`.
 - Payments: not implemented.
 - Video: not implemented.
 - Custom match event definitions: not implemented; the app uses a fixed standard event set.
