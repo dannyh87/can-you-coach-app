@@ -4,8 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
 
 import FitnessResultsCsvButton from '@/app/fitness/sessions/[id]/FitnessResultsCsvButton'
+import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
 import { getLocalUser } from '@/lib/localUser'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import { reopenFitnessTestSession } from '@/lib/fitnessSessionActions'
 import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
@@ -171,6 +173,12 @@ async function startFitnessTestSession(formData: FormData) {
   redirect(`/fitness/sessions/${session.id}?started=1`)
 }
 
+async function reopenCompletedFitnessTest(formData: FormData) {
+  'use server'
+
+  await reopenFitnessTestSession(formData)
+}
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 
 const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
@@ -264,6 +272,37 @@ export default async function FitnessSessionPage({
     rank: resultRanks.get(result.id) ?? null,
     notes: result.notes,
   }))
+  const activePlayerIds = new Set(activePlayers.map((player) => player.id))
+  const completedSummaryPlayers = [
+    ...activePlayers.map((player) => {
+      const result = resultsByPlayerId.get(player.id)
+
+      return {
+        id: player.id,
+        firstName: player.firstName,
+        surname: player.surname,
+        squadNumber: player.squadNumber,
+        result: result
+          ? {
+              resultValue: result.resultValue,
+              resultText: result.resultText,
+            }
+          : null,
+      }
+    }),
+    ...existingResults
+      .filter((result) => !activePlayerIds.has(result.playerId))
+      .map((result) => ({
+        id: result.playerId,
+        firstName: result.player.firstName,
+        surname: result.player.surname,
+        squadNumber: result.player.squadNumber,
+        result: {
+          resultValue: result.resultValue,
+          resultText: result.resultText,
+        },
+      })),
+  ]
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6">
@@ -378,6 +417,12 @@ export default async function FitnessSessionPage({
               >
                 Rankings
               </Link>
+              <Link
+                href="/fitness/progress"
+                className="inline-flex rounded border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700"
+              >
+                Progress
+              </Link>
             </>
           ) : (
             <>
@@ -429,21 +474,26 @@ export default async function FitnessSessionPage({
       </section>
 
       {session.status === 'COMPLETED' ? (
-        <section className="mt-6 rounded-lg border p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold">Saved Results</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                This completed test is locked. Results can still be viewed in rankings
-                and progress reports.
-              </p>
-            </div>
-            <Link
-              href={`/fitness/sessions/${session.id}/rankings`}
-              className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-            >
-              Rankings
-            </Link>
+        <div className="mt-6 space-y-4">
+          <FitnessTestCompleteSummary
+            title="Test Complete"
+            description="This completed fitness test is locked and read-only. Reopen it only for admin corrections."
+            testTypeName={session.fitnessTestType.name}
+            teamName={`${session.team.club.name} - ${session.team.name}`}
+            dateLabel={formatDate(session.date)}
+            sessionStatusLabel={formatFitnessSessionStatus(session.status)}
+            startedAtLabel={formatDateTime(session.startedAt)}
+            completedAtLabel={formatDateTime(session.completedAt)}
+            resultCount={existingResults.length}
+            players={completedSummaryPlayers}
+            resultUnit={session.fitnessTestType.resultUnit}
+            higherIsBetter={session.fitnessTestType.higherIsBetter}
+            statusLabel="Saved"
+            rankingsHref={`/fitness/sessions/${session.id}/rankings`}
+            progressHref="/fitness/progress"
+          />
+
+          <div className="flex flex-wrap gap-2">
             {existingResults.length > 0 && (
               <FitnessResultsCsvButton
                 sessionName={session.fitnessTestType.name}
@@ -458,50 +508,19 @@ export default async function FitnessSessionPage({
             )}
           </div>
 
-          {existingResults.length === 0 ? (
-            <p className="mt-4 rounded-lg bg-gray-50 p-3 text-sm text-gray-500">
-              No results were saved before this test was completed.
+          <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <h2 className="text-lg font-bold text-amber-950">Admin correction</h2>
+            <p className="mt-1 text-sm text-amber-900">
+              Reopen this completed test only when saved results need correcting. Existing results are preserved.
             </p>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Player</th>
-                    <th className="px-3 py-2 font-medium">Squad</th>
-                    <th className="px-3 py-2 font-medium">Result</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {existingResults.map((result) => (
-                    <tr key={result.id}>
-                      <td className="px-3 py-2 font-medium">
-                        {result.player.firstName} {result.player.surname}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">
-                        {formatSquadNumber(result.player.squadNumber)}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">
-                        {result.resultText ||
-                          (result.resultValue !== null
-                            ? `${result.resultValue} ${session.fitnessTestType.resultUnit}`
-                            : 'No result')}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">
-                        {formatResultStatus(result.status)}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">
-                        {result.notes || 'None'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+            <form action={reopenCompletedFitnessTest} className="mt-3">
+              <input type="hidden" name="fitnessTestSessionId" value={session.id} />
+              <button className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white">
+                Reopen for Correction
+              </button>
+            </form>
+          </section>
+        </div>
       ) : !recordingModes.manualEntry ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">Manual entry is not used for this test</h2>

@@ -433,7 +433,9 @@ export default function FitnessClient({
                   {modalMode === 'delete'
                     ? 'Deletion is permanent and removes saved results for this session.'
                     : modalMode === 'detail'
-                      ? 'View session details and choose the next action.'
+                      ? selectedSession?.status === 'COMPLETED'
+                        ? 'This completed session is locked and read-only.'
+                        : 'View session details and choose the next action.'
                       : 'Create a session before recording fitness results.'}
                 </p>
               </div>
@@ -598,6 +600,13 @@ function SessionDetail({
         </p>
       )}
 
+      {session.status === 'COMPLETED' && (
+        <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">
+          Locked and read-only. Results can be reviewed, exported from the results page,
+          and compared in rankings or progress.
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2 pt-2">
         <SessionActions session={session} />
         {session.status !== 'IN_PROGRESS' && (
@@ -620,7 +629,7 @@ function SessionActions({ session }: { session: FitnessSessionRow }) {
     return (
       <>
         <ActionLink href={`/fitness/sessions/${session.id}`} primary>
-          View Results
+          View Locked Results
         </ActionLink>
         <ActionLink href={`/fitness/sessions/${session.id}/rankings`}>
           Rankings

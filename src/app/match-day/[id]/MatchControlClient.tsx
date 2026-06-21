@@ -89,7 +89,7 @@ export default function MatchControlClient({
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isCompleted = status === 'COMPLETED'
-  const canUpdateScore = status === 'IN_PROGRESS' || status === 'HALF_TIME'
+  const canUpdateScore = status === 'IN_PROGRESS'
   const isFirstHalfActive =
     status === 'IN_PROGRESS' && Boolean(firstHalfStartedAt) && !firstHalfEndedAt
   const isSecondHalfActive =
@@ -308,56 +308,65 @@ export default function MatchControlClient({
             )}
           </div>
 
-          {canUpdateScore && (
-            <div className="rounded-xl bg-white p-4 shadow-sm">
-              <h2 className="text-lg font-bold">Score controls</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Correct the score during live play or half-time.
+          <div className="rounded-xl bg-white p-4 shadow-sm">
+            <h2 className="text-lg font-bold">Goal controls</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Add goals during live play. Use undo if a goal was tapped by mistake.
+            </p>
+
+            {status === 'HALF_TIME' ? (
+              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Goal recording is paused at half-time. Start the second half to continue.
               </p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <ScoreButton
-                  label={`${teamName} +1`}
-                  disabled={Boolean(pendingAction)}
-                  onClick={() =>
-                    updateScore({
-                      nextOwnScore: ownScore + 1,
-                      nextOppositionScore: oppositionScore,
-                    })
-                  }
-                />
-                <ScoreButton
-                  label={`${opposition} +1`}
-                  disabled={Boolean(pendingAction)}
-                  onClick={() =>
-                    updateScore({
-                      nextOwnScore: ownScore,
-                      nextOppositionScore: oppositionScore + 1,
-                    })
-                  }
-                />
-                <ScoreButton
-                  label={`${teamName} -1`}
-                  disabled={Boolean(pendingAction) || ownScore <= 0}
-                  onClick={() =>
-                    updateScore({
-                      nextOwnScore: ownScore - 1,
-                      nextOppositionScore: oppositionScore,
-                    })
-                  }
-                />
-                <ScoreButton
-                  label={`${opposition} -1`}
-                  disabled={Boolean(pendingAction) || oppositionScore <= 0}
-                  onClick={() =>
-                    updateScore({
-                      nextOwnScore: ownScore,
-                      nextOppositionScore: oppositionScore - 1,
-                    })
-                  }
-                />
+            ) : (
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <GoalButton
+                    label={`${teamName} GOAL!`}
+                    disabled={Boolean(pendingAction) || !canUpdateScore}
+                    onClick={() =>
+                      updateScore({
+                        nextOwnScore: ownScore + 1,
+                        nextOppositionScore: oppositionScore,
+                      })
+                    }
+                  />
+                  <GoalButton
+                    label={`${opposition} GOAL!`}
+                    disabled={Boolean(pendingAction) || !canUpdateScore}
+                    onClick={() =>
+                      updateScore({
+                        nextOwnScore: ownScore,
+                        nextOppositionScore: oppositionScore + 1,
+                      })
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <UndoGoalButton
+                    label={`Undo ${teamName} goal`}
+                    disabled={Boolean(pendingAction) || !canUpdateScore || ownScore <= 0}
+                    onClick={() =>
+                      updateScore({
+                        nextOwnScore: ownScore - 1,
+                        nextOppositionScore: oppositionScore,
+                      })
+                    }
+                  />
+                  <UndoGoalButton
+                    label={`Undo ${opposition} goal`}
+                    disabled={Boolean(pendingAction) || !canUpdateScore || oppositionScore <= 0}
+                    onClick={() =>
+                      updateScore({
+                        nextOwnScore: ownScore,
+                        nextOppositionScore: oppositionScore - 1,
+                      })
+                    }
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -389,7 +398,7 @@ function TimerCard({
   )
 }
 
-function ScoreButton({
+function GoalButton({
   label,
   disabled,
   onClick,
@@ -402,7 +411,28 @@ function ScoreButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
+      className="rounded-lg bg-green-700 px-4 py-4 text-base font-extrabold text-white disabled:opacity-50"
+      disabled={disabled}
+    >
+      {label}
+    </button>
+  )
+}
+
+function UndoGoalButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string
+  disabled: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border bg-white px-4 py-3 text-sm font-semibold text-red-700 disabled:opacity-50"
       disabled={disabled}
     >
       {label}

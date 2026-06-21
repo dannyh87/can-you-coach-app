@@ -151,3 +151,51 @@ export async function endFitnessTestSession(formData: FormData): Promise<
 
   return { ok: true, completedAt: completedAt.toISOString() }
 }
+
+export async function reopenFitnessTestSession(formData: FormData): Promise<
+  | { ok: true }
+  | { ok: false; reason: string }
+> {
+  const user = await getLocalUser()
+  const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
+
+  if (!fitnessTestSessionId) {
+    return { ok: false, reason: 'Missing fitness test session.' }
+  }
+
+  const session = await prisma.fitnessTestSession.findFirst({
+    where: {
+      id: fitnessTestSessionId,
+      team: {
+        club: {
+          userId: user.id,
+        },
+      },
+    },
+  })
+
+  if (!session) {
+    return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (session.status !== 'COMPLETED') {
+    return { ok: false, reason: 'Only completed fitness tests can be reopened.' }
+  }
+
+  await prisma.fitnessTestSession.update({
+    where: { id: session.id },
+    data: {
+      status: 'IN_PROGRESS',
+      completedAt: null,
+    },
+  })
+
+  revalidatePath('/fitness')
+  revalidatePath(`/fitness/sessions/${session.id}`)
+  revalidatePath(`/fitness/sessions/${session.id}/live`)
+  revalidatePath(`/fitness/sessions/${session.id}/timer`)
+  revalidatePath(`/fitness/sessions/${session.id}/rankings`)
+  revalidatePath('/fitness/progress')
+
+  return { ok: true }
+}

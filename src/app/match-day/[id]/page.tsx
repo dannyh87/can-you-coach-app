@@ -653,8 +653,8 @@ async function updateMatchScore(formData: FormData): Promise<MatchActionResult> 
 
   const match = await getOwnedMatch(matchDayId)
   if (!match) return { ok: false, reason: 'Match was not found.' }
-  if (match.status !== 'IN_PROGRESS' && match.status !== 'HALF_TIME') {
-    return { ok: false, reason: 'Scores can only be changed during live play or half-time.' }
+  if (match.status !== 'IN_PROGRESS') {
+    return { ok: false, reason: 'Goals can only be added or undone during live play.' }
   }
 
   await prisma.matchDay.update({
