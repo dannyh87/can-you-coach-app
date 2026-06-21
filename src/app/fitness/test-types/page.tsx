@@ -70,7 +70,9 @@ async function createFitnessTestType(
 
   await prisma.fitnessTestType.create({
     data: {
-      userId: user.id,
+      user: {
+        connect: { id: user.id },
+      },
       name,
       resultUnit,
       higherIsBetter,
