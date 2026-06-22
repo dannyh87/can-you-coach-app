@@ -25,11 +25,13 @@ export default function StatusBadge({ label, variant = 'neutral', className = ''
 }
 
 export const getStatusBadgeVariant = (status: string): StatusVariant => {
-  if (status === 'IN_PROGRESS') return 'inProgress'
-  if (status === 'HALF_TIME') return 'halfTime'
-  if (status === 'COMPLETED') return 'completed'
-  if (status === 'DRAFT') return 'draft'
-  if (status === 'active') return 'active'
-  if (status === 'archived') return 'archived'
+  const normalizedStatus = status.trim().toUpperCase().replaceAll(' ', '_')
+
+  if (normalizedStatus === 'IN_PROGRESS' || normalizedStatus === 'LIVE') return 'inProgress'
+  if (normalizedStatus === 'HALF_TIME') return 'halfTime'
+  if (normalizedStatus === 'COMPLETED') return 'completed'
+  if (normalizedStatus === 'DRAFT' || normalizedStatus === 'CREATED') return 'draft'
+  if (normalizedStatus === 'ACTIVE') return 'active'
+  if (normalizedStatus === 'ARCHIVED') return 'archived'
   return 'neutral'
 }

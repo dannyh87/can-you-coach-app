@@ -1,12 +1,23 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import ActionLink from '@/components/ui/ActionLink'
+import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeader,
+} from '@/components/ui/DataTable'
+import FormField from '@/components/ui/FormField'
+import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
-import { fieldClassName } from '@/components/ui/formStyles'
+import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
+import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 
 type MatchActionResult =
   | { ok: true }
@@ -77,9 +88,7 @@ export default function MatchDayClient({
   return (
     <>
       {message && (
-        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-          {message}
-        </p>
+        <Alert variant="success" className="mb-6">{message}</Alert>
       )}
 
       <SectionCard
@@ -114,9 +123,7 @@ export default function MatchDayClient({
                       {match.dateDisplay} · {match.kickoffTimeDisplay}
                     </p>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${match.statusClasses}`}>
-                    {match.statusLabel}
-                  </span>
+                  <StatusBadge label={match.statusLabel} variant={getStatusBadgeVariant(match.statusLabel.toUpperCase().replace(' ', '_'))} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div className="rounded-lg bg-slate-50 p-3">
@@ -140,95 +147,76 @@ export default function MatchDayClient({
                     <dd className="mt-1 font-semibold text-gray-900">{match.venueLabel}</dd>
                   </div>
                 </dl>
-                <Link
+                <ActionLink
                   href={`/match-day/${match.id}`}
-                  className="mt-4 inline-flex w-full justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white"
+                  variant="primary"
+                  fullWidth
+                  className="mt-4"
                 >
                   Open match
-                </Link>
+                </ActionLink>
               </article>
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
+          <DataTable className="min-w-[900px]">
+              <DataTableHead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Opposition</th>
-                  <th className="px-4 py-3 font-medium">Team</th>
-                  <th className="px-4 py-3 font-medium">Match type</th>
-                  <th className="px-4 py-3 font-medium">Venue</th>
-                  <th className="px-4 py-3 font-medium">Score</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Action</th>
+                  <DataTableHeader>Date</DataTableHeader>
+                  <DataTableHeader>Opposition</DataTableHeader>
+                  <DataTableHeader>Team</DataTableHeader>
+                  <DataTableHeader>Match type</DataTableHeader>
+                  <DataTableHeader>Venue</DataTableHeader>
+                  <DataTableHeader>Score</DataTableHeader>
+                  <DataTableHeader>Status</DataTableHeader>
+                  <DataTableHeader>Action</DataTableHeader>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
+              </DataTableHead>
+              <DataTableBody>
                 {matches.map((match) => (
                   <tr key={match.id}>
-                    <td className="px-4 py-3 text-gray-600">
+                    <DataTableCell>
                       {match.dateDisplay} · {match.kickoffTimeDisplay}
-                    </td>
-                    <td className="px-4 py-3 font-medium">{match.opposition}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell className="font-medium text-slate-950">{match.opposition}</DataTableCell>
+                    <DataTableCell>
                       {match.clubName} / {match.teamName}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{match.matchTypeLabel}</td>
-                    <td className="px-4 py-3 text-gray-600">{match.venueLabel}</td>
-                    <td className="px-4 py-3 font-medium">
+                    </DataTableCell>
+                    <DataTableCell>{match.matchTypeLabel}</DataTableCell>
+                    <DataTableCell>{match.venueLabel}</DataTableCell>
+                    <DataTableCell className="font-medium text-slate-950">
                       {match.ownScore}-{match.oppositionScore}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${match.statusClasses}`}>
-                        {match.statusLabel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
+                    </DataTableCell>
+                    <DataTableCell>
+                      <StatusBadge label={match.statusLabel} variant={getStatusBadgeVariant(match.statusLabel.toUpperCase().replace(' ', '_'))} />
+                    </DataTableCell>
+                    <DataTableCell>
+                      <ActionLink
                         href={`/match-day/${match.id}`}
-                        className="text-sm font-medium text-blue-600 hover:underline"
+                        variant="ghost"
+                        size="sm"
                       >
                         View details
-                      </Link>
-                    </td>
+                      </ActionLink>
+                    </DataTableCell>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </DataTableBody>
+          </DataTable>
           </>
         )}
       </SectionCard>
 
       {isCreateModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
+        <ModalShell
+          title="Create match"
+          description="Set up the match record before choosing squad and events."
+          onClose={closeModal}
+          isSubmitting={isSubmitting}
+          mode="create"
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">Create match</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  Set up the match record before choosing squad and events.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded border px-3 py-1 text-sm font-medium"
-                disabled={isSubmitting}
-              >
-                Close
-              </button>
-            </div>
-
             {error && (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
+              <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
             <CreateMatchForm
@@ -236,8 +224,7 @@ export default function MatchDayClient({
               isSubmitting={isSubmitting}
               onSubmit={createMatch}
             />
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   )
@@ -253,9 +240,8 @@ function CreateMatchForm({
   onSubmit: (formData: FormData) => Promise<void>
 }) {
   return (
-    <form action={onSubmit} className="grid gap-3 md:grid-cols-2">
-      <label className="text-sm font-medium">
-        Team
+    <form action={onSubmit} className={formGridClassName}>
+      <FormField label="Team">
         <select
           name="teamId"
           required
@@ -268,20 +254,18 @@ function CreateMatchForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Opposition
+      <FormField label="Opposition">
         <input
           name="opposition"
           required
           className={fieldClassName}
           placeholder="e.g. Brereton Social"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Date
+      <FormField label="Date">
         <input
           name="date"
           type="date"
@@ -289,10 +273,9 @@ function CreateMatchForm({
           defaultValue={new Date().toISOString().split('T')[0]}
           className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Kick-off time
+      <FormField label="Kick-off time">
         <input
           name="kickoffTime"
           type="time"
@@ -300,10 +283,9 @@ function CreateMatchForm({
           defaultValue="10:30"
           className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Match type
+      <FormField label="Match type">
         <select
           name="matchType"
           required
@@ -314,10 +296,9 @@ function CreateMatchForm({
           <option value="CUP">Cup</option>
           <option value="FRIENDLY">Friendly</option>
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Venue
+      <FormField label="Venue">
         <select
           name="venue"
           required
@@ -328,15 +309,12 @@ function CreateMatchForm({
           <option value="AWAY">Away</option>
           <option value="NEUTRAL">Neutral</option>
         </select>
-      </label>
+      </FormField>
 
       <div className="flex items-end md:col-span-2">
-        <button
-          className="w-full rounded-lg bg-blue-800 px-4 py-3 font-semibold text-white disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" size="lg" fullWidth disabled={isSubmitting}>
           {isSubmitting ? 'Creating...' : 'Create match'}
-        </button>
+        </Button>
       </div>
     </form>
   )

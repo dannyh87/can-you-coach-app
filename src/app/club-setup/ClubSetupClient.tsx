@@ -3,10 +3,21 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeader,
+  dataTableRowClassName,
+} from '@/components/ui/DataTable'
+import FormField from '@/components/ui/FormField'
+import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
 import StatCard from '@/components/ui/StatCard'
-import { fieldClassName } from '@/components/ui/formStyles'
+import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 
 type SetupActionResult =
   | { ok: true }
@@ -249,90 +260,68 @@ export default function ClubSetupClient({
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[960px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
+          <DataTable className="min-w-[960px]">
+              <DataTableHead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Team name</th>
-                  <th className="px-4 py-3 font-medium">Age group</th>
-                  <th className="px-4 py-3 font-medium">Season</th>
-                  <th className="px-4 py-3 font-medium">League</th>
-                  <th className="px-4 py-3 font-medium">Level</th>
-                  <th className="px-4 py-3 font-medium">Players</th>
-                  <th className="px-4 py-3 font-medium">Fitness sessions</th>
+                  <DataTableHeader>Team name</DataTableHeader>
+                  <DataTableHeader>Age group</DataTableHeader>
+                  <DataTableHeader>Season</DataTableHeader>
+                  <DataTableHeader>League</DataTableHeader>
+                  <DataTableHeader>Level</DataTableHeader>
+                  <DataTableHeader>Players</DataTableHeader>
+                  <DataTableHeader>Fitness sessions</DataTableHeader>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
+              </DataTableHead>
+              <DataTableBody>
                 {teams.map((team) => (
                   <tr
                     key={team.id}
                     onClick={() => openModal('teamDetail', team)}
-                    className="cursor-pointer hover:bg-blue-50/70"
+                    className={dataTableRowClassName(true)}
                   >
-                    <td className="px-4 py-3 font-medium">{team.name}</td>
-                    <td className="px-4 py-3 text-gray-600">{team.ageGroup}</td>
-                    <td className="px-4 py-3 text-gray-600">{team.season}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <DataTableCell className="font-medium text-slate-950">{team.name}</DataTableCell>
+                    <DataTableCell>{team.ageGroup}</DataTableCell>
+                    <DataTableCell>{team.season}</DataTableCell>
+                    <DataTableCell>
                       {team.league || 'Not set'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell>
                       {team.footballPyramidStep || 'Not set'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{team.playerCount}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell>{team.playerCount}</DataTableCell>
+                    <DataTableCell>
                       {team.fitnessSessionCount}
-                    </td>
+                    </DataTableCell>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </DataTableBody>
+          </DataTable>
           </>
         )}
       </SectionCard>
 
       {modalMode && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
+        <ModalShell
+          title={modalMode === 'editClub'
+            ? 'Edit Club'
+            : modalMode === 'addTeam'
+              ? 'Add Team'
+              : modalMode === 'editTeam'
+                ? 'Edit Team'
+                : modalMode === 'deleteTeam'
+                  ? 'Confirm Delete Team'
+                  : selectedTeam?.name ?? 'Team Details'}
+          description={modalMode === 'deleteTeam'
+            ? 'Deletion is permanent and only allowed for empty teams.'
+            : modalMode === 'teamDetail'
+              ? 'View team details and manage this team.'
+              : 'Changes are saved only after a successful action.'}
+          onClose={closeModal}
+          isSubmitting={isSubmitting}
+          mode={modalMode === 'deleteTeam' ? 'danger' : modalMode === 'teamDetail' ? 'detail' : modalMode === 'editClub' || modalMode === 'editTeam' ? 'edit' : 'create'}
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">
-                  {modalMode === 'editClub'
-                    ? 'Edit Club'
-                    : modalMode === 'addTeam'
-                      ? 'Add Team'
-                      : modalMode === 'editTeam'
-                        ? 'Edit Team'
-                        : modalMode === 'deleteTeam'
-                          ? 'Confirm Delete Team'
-                          : selectedTeam?.name ?? 'Team Details'}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {modalMode === 'deleteTeam'
-                    ? 'Deletion is permanent and only allowed for empty teams.'
-                    : modalMode === 'teamDetail'
-                      ? 'View team details and manage this team.'
-                      : 'Changes are saved only after a successful action.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded border px-3 py-1 text-sm font-medium"
-                disabled={isSubmitting}
-              >
-                Close
-              </button>
-            </div>
-
             {error && (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
+              <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
             {modalMode === 'editClub' && (
@@ -382,8 +371,7 @@ export default function ClubSetupClient({
                 onConfirm={deleteSelectedTeam}
               />
             )}
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   )
@@ -404,43 +392,37 @@ function ClubForm({
     <form action={(formData) => onSubmit(action, formData)} className="grid gap-3">
       <input type="hidden" name="id" value={club.id} />
 
-      <label className="text-sm font-medium">
-        Club name
+      <FormField label="Club name">
         <input
           name="name"
           required
           defaultValue={club.name}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Location
+      <FormField label="Location">
         <input
           name="location"
           defaultValue={club.location ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="Optional"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Notes
+      <FormField label="Notes">
         <textarea
           name="notes"
           defaultValue={club.notes ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           rows={3}
           placeholder="Optional"
         />
-      </label>
+      </FormField>
 
-      <button
-        className="rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-        disabled={isSubmitting}
-      >
+      <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Saving...' : 'Save Club'}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -461,7 +443,7 @@ function TeamForm({
   onSubmit: (action: SetupAction, formData: FormData) => Promise<void>
 }) {
   return (
-    <form action={(formData) => onSubmit(action, formData)} className="grid gap-3 md:grid-cols-2">
+    <form action={(formData) => onSubmit(action, formData)} className={formGridClassName}>
       {team && <input type="hidden" name="id" value={team.id} />}
       <input type="hidden" name="clubId" value={club.id} />
 
@@ -474,55 +456,50 @@ function TeamForm({
         Use the step dropdown for Open Age teams where pyramid level matters.
       </p>
 
-      <label className="text-sm font-medium">
-        Team name
+      <FormField label="Team name">
         <input
           name="name"
           required
           defaultValue={team?.name ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="e.g. First Team"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Age group
+      <FormField label="Age group">
         <input
           name="ageGroup"
           required
           defaultValue={team?.ageGroup ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="e.g. Open Age"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Season
+      <FormField label="Season">
         <input
           name="season"
           required
           defaultValue={team?.season ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="e.g. 2026/27"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        League
+      <FormField label="League">
         <input
           name="league"
           defaultValue={team?.league ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
           placeholder="e.g. North West Counties League"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Football pyramid step
+      <FormField label="Football pyramid step">
         <select
           name="footballPyramidStep"
           defaultValue={team?.footballPyramidStep ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           <option value="">Not set</option>
           {footballPyramidStepOptions.map((option) => (
@@ -531,15 +508,12 @@ function TeamForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
       <div className="flex items-end md:col-span-2">
-        <button
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" fullWidth disabled={isSubmitting}>
           {isSubmitting ? 'Saving...' : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -575,14 +549,13 @@ function TeamDetail({
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2">
-        <button
+        <Button
           type="button"
           onClick={onEdit}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           disabled={isSubmitting}
         >
           Edit Team
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-lg border border-red-100 bg-red-50 p-4">
@@ -592,14 +565,15 @@ function TeamDetail({
         <p className="mt-1 text-sm text-red-700">
           Delete is permanent and only available when the team has no linked records.
         </p>
-        <button
+        <Button
           type="button"
           onClick={onDelete}
-          className="mt-3 rounded border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+          variant="secondary"
+          className="mt-3 border-red-200 text-red-700"
           disabled={isSubmitting}
         >
           Delete Team
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -633,34 +607,34 @@ function DeleteTeamConfirmation({
       </div>
 
       {isBlocked ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        <Alert variant="warning">
           This team cannot be deleted while it has players or fitness sessions.
           Move or remove them before deleting this team.
-        </p>
+        </Alert>
       ) : (
-        <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <Alert variant="error">
           This will permanently delete the team. This action cannot be undone.
-        </p>
+        </Alert>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
           onClick={onCancel}
-          className="rounded border px-4 py-2 text-sm font-medium"
+          variant="secondary"
           disabled={isSubmitting}
         >
           Cancel
-        </button>
+        </Button>
         {!isBlocked && (
-          <button
+          <Button
             type="button"
             onClick={onConfirm}
-            className="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            variant="danger"
             disabled={isSubmitting}
           >
             {isSubmitting ? 'Deleting...' : 'Confirm Delete Team'}
-          </button>
+          </Button>
         )}
       </div>
     </div>

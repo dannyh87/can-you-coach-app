@@ -3,11 +3,22 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeader,
+  dataTableRowClassName,
+} from '@/components/ui/DataTable'
+import FormField from '@/components/ui/FormField'
+import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
 import StatCard from '@/components/ui/StatCard'
 import StatusBadge from '@/components/ui/StatusBadge'
-import { fieldClassName } from '@/components/ui/formStyles'
+import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 
 const positions = [
   'Goalkeeper',
@@ -383,87 +394,65 @@ export default function PlayersClient({
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[760px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
+          <DataTable className="min-w-[760px]">
+              <DataTableHead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Player name</th>
-                  <th className="px-4 py-3 font-medium">Team</th>
-                  <th className="px-4 py-3 font-medium">Position</th>
-                  <th className="px-4 py-3 font-medium">Squad number</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
+                  <DataTableHeader>Player name</DataTableHeader>
+                  <DataTableHeader>Team</DataTableHeader>
+                  <DataTableHeader>Position</DataTableHeader>
+                  <DataTableHeader>Squad number</DataTableHeader>
+                  <DataTableHeader>Status</DataTableHeader>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
+              </DataTableHead>
+              <DataTableBody>
                 {filteredAndSortedPlayers.map((player) => (
                   <tr
                     key={player.id}
                     onClick={() => openDetailModal(player)}
-                    className="cursor-pointer hover:bg-blue-50/70"
+                    className={dataTableRowClassName(true)}
                   >
-                    <td className="px-4 py-3 font-medium">{getPlayerName(player)}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <DataTableCell className="font-medium text-slate-950">{getPlayerName(player)}</DataTableCell>
+                    <DataTableCell>
                       {player.clubName} / {player.teamName}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell>
                       {player.preferredPosition ?? 'Not set'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell>
                       {formatSquadNumber(player.squadNumber)}
-                    </td>
-                    <td className="px-4 py-3">
+                    </DataTableCell>
+                    <DataTableCell>
                       <StatusBadge
                         label={player.isActive ? 'Active' : 'Archived'}
                         variant={player.isActive ? 'active' : 'archived'}
                       />
-                    </td>
+                    </DataTableCell>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </DataTableBody>
+          </DataTable>
           </>
         )}
       </SectionCard>
 
       {modalMode && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
+        <ModalShell
+          title={modalMode === 'add'
+            ? 'Add Player'
+            : modalMode === 'edit'
+              ? 'Edit Player'
+              : selectedPlayer
+                ? getPlayerName(selectedPlayer)
+                : 'Player Details'}
+          description={modalMode === 'detail'
+            ? 'View player details and manage status.'
+            : 'Squad number, date of birth and joined date are optional.'}
+          onClose={closeModal}
+          isSubmitting={isSubmitting}
+          mode={modalMode === 'add' ? 'create' : modalMode === 'edit' ? 'edit' : 'detail'}
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">
-                  {modalMode === 'add'
-                    ? 'Add Player'
-                    : modalMode === 'edit'
-                      ? 'Edit Player'
-                      : selectedPlayer
-                        ? getPlayerName(selectedPlayer)
-                        : 'Player Details'}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {modalMode === 'detail'
-                    ? 'View player details and manage status.'
-                    : 'Squad number, date of birth and joined date are optional.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded border px-3 py-1 text-sm font-medium"
-                disabled={isSubmitting}
-              >
-                Close
-              </button>
-            </div>
-
             {error && (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
+              <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
             {modalMode === 'add' && (
@@ -495,8 +484,7 @@ export default function PlayersClient({
                 onArchiveOrRestore={archiveOrRestore}
               />
             )}
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   )
@@ -518,16 +506,15 @@ function PlayerForm({
   onSubmit: (action: PlayerAction, formData: FormData) => Promise<void>
 }) {
   return (
-    <form action={(formData) => onSubmit(action, formData)} className="grid gap-3 md:grid-cols-2">
+    <form action={(formData) => onSubmit(action, formData)} className={formGridClassName}>
       {player && <input type="hidden" name="id" value={player.id} />}
 
-      <label className="text-sm font-medium md:col-span-2">
-        Team
+      <FormField label="Team" className="md:col-span-2">
         <select
           name="teamId"
           required
           defaultValue={player?.teamId ?? teams[0]?.id}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           {teams.map((team) => (
             <option key={team.id} value={team.id}>
@@ -535,46 +522,42 @@ function PlayerForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        First name
+      <FormField label="First name">
         <input
           name="firstName"
           required
           defaultValue={player?.firstName ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Surname
+      <FormField label="Surname">
         <input
           name="surname"
           required
           defaultValue={player?.surname ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Squad number optional
+      <FormField label="Squad number optional">
         <input
           name="squadNumber"
           type="number"
           min="0"
           defaultValue={player?.squadNumber ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Preferred position
+      <FormField label="Preferred position">
         <select
           name="preferredPosition"
           required
           defaultValue={player?.preferredPosition ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         >
           <option value="" disabled>
             Select position
@@ -585,35 +568,30 @@ function PlayerForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Date of birth
+      <FormField label="Date of birth">
         <input
           name="dateOfBirth"
           type="date"
           defaultValue={player?.dateOfBirthInput ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Joined club date
+      <FormField label="Joined club date">
         <input
           name="joinedClubDate"
           type="date"
           defaultValue={player?.joinedClubDateInput ?? ''}
-          className="mt-1 w-full rounded border p-2"
+          className={fieldClassName}
         />
-      </label>
+      </FormField>
 
       <div className="flex items-end md:col-span-2">
-        <button
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" fullWidth disabled={isSubmitting}>
           {isSubmitting ? 'Saving...' : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -642,14 +620,13 @@ function PlayerDetail({
       </div>
 
       <div className="flex flex-wrap gap-2 pt-2">
-        <button
+        <Button
           type="button"
           onClick={onEdit}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
           disabled={isSubmitting}
         >
           Edit Player
-        </button>
+        </Button>
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -659,12 +636,11 @@ function PlayerDetail({
         <p className="mt-1 text-sm text-slate-600">
           Archive or restore this player outside normal squad edits.
         </p>
-        <button
+        <Button
           type="button"
           onClick={onArchiveOrRestore}
-          className={`mt-3 rounded border bg-white px-4 py-2 text-sm font-medium disabled:opacity-50 ${
-            player.isActive ? 'text-red-700' : 'text-blue-700'
-          }`}
+          variant="secondary"
+          className={`mt-3 ${player.isActive ? 'text-red-700' : 'text-blue-700'}`}
           disabled={isSubmitting}
         >
           {isSubmitting
@@ -672,7 +648,7 @@ function PlayerDetail({
             : player.isActive
               ? 'Archive Player'
               : 'Restore Player'}
-        </button>
+        </Button>
       </div>
     </div>
   )

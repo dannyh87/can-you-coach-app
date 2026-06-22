@@ -7,6 +7,12 @@ type SectionCardProps = {
   children: ReactNode
   className?: string
   bodyClassName?: string
+  variant?: 'standard' | 'compact'
+}
+
+const variantClasses = {
+  standard: 'rounded-2xl border border-slate-200 bg-white shadow-sm',
+  compact: 'rounded-xl border border-slate-200 bg-white shadow-sm',
 }
 
 export default function SectionCard({
@@ -16,11 +22,12 @@ export default function SectionCard({
   children,
   className = '',
   bodyClassName = '',
+  variant = 'standard',
 }: SectionCardProps) {
   const hasHeader = title || description || actions
 
   return (
-    <section className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}>
+    <section className={`overflow-hidden ${variantClasses[variant]} ${className}`}>
       {hasHeader && (
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
           <div className="min-w-0">

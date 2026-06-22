@@ -3,10 +3,13 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
+import FormField from '@/components/ui/FormField'
+import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
-import { fieldClassName } from '@/components/ui/formStyles'
+import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 import {
   fitnessRecordingModeOptions,
   formatFitnessRecordingMode,
@@ -111,9 +114,7 @@ export default function FitnessTestTypesClient({
   return (
     <>
       {message && (
-        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-          {message}
-        </p>
+        <Alert variant="success" className="mb-6">{message}</Alert>
       )}
 
       <SectionCard
@@ -217,39 +218,17 @@ export default function FitnessTestTypesClient({
       </SectionCard>
 
       {modalMode && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
+        <ModalShell
+          title={modalMode === 'create' ? 'Add custom fitness test' : 'Edit fitness test'}
+          description={modalMode === 'create'
+            ? 'Create a test that matches how your coaches collect results.'
+            : 'Update how this test is measured, ranked and recorded.'}
+          onClose={closeModal}
+          isSubmitting={isSubmitting}
+          mode={modalMode === 'create' ? 'create' : 'edit'}
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-4 shadow-xl sm:p-6">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">
-                  {modalMode === 'create'
-                    ? 'Add custom fitness test'
-                    : 'Edit fitness test'}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {modalMode === 'create'
-                    ? 'Create a test that matches how your coaches collect results.'
-                    : 'Update how this test is measured, ranked and recorded.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-              className="rounded border px-3 py-2 text-sm font-medium"
-                disabled={isSubmitting}
-              >
-                Close
-              </button>
-            </div>
-
             {error && (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
+              <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
             {modalMode === 'create' ? (
@@ -268,8 +247,7 @@ export default function FitnessTestTypesClient({
                 onSubmit={updateTestType}
               />
             ) : null}
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   )
@@ -307,31 +285,28 @@ function FitnessTestTypeForm({
   }
 
   return (
-    <form action={onSubmit} className="grid gap-4 md:grid-cols-2">
+    <form action={onSubmit} className={formGridClassName}>
       {testType && <input type="hidden" name="id" value={testType.id} />}
 
-      <label className="text-sm font-medium">
-        Test name
+      <FormField label="Test name">
         <input
           name="name"
           required
           defaultValue={testType?.name ?? ''}
           className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        How results are measured
+      <FormField label="How results are measured">
         <input
           name="resultUnit"
           required
           defaultValue={testType?.resultUnit ?? ''}
           className={fieldClassName}
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        How rankings work
+      <FormField label="How rankings work">
         <select
           name="higherIsBetter"
           defaultValue={testType?.higherIsBetter === false ? 'false' : 'true'}
@@ -340,10 +315,9 @@ function FitnessTestTypeForm({
           <option value="true">Higher is better</option>
           <option value="false">Lower is better</option>
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Coach preferred recording mode
+      <FormField label="Coach preferred recording mode">
         <select
           name="preferredRecordingMode"
           value={preferredMode}
@@ -356,7 +330,7 @@ function FitnessTestTypeForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
       <fieldset className="rounded-lg border p-4 md:col-span-2">
         <legend className="px-1 text-sm font-medium">Recording modes coaches can use</legend>

@@ -1,14 +1,25 @@
 'use client'
 
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { ReactNode } from 'react'
 import { useState } from 'react'
 
+import ActionLink from '@/components/ui/ActionLink'
+import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeader,
+  dataTableRowClassName,
+} from '@/components/ui/DataTable'
+import FormField from '@/components/ui/FormField'
+import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
 import StatCard from '@/components/ui/StatCard'
-import { fieldClassName } from '@/components/ui/formStyles'
+import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
+import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 
 type FitnessActionResult =
   | { ok: true }
@@ -230,9 +241,7 @@ export default function FitnessClient({
   return (
     <>
       {message && (
-        <p className="mb-6 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
-          {message}
-        </p>
+        <Alert variant="success" className="mb-6">{message}</Alert>
       )}
 
       <section className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -393,9 +402,7 @@ export default function FitnessClient({
                         {session.clubName} / {session.teamName}
                       </p>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${session.statusClasses}`}>
-                      {session.statusLabel}
-                    </span>
+                    <StatusBadge label={session.statusLabel} variant={getStatusBadgeVariant(session.statusLabel)} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-lg bg-slate-50 p-3">
@@ -421,90 +428,66 @@ export default function FitnessClient({
             ))}
           </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="bg-slate-50 text-slate-600">
+          <DataTable className="min-w-[920px]">
+              <DataTableHead>
                 <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Team</th>
-                  <th className="px-4 py-3 font-medium">Test type</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Results</th>
-                  <th className="px-4 py-3 font-medium">Recording mode</th>
+                  <DataTableHeader>Date</DataTableHeader>
+                  <DataTableHeader>Team</DataTableHeader>
+                  <DataTableHeader>Test type</DataTableHeader>
+                  <DataTableHeader>Status</DataTableHeader>
+                  <DataTableHeader>Results</DataTableHeader>
+                  <DataTableHeader>Recording mode</DataTableHeader>
                 </tr>
-              </thead>
-              <tbody className="divide-y">
+              </DataTableHead>
+              <DataTableBody>
                 {filteredAndSortedSessions.map((session) => (
                   <tr
                     key={session.id}
                     onClick={() => openDetailModal(session)}
-                    className="cursor-pointer hover:bg-blue-50/70"
+                    className={dataTableRowClassName(true)}
                   >
-                    <td className="px-4 py-3 text-gray-600">{session.dateDisplay}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <DataTableCell>{session.dateDisplay}</DataTableCell>
+                    <DataTableCell>
                       {session.clubName} / {session.teamName}
-                    </td>
-                    <td className="px-4 py-3 font-medium">
+                    </DataTableCell>
+                    <DataTableCell className="font-medium text-slate-950">
                       {session.fitnessTestTypeName}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${session.statusClasses}`}>
-                        {session.statusLabel}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{session.resultCount}</td>
-                    <td className="px-4 py-3 text-gray-600">
+                    </DataTableCell>
+                    <DataTableCell>
+                      <StatusBadge label={session.statusLabel} variant={getStatusBadgeVariant(session.statusLabel)} />
+                    </DataTableCell>
+                    <DataTableCell>{session.resultCount}</DataTableCell>
+                    <DataTableCell>
                       {session.recordingModeLabel}
-                    </td>
+                    </DataTableCell>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </DataTableBody>
+          </DataTable>
           </>
         )}
       </SectionCard>
 
       {modalMode && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
+        <ModalShell
+          title={modalMode === 'add'
+            ? 'Add Fitness Test Session'
+            : modalMode === 'delete'
+              ? 'Confirm Delete Session'
+              : selectedSession?.fitnessTestTypeName ?? 'Fitness Session'}
+          description={modalMode === 'delete'
+            ? 'Deletion is permanent and removes saved results for this session.'
+            : modalMode === 'detail'
+              ? selectedSession?.status === 'COMPLETED'
+                ? 'This completed session is locked and read-only.'
+                : 'View session details and choose the next action.'
+              : 'Create a session before recording fitness results.'}
+          onClose={closeModal}
+          isSubmitting={isSubmitting}
+          mode={modalMode === 'delete' ? 'danger' : modalMode === 'add' ? 'create' : 'detail'}
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">
-                  {modalMode === 'add'
-                    ? 'Add Fitness Test Session'
-                    : modalMode === 'delete'
-                      ? 'Confirm Delete Session'
-                      : selectedSession?.fitnessTestTypeName ?? 'Fitness Session'}
-                </h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  {modalMode === 'delete'
-                    ? 'Deletion is permanent and removes saved results for this session.'
-                    : modalMode === 'detail'
-                      ? selectedSession?.status === 'COMPLETED'
-                        ? 'This completed session is locked and read-only.'
-                        : 'View session details and choose the next action.'
-                      : 'Create a session before recording fitness results.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded border px-3 py-1 text-sm font-medium"
-                disabled={isSubmitting}
-              >
-                Close
-              </button>
-            </div>
-
             {error && (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
-                {error}
-              </p>
+              <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
             {modalMode === 'add' && (
@@ -532,8 +515,7 @@ export default function FitnessClient({
                 onConfirm={deleteSession}
               />
             )}
-          </div>
-        </div>
+        </ModalShell>
       )}
     </>
   )
@@ -551,9 +533,8 @@ function CreateSessionForm({
   onSubmit: (formData: FormData) => Promise<void>
 }) {
   return (
-    <form action={onSubmit} className="grid gap-3 md:grid-cols-2">
-      <label className="text-sm font-medium">
-        Team
+    <form action={onSubmit} className={formGridClassName}>
+      <FormField label="Team">
         <select
           name="teamId"
           required
@@ -566,10 +547,9 @@ function CreateSessionForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Test type
+      <FormField label="Test type">
         <select
           name="fitnessTestTypeId"
           required
@@ -583,10 +563,9 @@ function CreateSessionForm({
             </option>
           ))}
         </select>
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium">
-        Date
+      <FormField label="Date">
         <input
           name="date"
           type="date"
@@ -594,25 +573,21 @@ function CreateSessionForm({
           defaultValue={new Date().toISOString().split('T')[0]}
           className="mt-1 w-full rounded border p-2"
         />
-      </label>
+      </FormField>
 
-      <label className="text-sm font-medium md:col-span-2">
-        Notes
+      <FormField label="Notes" className="md:col-span-2">
         <textarea
           name="notes"
           className="mt-1 w-full rounded border p-2"
           placeholder="Optional"
           rows={3}
         />
-      </label>
+      </FormField>
 
       <div className="flex items-end md:col-span-2">
-        <button
-          className="w-full rounded bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" fullWidth disabled={isSubmitting}>
           {isSubmitting ? 'Creating...' : 'Create Fitness Test Session'}
-        </button>
+        </Button>
       </div>
     </form>
   )
@@ -704,14 +679,15 @@ function SessionDetail({
           <p className="mt-1 text-sm text-red-700">
             Delete removes this session and saved results. Use only outside live recording.
           </p>
-          <button
+          <Button
             type="button"
             onClick={onDelete}
-            className="mt-3 rounded border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+            variant="secondary"
+            className="mt-3 border-red-200 text-red-700"
             disabled={isSubmitting}
           >
             Delete Session
-          </button>
+          </Button>
         </div>
         )}
     </div>
@@ -722,7 +698,7 @@ function SessionActions({ session }: { session: FitnessSessionRow }) {
   if (session.status === 'COMPLETED') {
     return (
       <>
-        <ActionLink href={`/fitness/sessions/${session.id}`} primary>
+        <ActionLink href={`/fitness/sessions/${session.id}`} variant="primary">
           View Locked Results
         </ActionLink>
         <ActionLink href={`/fitness/sessions/${session.id}/rankings`}>
@@ -737,17 +713,17 @@ function SessionActions({ session }: { session: FitnessSessionRow }) {
     return (
       <>
         {session.liveDropout && (
-          <ActionLink href={`/fitness/sessions/${session.id}/live`} primary>
+          <ActionLink href={`/fitness/sessions/${session.id}/live`} variant="primary">
             Continue Live Dropout
           </ActionLink>
         )}
         {session.liveTimedFinish && (
-          <ActionLink href={`/fitness/sessions/${session.id}/timer`} primary>
+          <ActionLink href={`/fitness/sessions/${session.id}/timer`} variant="primary">
             Continue Live Timed Finish
           </ActionLink>
         )}
         {session.manualEntry && (
-          <ActionLink href={`/fitness/sessions/${session.id}`} primary>
+          <ActionLink href={`/fitness/sessions/${session.id}`} variant="primary">
             Manual Entry
           </ActionLink>
         )}
@@ -761,17 +737,17 @@ function SessionActions({ session }: { session: FitnessSessionRow }) {
   return (
     <>
       {session.manualEntry && (
-        <ActionLink href={`/fitness/sessions/${session.id}`} primary>
+        <ActionLink href={`/fitness/sessions/${session.id}`} variant="primary">
           Manual Entry
         </ActionLink>
       )}
         {session.liveDropout && (
-          <ActionLink href={`/fitness/sessions/${session.id}/live`} primary>
+          <ActionLink href={`/fitness/sessions/${session.id}/live`} variant="primary">
             Start
           </ActionLink>
         )}
         {session.liveTimedFinish && (
-          <ActionLink href={`/fitness/sessions/${session.id}/timer`} primary>
+          <ActionLink href={`/fitness/sessions/${session.id}/timer`} variant="primary">
             Start
           </ActionLink>
         )}
@@ -806,53 +782,30 @@ function DeleteSessionConfirmation({
         </dl>
       </div>
 
-      <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+      <Alert variant="error">
         This will permanently delete this fitness test session and its saved
         results. This action cannot be undone.
-      </p>
+      </Alert>
 
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
           onClick={onCancel}
-          className="rounded border px-4 py-2 text-sm font-medium"
+          variant="secondary"
           disabled={isSubmitting}
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onConfirm}
-          className="rounded bg-red-700 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          variant="danger"
           disabled={isSubmitting}
         >
           {isSubmitting ? 'Deleting...' : 'Confirm Delete Session'}
-        </button>
+        </Button>
       </div>
     </div>
-  )
-}
-
-function ActionLink({
-  href,
-  primary,
-  children,
-}: {
-  href: string
-  primary?: boolean
-  children: ReactNode
-}) {
-  return (
-    <Link
-      href={href}
-      className={
-        primary
-          ? 'inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white'
-          : 'inline-flex rounded border px-4 py-2 text-sm font-medium'
-      }
-    >
-      {children}
-    </Link>
   )
 }
 
