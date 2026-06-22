@@ -115,14 +115,36 @@ export default function MatchEventsClient({
   const [error, setError] = useState<string | null>(null)
   const canRecord = status === 'IN_PROGRESS'
   const isReadOnly = status === 'COMPLETED'
-  const selectedPlayer = players.find(
+  const visibleCategories = availableCategories.filter((category) =>
+    eventOptions.some((eventOption) => eventOption.category === category.value)
+  )
+  const effectiveSelectedPlayerId = players.some(
     (player) => player.matchDayPlayerId === selectedPlayerId
   )
-  const selectedEvent = eventOptions.find(
+    ? selectedPlayerId
+    : players[0]?.matchDayPlayerId ?? ''
+  const selectedCategoryHasEvents = eventOptions.some(
+    (eventOption) => eventOption.category === selectedCategory
+  )
+  const effectiveSelectedCategory = selectedCategoryHasEvents
+    ? selectedCategory
+    : visibleCategories[0]?.value ?? selectedCategory
+  const firstCategoryEvent = eventOptions.find(
+    (eventOption) => eventOption.category === effectiveSelectedCategory
+  )
+  const effectiveSelectedEventType = eventOptions.some(
     (eventOption) => eventOption.value === selectedEventType
   )
+    ? selectedEventType
+    : firstCategoryEvent?.value ?? eventOptions[0]?.value ?? ''
+  const selectedPlayer = players.find(
+    (player) => player.matchDayPlayerId === effectiveSelectedPlayerId
+  )
+  const selectedEvent = eventOptions.find(
+    (eventOption) => eventOption.value === effectiveSelectedEventType
+  )
   const categoryEvents = eventOptions.filter(
-    (eventOption) => eventOption.category === selectedCategory
+    (eventOption) => eventOption.category === effectiveSelectedCategory
   )
 
   const recordEvent = async (eventType: MatchEventType | '', player: EventPlayer | undefined) => {
@@ -233,42 +255,53 @@ export default function MatchEventsClient({
               No event types were selected before kick-off, so there are no event buttons available for this match. Goal buttons can still update the score, but player event recording is unavailable.
             </p>
           ) : (
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
-                Event category
-              </h3>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {categoryOptions.map((category) => {
-                  const hasEvents = eventOptions.some(
-                    (eventOption) => eventOption.category === category.value
-                  )
-                  const isSelected = selectedCategory === category.value
-
-                  return (
-                    <button
-                      key={category.value}
-                      type="button"
-                      onClick={() => {
-                        if (!hasEvents) return
-                        setSelectedCategory(category.value)
-                        const firstCategoryEvent = eventOptions.find(
-                          (eventOption) => eventOption.category === category.value
-                        )
-                        if (firstCategoryEvent) setSelectedEventType(firstCategoryEvent.value)
-                      }}
-                      className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-40 ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50 text-blue-900'
-                          : 'bg-white text-gray-900'
-                      }`}
-                      disabled={!hasEvents || Boolean(pendingAction)}
-                    >
-                      {category.label}
-                    </button>
-                  )
-                })}
+            <>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                <p className="font-bold">Selected event buttons</p>
+                <p className="mt-1">
+                  {eventOptions.map((eventOption) => eventOption.label).join(', ')}
+                </p>
               </div>
-            </div>
+
+              {visibleCategories.length === 0 ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  Event types were selected, but none match the available event categories. Check event setup before starting future matches.
+                </p>
+              ) : (
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                    Event category
+                  </h3>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {visibleCategories.map((category) => {
+                      const isSelected = effectiveSelectedCategory === category.value
+
+                      return (
+                        <button
+                          key={category.value}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategory(category.value)
+                            const firstCategoryEvent = eventOptions.find(
+                              (eventOption) => eventOption.category === category.value
+                            )
+                            if (firstCategoryEvent) setSelectedEventType(firstCategoryEvent.value)
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-40 ${
+                            isSelected
+                              ? 'border-blue-600 bg-blue-50 text-blue-900'
+                              : 'bg-white text-gray-900'
+                          }`}
+                          disabled={Boolean(pendingAction)}
+                        >
+                          {category.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
@@ -304,7 +337,7 @@ export default function MatchEventsClient({
                 </h3>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {players.map((player) => {
-                    const isSelected = selectedPlayerId === player.matchDayPlayerId
+                    const isSelected = effectiveSelectedPlayerId === player.matchDayPlayerId
 
                     return (
                       <button
@@ -337,7 +370,11 @@ export default function MatchEventsClient({
                   </p>
                 )}
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  {categoryEvents.map((eventOption) => {
+                  {categoryEvents.length === 0 ? (
+                    <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      No selected event buttons are available in this category. Choose another category above.
+                    </p>
+                  ) : categoryEvents.map((eventOption) => {
                     const pendingKey = selectedPlayer
                       ? getPendingEventKey(eventOption.value, selectedPlayer.matchDayPlayerId)
                       : eventOption.value
@@ -364,8 +401,12 @@ export default function MatchEventsClient({
                   1. Select event
                 </h3>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  {categoryEvents.map((eventOption) => {
-                    const isSelected = selectedEventType === eventOption.value
+                  {categoryEvents.length === 0 ? (
+                    <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      No selected event buttons are available in this category. Choose another category above.
+                    </p>
+                  ) : categoryEvents.map((eventOption) => {
+                    const isSelected = effectiveSelectedEventType === eventOption.value
 
                     return (
                       <button
@@ -396,17 +437,17 @@ export default function MatchEventsClient({
                 )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {players.map((player) => {
-                    const pendingKey = selectedEventType
-                      ? getPendingEventKey(selectedEventType, player.matchDayPlayerId)
+                    const pendingKey = effectiveSelectedEventType
+                      ? getPendingEventKey(effectiveSelectedEventType, player.matchDayPlayerId)
                       : ''
 
                     return (
                       <button
                         key={player.matchDayPlayerId}
                         type="button"
-                        onClick={() => recordEvent(selectedEventType, player)}
+                        onClick={() => recordEvent(effectiveSelectedEventType, player)}
                         className="rounded-lg border bg-white p-4 text-left font-medium text-gray-900 disabled:opacity-50"
-                        disabled={!selectedEventType || Boolean(pendingAction)}
+                        disabled={!effectiveSelectedEventType || Boolean(pendingAction)}
                       >
                         <span className="block text-base font-bold">
                           {pendingAction === pendingKey ? 'Saving...' : formatPlayerName(player)}
