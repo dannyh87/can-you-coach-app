@@ -241,9 +241,15 @@ export default function FitnessClient({
         <StatCard label="Completed" value={completedCount} tone="success" />
       </section>
 
+      <section className="mb-6 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:grid-cols-3">
+        <WorkflowStep step="1" title="Create or select a test" description="Set the team, test type and date." />
+        <WorkflowStep step="2" title="Record results" description="Use the available manual or live mode." />
+        <WorkflowStep step="3" title="Review progress" description="Compare rankings, trends and exports." />
+      </section>
+
       <SectionCard
         title="Fitness Test Sessions"
-        description="Click a row to view details and available actions."
+        description="Open a session to continue recording or review results."
         actions={(
           <Button
             type="button"
@@ -371,7 +377,51 @@ export default function FitnessClient({
             No fitness test sessions match these filters.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y md:hidden">
+            {filteredAndSortedSessions.map((session) => (
+              <article key={session.id} className="p-4">
+                <button
+                  type="button"
+                  onClick={() => openDetailModal(session)}
+                  className="block w-full text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-bold">{session.fitnessTestTypeName}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {session.clubName} / {session.teamName}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${session.statusClasses}`}>
+                      {session.statusLabel}
+                    </span>
+                  </div>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <dt className="text-gray-500">Date</dt>
+                      <dd className="mt-1 font-semibold text-gray-900">{session.dateDisplay}</dd>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <dt className="text-gray-500">Results</dt>
+                      <dd className="mt-1 font-semibold text-gray-900">{session.resultCount}</dd>
+                    </div>
+                    <div className="col-span-2 rounded-lg bg-slate-50 p-3">
+                      <dt className="text-gray-500">Recording mode</dt>
+                      <dd className="mt-1 font-semibold text-gray-900">
+                        {session.recordingModeLabel}
+                      </dd>
+                    </div>
+                  </dl>
+                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <SessionActions session={session} />
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -411,6 +461,7 @@ export default function FitnessClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </SectionCard>
 
@@ -567,6 +618,28 @@ function CreateSessionForm({
   )
 }
 
+function WorkflowStep({
+  step,
+  title,
+  description,
+}: {
+  step: string
+  title: string
+  description: string
+}) {
+  return (
+    <div className="flex gap-3 rounded-xl bg-white/80 p-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+        {step}
+      </span>
+      <div>
+        <h2 className="text-sm font-bold text-blue-950">{title}</h2>
+        <p className="mt-1 text-sm text-blue-900">{description}</p>
+      </div>
+    </div>
+  )
+}
+
 function SessionDetail({
   session,
   isSubmitting,
@@ -609,19 +682,38 @@ function SessionDetail({
         </p>
       )}
 
-      <div className="flex flex-wrap gap-2 pt-2">
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-blue-800">
+          Next actions
+        </h3>
+        <p className="mt-1 text-sm text-blue-900">
+          {session.status === 'COMPLETED'
+            ? 'Review locked results, rankings or progress.'
+            : 'Continue recording with the available mode for this test.'}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
         <SessionActions session={session} />
+        </div>
+      </div>
+
         {session.status !== 'IN_PROGRESS' && (
+        <div className="rounded-lg border border-red-100 bg-red-50 p-4">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-red-700">
+            Session admin
+          </h3>
+          <p className="mt-1 text-sm text-red-700">
+            Delete removes this session and saved results. Use only outside live recording.
+          </p>
           <button
             type="button"
             onClick={onDelete}
-            className="rounded border px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+            className="mt-3 rounded border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
             disabled={isSubmitting}
           >
             Delete Session
           </button>
+        </div>
         )}
-      </div>
     </div>
   )
 }

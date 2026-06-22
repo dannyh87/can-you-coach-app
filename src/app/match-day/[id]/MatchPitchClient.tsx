@@ -104,9 +104,9 @@ export default function MatchPitchClient({
     <section className="rounded-xl bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Players / substitutions</h2>
+          <h2 className="text-xl font-bold">Players and substitutions</h2>
           <p className="mt-1 text-sm text-gray-400">
-            Track who is on the pitch and make quick substitutions.
+            Tap Sub on or Sub off to track minutes from the touchline.
           </p>
         </div>
         <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">

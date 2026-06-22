@@ -344,7 +344,46 @@ export default function PlayersClient({
             No players match these filters.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y md:hidden">
+            {filteredAndSortedPlayers.map((player) => (
+              <button
+                key={player.id}
+                type="button"
+                onClick={() => openDetailModal(player)}
+                className="block w-full p-4 text-left hover:bg-blue-50/70"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-bold">{getPlayerName(player)}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {player.clubName} / {player.teamName}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    label={player.isActive ? 'Active' : 'Archived'}
+                    variant={player.isActive ? 'active' : 'archived'}
+                  />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Position</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {player.preferredPosition ?? 'Not set'}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Squad number</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {formatSquadNumber(player.squadNumber)}
+                    </dd>
+                  </div>
+                </dl>
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -383,6 +422,7 @@ export default function PlayersClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </SectionCard>
 
@@ -610,10 +650,19 @@ function PlayerDetail({
         >
           Edit Player
         </button>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
+          Player status admin
+        </h3>
+        <p className="mt-1 text-sm text-slate-600">
+          Archive or restore this player outside normal squad edits.
+        </p>
         <button
           type="button"
           onClick={onArchiveOrRestore}
-          className={`rounded border px-4 py-2 text-sm font-medium disabled:opacity-50 ${
+          className={`mt-3 rounded border bg-white px-4 py-2 text-sm font-medium disabled:opacity-50 ${
             player.isActive ? 'text-red-700' : 'text-blue-700'
           }`}
           disabled={isSubmitting}

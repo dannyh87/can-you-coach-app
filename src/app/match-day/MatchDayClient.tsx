@@ -103,7 +103,54 @@ export default function MatchDayClient({
         {matches.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No matches created yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y md:hidden">
+            {matches.map((match) => (
+              <article key={match.id} className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold">{match.opposition}</h2>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {match.dateDisplay} · {match.kickoffTimeDisplay}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${match.statusClasses}`}>
+                    {match.statusLabel}
+                  </span>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Team</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {match.clubName} / {match.teamName}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Score</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {match.ownScore}-{match.oppositionScore}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Type</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{match.matchTypeLabel}</dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Venue</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{match.venueLabel}</dd>
+                  </div>
+                </dl>
+                <Link
+                  href={`/match-day/${match.id}`}
+                  className="mt-4 inline-flex w-full justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white"
+                >
+                  Open match
+                </Link>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -150,6 +197,7 @@ export default function MatchDayClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </SectionCard>
 

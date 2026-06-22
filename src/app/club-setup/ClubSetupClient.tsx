@@ -206,7 +206,50 @@ export default function ClubSetupClient({
         {teams.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No teams created for this club yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y md:hidden">
+            {teams.map((team) => (
+              <button
+                key={team.id}
+                type="button"
+                onClick={() => openModal('teamDetail', team)}
+                className="block w-full p-4 text-left hover:bg-blue-50/70"
+              >
+                <div>
+                  <p className="text-base font-bold">{team.name}</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {team.ageGroup} · {team.season}
+                  </p>
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Players</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{team.playerCount}</dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Fitness sessions</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {team.fitnessSessionCount}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">League</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {team.league || 'Not set'}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Level</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {team.footballPyramidStep || 'Not set'}
+                    </dd>
+                  </div>
+                </dl>
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[960px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -244,6 +287,7 @@ export default function ClubSetupClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </SectionCard>
 
@@ -539,10 +583,19 @@ function TeamDetail({
         >
           Edit Team
         </button>
+      </div>
+
+      <div className="rounded-lg border border-red-100 bg-red-50 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-red-700">
+          Danger zone
+        </h3>
+        <p className="mt-1 text-sm text-red-700">
+          Delete is permanent and only available when the team has no linked records.
+        </p>
         <button
           type="button"
           onClick={onDelete}
-          className="rounded border px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+          className="mt-3 rounded border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
           disabled={isSubmitting}
         >
           Delete Team

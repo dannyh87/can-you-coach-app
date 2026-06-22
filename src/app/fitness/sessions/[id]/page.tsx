@@ -408,12 +408,6 @@ export default async function FitnessSessionPage({
           {session.status === 'COMPLETED' ? (
             <>
               <Link
-                href="/fitness"
-                className="inline-flex rounded border px-4 py-2 text-sm font-medium"
-              >
-                Back to Fitness
-              </Link>
-              <Link
                 href={`/fitness/sessions/${session.id}/rankings`}
                 className="inline-flex rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white"
               >
@@ -424,6 +418,12 @@ export default async function FitnessSessionPage({
                 className="inline-flex rounded border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700"
               >
                 Progress
+              </Link>
+              <Link
+                href="/fitness"
+                className="inline-flex rounded border px-4 py-2 text-sm font-medium"
+              >
+                Back to Fitness
               </Link>
             </>
           ) : (
@@ -495,7 +495,12 @@ export default async function FitnessSessionPage({
             progressHref="/fitness/progress"
           />
 
-          <div className="flex flex-wrap gap-2">
+          <section className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+            <h2 className="text-lg font-bold text-blue-950">Review and export</h2>
+            <p className="mt-1 text-sm text-blue-900">
+              Normal completed-session actions are review-only. Results remain locked.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
             {existingResults.length > 0 && (
               <FitnessResultsCsvButton
                 sessionName={session.fitnessTestType.name}
@@ -508,7 +513,8 @@ export default async function FitnessSessionPage({
                 results={fitnessCsvResults}
               />
             )}
-          </div>
+            </div>
+          </section>
 
           <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
             <h2 className="text-lg font-bold text-amber-950">Admin correction</h2>

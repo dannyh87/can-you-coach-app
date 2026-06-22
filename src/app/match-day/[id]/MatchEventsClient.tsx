@@ -175,9 +175,9 @@ export default function MatchEventsClient({
   return (
     <section className="rounded-xl bg-white p-4 shadow-sm">
       <div>
-        <h2 className="text-xl font-bold">Events</h2>
+        <h2 className="text-xl font-bold">Event recording</h2>
         <p className="mt-1 text-sm text-gray-400">
-          Record selected match events for tracked players.
+          Choose player first or event first, then tap once to record the action.
         </p>
       </div>
 
@@ -416,7 +416,10 @@ export default function MatchEventsClient({
       )}
 
       <div className="mt-6">
-        <h3 className="text-lg font-bold">Recent events</h3>
+        <h3 className="text-lg font-bold">Recent events and corrections</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          Use undo only when an event was tapped by mistake.
+        </p>
         {events.length === 0 ? (
           <p className="mt-2 rounded-lg border p-4 text-sm text-gray-500">
             No match events recorded yet.
@@ -438,7 +441,7 @@ export default function MatchEventsClient({
                     <button
                       type="button"
                       onClick={() => undoEvent(event.id)}
-                      className="rounded px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+                      className="rounded border border-red-100 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
                       disabled={Boolean(pendingAction)}
                     >
                       {pendingAction === event.id ? 'Undoing...' : 'Undo'}

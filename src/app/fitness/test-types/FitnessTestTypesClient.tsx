@@ -128,7 +128,45 @@ export default function FitnessTestTypesClient({
         {testTypes.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No fitness test types found.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y md:hidden">
+            {testTypes.map((testType) => (
+              <button
+                key={testType.id}
+                type="button"
+                onClick={() => openEditModal(testType)}
+                className="block w-full p-4 text-left hover:bg-blue-50/70"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-bold">{testType.name}</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {testType.resultUnit} · {testType.higherIsBetter ? 'Higher is better' : 'Lower is better'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    {testType.isDefault ? 'Default' : 'Custom'}
+                  </span>
+                </div>
+                <dl className="mt-4 grid gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Allowed modes</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {testType.allowedModesLabel}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Preferred mode</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">
+                      {testType.preferredModeLabel}
+                    </dd>
+                  </div>
+                </dl>
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[920px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -162,6 +200,7 @@ export default function FitnessTestTypesClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </SectionCard>
 

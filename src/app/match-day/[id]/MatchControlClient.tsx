@@ -244,7 +244,11 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className="mt-6 space-y-4 rounded-2xl bg-gray-50 p-5">
+    <section className={`mt-6 space-y-4 rounded-2xl bg-gray-50 p-5 ${!isCompleted ? 'sticky top-3 z-20 shadow-lg' : ''}`}>
+      <div>
+        <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Live match</p>
+        <h2 className="mt-1 text-2xl font-bold">Score and clock</h2>
+      </div>
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
         <div className="rounded-xl bg-white p-5 text-center shadow-sm">
           <p className="text-sm font-medium text-gray-500">Score</p>
@@ -289,7 +293,7 @@ export default function MatchControlClient({
       {!isCompleted && (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-bold">Match lifecycle</h2>
+            <h2 className="text-lg font-bold">Match controls</h2>
             {lifecycleButton ? (
               <button
                 type="button"
