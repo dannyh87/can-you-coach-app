@@ -145,10 +145,16 @@ export default function MatchPitchClient({
       )}
 
       {players.length === 0 ? (
-        <p className="mt-4 rounded-lg border p-4 text-sm text-gray-500">
-          Add starters or substitutes in the squad section before tracking on-pitch time.
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          No match squad players are available here. The squad is selected before kick-off; if no starters or substitutes were added before the match started, players cannot be subbed on or used for event recording in this match.
         </p>
       ) : (
+        <>
+        {canToggle && onPitchCount === 0 && (
+          <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">
+            Sub players on to make them available for Event recording. Only tracked players currently on the pitch can have events recorded.
+          </p>
+        )}
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {players.map((player) => {
             const displayedMilliseconds = getDisplayedMilliseconds(player)
@@ -199,6 +205,7 @@ export default function MatchPitchClient({
             )
           })}
         </div>
+        </>
       )}
     </section>
   )

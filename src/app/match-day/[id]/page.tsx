@@ -1251,28 +1251,60 @@ export default async function MatchDayDetailPage({
         <section className="mt-6 rounded-2xl bg-gray-50 p-4 sm:p-5">
           <div>
             <h2 className="text-2xl font-bold">Live match</h2>
-            <p className="mt-1 text-xs text-gray-500">
-              Squad and event setup were locked when the match started.
+            <p className="mt-1 text-sm text-gray-500">
+              Squad and event setup were locked when the match started. Goal buttons update the score only; player events are recorded below for tracked players who are currently on the pitch.
             </p>
           </div>
+          <div className="mt-4 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950 md:grid-cols-3">
+            <div>
+              <p className="font-bold">1. Put players on</p>
+              <p className="mt-1 text-blue-900">Use substitutions to make players available for tracking.</p>
+            </div>
+            <div>
+              <p className="font-bold">2. Record player events</p>
+              <p className="mt-1 text-blue-900">Event buttons appear for tracked players who are on the pitch.</p>
+            </div>
+            <div>
+              <p className="font-bold">3. Update score separately</p>
+              <p className="mt-1 text-blue-900">GOAL buttons do not create player event records.</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a
+              href="#players-and-substitutions"
+              className="inline-flex rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              Players and substitutions
+            </a>
+            <a
+              href="#event-recording"
+              className="inline-flex rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900"
+            >
+              Event recording
+            </a>
+          </div>
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <MatchPitchClient
-              matchDayId={match.id}
-              status={match.status}
-              matchElapsedMilliseconds={matchElapsedMilliseconds}
-              players={pitchPlayers}
-              togglePlayerOnPitchAction={togglePlayerOnPitch}
-            />
-            <MatchEventsClient
-              matchDayId={match.id}
-              status={match.status}
-              players={eventPlayers}
-              events={recentEventsForRecording}
-              eventOptions={selectedEventOptions}
-              categoryOptions={matchEventCategories}
-              recordMatchEventAction={recordMatchEvent}
-              deleteMatchEventAction={deleteMatchEvent}
-            />
+            <div id="players-and-substitutions" className="scroll-mt-24">
+              <MatchPitchClient
+                matchDayId={match.id}
+                status={match.status}
+                matchElapsedMilliseconds={matchElapsedMilliseconds}
+                players={pitchPlayers}
+                togglePlayerOnPitchAction={togglePlayerOnPitch}
+              />
+            </div>
+            <div id="event-recording" className="scroll-mt-24">
+              <MatchEventsClient
+                matchDayId={match.id}
+                status={match.status}
+                players={eventPlayers}
+                events={recentEventsForRecording}
+                eventOptions={selectedEventOptions}
+                categoryOptions={matchEventCategories}
+                recordMatchEventAction={recordMatchEvent}
+                deleteMatchEventAction={deleteMatchEvent}
+              />
+            </div>
           </div>
         </section>
       )}

@@ -315,7 +315,10 @@ export default function MatchControlClient({
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Goal controls</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Add goals during live play. Use undo if a goal was tapped by mistake.
+              Add goals during live play. These buttons update the score only and do not record player events.
+            </p>
+            <p className="mt-2 text-sm font-medium text-blue-800">
+              To record who had a shot, assist, pass or goal event, use Event recording below.
             </p>
 
             {status === 'HALF_TIME' ? (

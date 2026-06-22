@@ -212,16 +212,25 @@ export default function MatchEventsClient({
       )}
 
       {canRecord && players.length === 0 && (
-        <p className="mt-4 rounded-lg border p-4 text-sm text-gray-500">
-          Only tracked players currently on the pitch are shown.
-        </p>
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-bold">No players are available for event recording yet.</p>
+          <p className="mt-1">
+            Events can only be recorded for tracked players who are currently on the pitch. Go to Players and substitutions, sub tracked players on, then event buttons will appear here.
+          </p>
+          <a
+            href="#players-and-substitutions"
+            className="mt-3 inline-flex rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+          >
+            Go to Players and substitutions
+          </a>
+        </div>
       )}
 
       {canRecord && players.length > 0 && (
         <div className="mt-4 space-y-5">
           {eventOptions.length === 0 ? (
-            <p className="rounded-lg border p-4 text-sm text-gray-500">
-              No event types were selected for this match.
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              No event types were selected before kick-off, so there are no event buttons available for this match. Goal buttons can still update the score, but player event recording is unavailable.
             </p>
           ) : (
             <div>

@@ -94,7 +94,7 @@ export default function MatchEventSetupClient({
         <div>
           <h2 className="text-xl font-bold">Event setup</h2>
           <p className="mt-1 text-sm text-gray-400">
-            Choose the standard event types available for this match before kick-off.
+            Choose the event buttons coaches will see during live play. These are locked once the match starts.
           </p>
         </div>
         <button
@@ -120,6 +120,9 @@ export default function MatchEventSetupClient({
       )}
 
       <div className="mt-4 space-y-4">
+        <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          Selected events appear in Event recording after kick-off, once tracked players are on the pitch.
+        </p>
         {categoryOptions.map((category) => {
           const categoryEvents = eventOptions.filter(
             (eventOption) => eventOption.category === category.value
