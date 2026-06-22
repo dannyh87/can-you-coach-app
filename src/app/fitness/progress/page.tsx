@@ -1,6 +1,7 @@
 import Link from 'next/link'
 
 import FitnessProgressChart from '@/components/FitnessProgressChart'
+import EmptyState from '@/components/ui/EmptyState'
 import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
@@ -78,6 +79,26 @@ const getProgressSummary = (
 
 const getPlayerName = (player: ValidResult['player']) =>
   `${player.firstName} ${player.surname}`
+
+const getProgressInterpretation = ({
+  label,
+  summary,
+  unit,
+}: {
+  label: string
+  summary: ProgressSummary
+  unit: string
+}) => {
+  if (summary.improvement > 0) {
+    return `${label} has improved by ${formatNumber(summary.improvement)} ${unit} since the first test. Best result so far is ${formatNumber(summary.best)} ${unit}.`
+  }
+
+  if (summary.improvement < 0) {
+    return `${label} is ${formatNumber(Math.abs(summary.improvement))} ${unit} behind the first test. Best result so far is ${formatNumber(summary.best)} ${unit}.`
+  }
+
+  return `${label} is level with the first test. Best result so far is ${formatNumber(summary.best)} ${unit}.`
+}
 
 export default async function FitnessProgressPage({
   searchParams,
@@ -352,14 +373,17 @@ export default async function FitnessProgressPage({
       </section>
 
       {!hasSelection ? (
-        <p className="rounded-lg border p-4 text-sm text-gray-500">
-          Select a team and test type to view progress reporting.
-        </p>
+        <EmptyState
+          eyebrow="Progress report"
+          title="Choose a team and test"
+          description="Select a team and test from the report filters to see coach-friendly trend summaries and progress charts."
+        />
       ) : !hasEnoughData ? (
-          <p className="rounded-lg border p-4 text-sm text-gray-500">
-          At least two completed sessions with valid numeric results are needed
-          to show progress.
-        </p>
+        <EmptyState
+          eyebrow="More data needed"
+          title="Progress needs two completed tests"
+          description="At least two completed sessions with valid numeric results are needed before the app can show trends, improvement and biggest improvers."
+        />
       ) : (
         <div className="space-y-8">
           {selectedTeam && selectedFitnessTestType && teamSummary && (
@@ -395,6 +419,14 @@ export default async function FitnessProgressPage({
                   }
                 />
               </div>
+
+              <p className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
+                {getProgressInterpretation({
+                  label: 'Team average',
+                  summary: teamSummary,
+                  unit: selectedFitnessTestType.resultUnit,
+                })}
+              </p>
             </section>
           )}
 
@@ -425,6 +457,14 @@ export default async function FitnessProgressPage({
                   }
                 />
               </div>
+
+              <p className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
+                {getProgressInterpretation({
+                  label: getPlayerName(selectedPlayer),
+                  summary: selectedPlayerSummary,
+                  unit: selectedFitnessTestType.resultUnit,
+                })}
+              </p>
             </section>
           )}
 
@@ -441,9 +481,10 @@ export default async function FitnessProgressPage({
             <h2 className="text-xl font-bold">Biggest Improvers</h2>
 
             {biggestImprovers.length === 0 ? (
-              <p className="rounded-lg border p-4 text-sm text-gray-500">
-                No players have at least two valid numeric results yet.
-              </p>
+              <EmptyState
+                title="No biggest improvers yet"
+                description="Players need at least two valid numeric results in completed sessions before improvement can be ranked."
+              />
             ) : (
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full border-collapse text-sm">

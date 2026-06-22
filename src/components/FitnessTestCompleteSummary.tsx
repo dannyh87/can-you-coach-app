@@ -75,6 +75,10 @@ export default function FitnessTestCompleteSummary({
     })
   const topPerformer = rankedPlayers[0]
   const bottomPerformer = rankedPlayers[rankedPlayers.length - 1]
+  const playersWithResults = players.filter((player) => player.result).length
+  const rankingDirectionLabel = higherIsBetter
+    ? 'Higher scores appear higher in the ranking.'
+    : 'Lower scores appear higher in the ranking.'
   const metadata = [
     { label: 'Test type', value: testTypeName },
     { label: 'Team', value: teamName },
@@ -121,6 +125,10 @@ export default function FitnessTestCompleteSummary({
           </div>
         ))}
       </dl>
+
+      <p className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
+        {playersWithResults} player{playersWithResults === 1 ? '' : 's'} have saved results for this completed test. {rankingDirectionLabel} Use rankings for the full order and progress to compare against previous completed tests.
+      </p>
 
       {topPerformer && bottomPerformer && (
         <div className="grid gap-3 sm:grid-cols-2">

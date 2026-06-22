@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import Button from '@/components/ui/Button'
+import EmptyState from '@/components/ui/EmptyState'
 import SectionCard from '@/components/ui/SectionCard'
 import { fieldClassName } from '@/components/ui/formStyles'
 import {
@@ -116,17 +117,28 @@ export default function FitnessTestTypesClient({
       )}
 
       <SectionCard
-        title="Test Types"
-        description="Create custom tests or tap a row to edit how a test is recorded."
+        title="Tests available to coaches"
+        description="Create custom tests or tap an existing test to adjust how coaches record it."
         actions={(
           <Button type="button" onClick={openCreateModal} size="sm">
-            New Fitness Test Type
+            Add custom test
           </Button>
         )}
         bodyClassName="p-0"
       >
         {testTypes.length === 0 ? (
-          <p className="p-4 text-sm text-gray-500">No fitness test types found.</p>
+          <div className="p-4">
+            <EmptyState
+              eyebrow="Fitness Test Library"
+              title="No tests are available yet"
+              description="Add a custom test so coaches can create fitness sessions with the right unit, ranking direction and recording mode."
+              action={(
+                <Button type="button" onClick={openCreateModal} size="sm">
+                  Add custom test
+                </Button>
+              )}
+            />
+          </div>
         ) : (
           <>
           <div className="divide-y md:hidden">
@@ -215,13 +227,13 @@ export default function FitnessTestTypesClient({
               <div>
                 <h2 className="text-2xl font-bold">
                   {modalMode === 'create'
-                    ? 'New Fitness Test Type'
-                    : 'Edit Fitness Test Type'}
+                    ? 'Add custom fitness test'
+                    : 'Edit fitness test'}
                 </h2>
                 <p className="mt-1 text-sm text-gray-500">
                   {modalMode === 'create'
-                    ? 'Create a custom test type for this local coach profile.'
-                    : 'Update result settings and allowed recording modes.'}
+                    ? 'Create a test that matches how your coaches collect results.'
+                    : 'Update how this test is measured, ranked and recorded.'}
                 </p>
               </div>
               <button
@@ -244,7 +256,7 @@ export default function FitnessTestTypesClient({
               <FitnessTestTypeForm
                 key="create"
                 isSubmitting={isSubmitting}
-                submitLabel="Create Fitness Test Type"
+                submitLabel="Create Fitness Test"
                 onSubmit={createTestType}
               />
             ) : selectedTestType ? (
@@ -252,7 +264,7 @@ export default function FitnessTestTypesClient({
                 key={selectedTestType.id}
                 testType={selectedTestType}
                 isSubmitting={isSubmitting}
-                submitLabel="Save Fitness Test Type"
+                submitLabel="Save Fitness Test"
                 onSubmit={updateTestType}
               />
             ) : null}
@@ -299,7 +311,7 @@ function FitnessTestTypeForm({
       {testType && <input type="hidden" name="id" value={testType.id} />}
 
       <label className="text-sm font-medium">
-        Name
+        Test name
         <input
           name="name"
           required
@@ -309,7 +321,7 @@ function FitnessTestTypeForm({
       </label>
 
       <label className="text-sm font-medium">
-        Unit
+        How results are measured
         <input
           name="resultUnit"
           required
@@ -319,7 +331,7 @@ function FitnessTestTypeForm({
       </label>
 
       <label className="text-sm font-medium">
-        Ranking direction
+        How rankings work
         <select
           name="higherIsBetter"
           defaultValue={testType?.higherIsBetter === false ? 'false' : 'true'}
@@ -331,7 +343,7 @@ function FitnessTestTypeForm({
       </label>
 
       <label className="text-sm font-medium">
-        Preferred recording mode
+        Coach preferred recording mode
         <select
           name="preferredRecordingMode"
           value={preferredMode}
@@ -347,7 +359,7 @@ function FitnessTestTypeForm({
       </label>
 
       <fieldset className="rounded-lg border p-4 md:col-span-2">
-        <legend className="px-1 text-sm font-medium">Allowed recording modes</legend>
+        <legend className="px-1 text-sm font-medium">Recording modes coaches can use</legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
           {fitnessRecordingModeOptions.map((option) => (
             <label key={option.value} className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium">

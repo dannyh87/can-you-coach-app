@@ -176,14 +176,35 @@ export default async function FitnessTestTypesPage() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
-        title="Fitness Test Types"
-        description="Choose how each test should be recorded, which unit it uses and whether higher or lower scores are better."
+        title="Fitness Test Library"
+        description="Choose the tests your coaches use, how each one is recorded, and how results should be interpreted."
         actions={(
           <Link href="/fitness" className="text-sm font-semibold text-blue-800 hover:underline">
             Back to Fitness
           </Link>
         )}
       />
+
+      <section className="mb-6 grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Manual entry</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Best when a stopwatch, timing gates or another device gives you the final score.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Live dropout</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Best for tests where players drop out one by one, such as bleep or Yo-Yo tests.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Live timed finish</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Best when each player finishes at a different time and the coach taps finish live.
+          </p>
+        </div>
+      </section>
 
       <FitnessTestTypesClient
         testTypes={testTypes}

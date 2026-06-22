@@ -14,9 +14,9 @@ export const getFitnessSessionStatusClasses = (
   status: FitnessTestSessionStatus
 ) => {
   const classes: Record<FitnessTestSessionStatus, string> = {
-    DRAFT: 'bg-gray-100 text-gray-700',
-    IN_PROGRESS: 'bg-green-100 text-green-700',
-    COMPLETED: 'bg-blue-100 text-blue-700',
+    DRAFT: 'bg-slate-100 text-slate-700',
+    IN_PROGRESS: 'bg-blue-100 text-blue-800',
+    COMPLETED: 'bg-green-100 text-green-800',
   }
 
   return classes[status]

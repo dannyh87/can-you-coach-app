@@ -5,24 +5,30 @@ import PageHeader from '@/components/ui/PageHeader'
 const setupLinks = [
   {
     href: '/club-setup',
-    title: 'Set up your club',
-    description: 'Add clubs and teams so every player, test and match sits in the right place.',
+    title: 'Set up teams',
+    description: 'Add your club and teams first so squads, tests and matches stay organised.',
   },
   {
     href: '/players',
-    title: 'Players',
-    description: 'Keep squad details tidy before training, testing or match day.',
+    title: 'Build your squad',
+    description: 'Keep player details, positions and squad numbers ready for testing and match day.',
   },
   {
     href: '/fitness',
-    title: 'Fitness testing',
-    description: 'Run tests, lock results, compare rankings and track progress over time.',
+    title: 'Run fitness tests',
+    description: 'Record results, lock completed tests, compare rankings and track progress.',
   },
   {
     href: '/match-day',
     title: 'Match Day',
-    description: 'Prepare the squad, track minutes and record key moments during the game.',
+    description: 'Prepare the squad, track minutes and record key moments from the touchline.',
   },
+]
+
+const quickLinks = [
+  { href: '/fitness/test-types', label: 'Manage Fitness Test Library' },
+  { href: '/fitness/progress', label: 'Review Fitness Progress' },
+  { href: '/match-day', label: 'Open Match Day' },
 ]
 
 export default function Home() {
@@ -33,6 +39,25 @@ export default function Home() {
         title="Simple tools for grassroots coaches"
         description="Set up your squad, run fitness tests and manage match day from one phone-friendly workspace. Built for quick use by coaches and volunteers."
       />
+
+      <section className="mb-6 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm sm:p-6">
+        <p className="text-sm font-bold uppercase tracking-wide text-blue-800">Start here</p>
+        <h2 className="mt-2 text-2xl font-extrabold text-blue-950">Pick the coaching job you are doing now</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-blue-900">
+          Use the setup tools before the season, Fitness when testing players, and Match Day when you are on the touchline. Reports and rankings help you review what happened afterwards.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {quickLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="inline-flex rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {setupLinks.map((link, index) => (

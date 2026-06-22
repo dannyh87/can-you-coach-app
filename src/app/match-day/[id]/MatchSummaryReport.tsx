@@ -77,6 +77,10 @@ export default function MatchSummaryReport({
   summaryCsvRows,
   eventCsvRows,
 }: MatchSummaryReportProps) {
+  const totalTeamEvents = teamEventTotals.reduce((total, row) => total + row.count, 0)
+  const playersUsed = minutesRows.filter((row) => row.minutesPlayed > 0).length
+  const mostInvolvedPlayer = mostInvolvedPlayers[0]
+
   return (
     <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
       <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -104,14 +108,29 @@ export default function MatchSummaryReport({
 
       <div className="mt-5 grid gap-4 md:grid-cols-3">
         <ReportCard label="Match result" value={finalScore} />
-        <ReportCard label="Team events" value={String(teamEventTotals.reduce((total, row) => total + row.count, 0))} />
-        <ReportCard label="Players used" value={String(minutesRows.filter((row) => row.minutesPlayed > 0).length)} />
+        <ReportCard label="Team events" value={String(totalTeamEvents)} />
+        <ReportCard label="Players used" value={String(playersUsed)} />
+      </div>
+
+      <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4">
+        <h3 className="text-lg font-bold text-blue-950">Coach summary</h3>
+        <p className="mt-1 text-sm font-medium leading-6 text-blue-900">
+          {playersUsed > 0
+            ? `${playersUsed} player${playersUsed === 1 ? '' : 's'} recorded minutes.`
+            : 'No player minutes were recorded.'}{' '}
+          {totalTeamEvents > 0
+            ? `${totalTeamEvents} tracked event${totalTeamEvents === 1 ? '' : 's'} were recorded.`
+            : 'No tracked events were recorded.'}{' '}
+          {mostInvolvedPlayer
+            ? `${mostInvolvedPlayer.playerName} was the most involved tracked player with ${mostInvolvedPlayer.total} event${mostInvolvedPlayer.total === 1 ? '' : 's'}.`
+            : 'Record events during live play to build involvement summaries.'}
+        </p>
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <ReportPanel title="Minutes played">
           {minutesRows.length === 0 ? (
-            <EmptyText>No minutes were recorded.</EmptyText>
+            <EmptyText>No minutes were recorded. Use Sub on/off during a live match to build this view.</EmptyText>
           ) : (
             <div className="space-y-2">
               {minutesRows.map((row) => (
@@ -129,7 +148,7 @@ export default function MatchSummaryReport({
 
         <ReportPanel title="Team event totals">
           {teamEventTotals.length === 0 ? (
-            <EmptyText>No events were recorded.</EmptyText>
+            <EmptyText>No events were recorded. Select tracked event types before or during match setup to fill this panel.</EmptyText>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {teamEventTotals.map((row) => (
@@ -146,7 +165,7 @@ export default function MatchSummaryReport({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ReportPanel title="Player event counts">
           {playerEventCounts.length === 0 ? (
-            <EmptyText>No player events were recorded.</EmptyText>
+            <EmptyText>No player events were recorded. Event recording creates per-player totals for post-match review.</EmptyText>
           ) : (
             <div className="space-y-3">
               {playerEventCounts.map((row) => (
@@ -166,7 +185,7 @@ export default function MatchSummaryReport({
 
         <ReportPanel title="Most involved players">
           {mostInvolvedPlayers.length === 0 ? (
-            <EmptyText>No involvement data yet.</EmptyText>
+            <EmptyText>No involvement data yet. Record player events to identify who was most involved.</EmptyText>
           ) : (
             <div className="space-y-2">
               {mostInvolvedPlayers.map((row, index) => (
@@ -182,7 +201,7 @@ export default function MatchSummaryReport({
 
       <ReportPanel title="Match timeline" className="mt-4">
         {timelineEvents.length === 0 ? (
-          <EmptyText>No timeline events were recorded.</EmptyText>
+          <EmptyText>No timeline events were recorded. Live event taps will appear here in match order.</EmptyText>
         ) : (
           <div className="space-y-2">
             {timelineEvents.map((event) => (
