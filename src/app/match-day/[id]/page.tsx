@@ -1284,7 +1284,7 @@ export default async function MatchDayDetailPage({
             </a>
           </div>
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div id="players-and-substitutions" className="scroll-mt-24">
+            <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
               <MatchPitchClient
                 matchDayId={match.id}
                 status={match.status}
@@ -1293,7 +1293,7 @@ export default async function MatchDayDetailPage({
                 togglePlayerOnPitchAction={togglePlayerOnPitch}
               />
             </div>
-            <div id="event-recording" className="scroll-mt-24">
+            <div id="event-recording" className="order-1 scroll-mt-24 xl:order-2">
               <MatchEventsClient
                 matchDayId={match.id}
                 status={match.status}

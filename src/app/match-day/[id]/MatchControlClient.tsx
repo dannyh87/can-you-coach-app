@@ -244,7 +244,7 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className={`mt-6 space-y-4 rounded-2xl bg-gray-50 p-5 ${!isCompleted ? 'sticky top-3 z-20 shadow-lg' : ''}`}>
+    <section className="mt-6 space-y-4 rounded-2xl bg-gray-50 p-5 shadow-sm">
       <div>
         <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Live match</p>
         <h2 className="mt-1 text-2xl font-bold">Score and clock</h2>
