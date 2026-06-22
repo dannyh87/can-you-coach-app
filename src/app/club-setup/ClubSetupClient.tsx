@@ -46,7 +46,7 @@ type ClubRow = {
   teams: TeamRow[]
 }
 
-type ModalMode = 'editClub' | 'addTeam' | 'teamDetail' | 'editTeam' | 'deleteTeam' | null
+type ModalMode = 'clubDetail' | 'editClub' | 'addTeam' | 'teamDetail' | 'editTeam' | 'deleteTeam' | null
 
 type ClubSetupClientProps = {
   clubs: ClubRow[]
@@ -89,6 +89,15 @@ export default function ClubSetupClient({
     0
   )
 
+  const getClubTotals = (club: ClubRow) => ({
+    teams: club.teams.length,
+    players: club.teams.reduce((total, team) => total + team.playerCount, 0),
+    fitnessSessions: club.teams.reduce(
+      (total, team) => total + team.fitnessSessionCount,
+      0
+    ),
+  })
+
   const closeModal = () => {
     if (isSubmitting) return
     setModalMode(null)
@@ -100,6 +109,13 @@ export default function ClubSetupClient({
     setSelectedTeam(team)
     setError(null)
     setModalMode(mode)
+  }
+
+  const openClubDetail = (club: ClubRow) => {
+    setSelectedClubId(club.id)
+    setSelectedTeam(null)
+    setError(null)
+    setModalMode('clubDetail')
   }
 
   const returnToTeamDetail = () => {
@@ -147,57 +163,109 @@ export default function ClubSetupClient({
 
   return (
     <>
-      {clubs.length > 1 && (
-        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="text-sm font-medium">
-            Current club
-            <select
-              value={selectedClub.id}
-              onChange={(event) => {
-                setSelectedClubId(event.target.value)
-                setSelectedTeam(null)
-                setError(null)
-                setModalMode(null)
-              }}
-              className={fieldClassName}
-            >
-              {clubs.map((club) => (
-                <option key={club.id} value={club.id}>
-                  {club.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </section>
-      )}
-
       <SectionCard
         className="mb-6"
-        title={selectedClub.name}
-        description={selectedClub.location || 'No location set'}
+        title="Clubs"
+        description="Click a club row to view details or edit setup information."
         actions={(
           <Button
             type="button"
             onClick={() => openModal('editClub')}
             size="sm"
           >
-            Edit Club
+            Edit Selected Club
           </Button>
         )}
+        bodyClassName="p-0"
       >
+        <div className="divide-y md:hidden">
+          {clubs.map((club) => {
+            const totals = getClubTotals(club)
+            const isSelected = club.id === selectedClub.id
 
-        {selectedClub.notes && (
-          <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
-            {selectedClub.notes}
-          </p>
-        )}
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          <StatCard label="Teams" value={teams.length} />
-          <StatCard label="Players" value={totalPlayers} />
-          <StatCard label="Fitness sessions" value={totalFitnessSessions} />
+            return (
+              <button
+                key={club.id}
+                type="button"
+                onClick={() => openClubDetail(club)}
+                className={`block w-full p-4 text-left hover:bg-blue-50/70 ${isSelected ? 'bg-blue-50/50' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-base font-bold">{club.name}</p>
+                    <p className="mt-1 text-sm text-gray-500">{club.location || 'No location set'}</p>
+                  </div>
+                  {isSelected && (
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Teams</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{totals.teams}</dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Players</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{totals.players}</dd>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-3">
+                    <dt className="text-gray-500">Fitness</dt>
+                    <dd className="mt-1 font-semibold text-gray-900">{totals.fitnessSessions}</dd>
+                  </div>
+                </dl>
+              </button>
+            )
+          })}
         </div>
+
+        <DataTable className="min-w-[760px]">
+          <DataTableHead>
+            <tr>
+              <DataTableHeader>Club name</DataTableHeader>
+              <DataTableHeader>Location</DataTableHeader>
+              <DataTableHeader>Teams</DataTableHeader>
+              <DataTableHeader>Players</DataTableHeader>
+              <DataTableHeader>Fitness sessions</DataTableHeader>
+              <DataTableHeader>Status</DataTableHeader>
+            </tr>
+          </DataTableHead>
+          <DataTableBody>
+            {clubs.map((club) => {
+              const totals = getClubTotals(club)
+              const isSelected = club.id === selectedClub.id
+
+              return (
+                <tr
+                  key={club.id}
+                  onClick={() => openClubDetail(club)}
+                  className={dataTableRowClassName(true)}
+                >
+                  <DataTableCell className="font-medium text-slate-950">{club.name}</DataTableCell>
+                  <DataTableCell>{club.location || 'Not set'}</DataTableCell>
+                  <DataTableCell>{totals.teams}</DataTableCell>
+                  <DataTableCell>{totals.players}</DataTableCell>
+                  <DataTableCell>{totals.fitnessSessions}</DataTableCell>
+                  <DataTableCell>
+                    {isSelected ? (
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">
+                        Selected
+                      </span>
+                    ) : 'Click to select'}
+                  </DataTableCell>
+                </tr>
+              )
+            })}
+          </DataTableBody>
+        </DataTable>
       </SectionCard>
+
+      <section className="mb-6 grid gap-3 sm:grid-cols-3">
+        <StatCard label="Selected club teams" value={teams.length} />
+        <StatCard label="Players" value={totalPlayers} />
+        <StatCard label="Fitness sessions" value={totalFitnessSessions} />
+      </section>
 
       <SectionCard
         title="Teams"
@@ -304,7 +372,9 @@ export default function ClubSetupClient({
         <ModalShell
           title={modalMode === 'editClub'
             ? 'Edit Club'
-            : modalMode === 'addTeam'
+            : modalMode === 'clubDetail'
+              ? selectedClub.name
+              : modalMode === 'addTeam'
               ? 'Add Team'
               : modalMode === 'editTeam'
                 ? 'Edit Team'
@@ -313,15 +383,26 @@ export default function ClubSetupClient({
                   : selectedTeam?.name ?? 'Team Details'}
           description={modalMode === 'deleteTeam'
             ? 'Deletion is permanent and only allowed for empty teams.'
+            : modalMode === 'clubDetail'
+              ? 'View club details and choose an action.'
             : modalMode === 'teamDetail'
               ? 'View team details and manage this team.'
               : 'Changes are saved only after a successful action.'}
           onClose={closeModal}
           isSubmitting={isSubmitting}
-          mode={modalMode === 'deleteTeam' ? 'danger' : modalMode === 'teamDetail' ? 'detail' : modalMode === 'editClub' || modalMode === 'editTeam' ? 'edit' : 'create'}
+          mode={modalMode === 'deleteTeam' ? 'danger' : modalMode === 'teamDetail' || modalMode === 'clubDetail' ? 'detail' : modalMode === 'editClub' || modalMode === 'editTeam' ? 'edit' : 'create'}
         >
             {error && (
               <Alert variant="error" className="mb-4">{error}</Alert>
+            )}
+
+            {modalMode === 'clubDetail' && (
+              <ClubDetail
+                club={selectedClub}
+                totals={getClubTotals(selectedClub)}
+                isSubmitting={isSubmitting}
+                onEdit={() => openModal('editClub')}
+              />
             )}
 
             {modalMode === 'editClub' && (
@@ -424,6 +505,40 @@ function ClubForm({
         {isSubmitting ? 'Saving...' : 'Save Club'}
       </Button>
     </form>
+  )
+}
+
+function ClubDetail({
+  club,
+  totals,
+  isSubmitting,
+  onEdit,
+}: {
+  club: ClubRow
+  totals: { teams: number; players: number; fitnessSessions: number }
+  isSubmitting: boolean
+  onEdit: () => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DetailItem label="Club name" value={club.name} />
+        <DetailItem label="Location" value={club.location || 'Not set'} />
+        <DetailItem label="Teams" value={String(totals.teams)} />
+        <DetailItem label="Players" value={String(totals.players)} />
+        <DetailItem label="Fitness sessions" value={String(totals.fitnessSessions)} />
+      </div>
+
+      {club.notes && (
+        <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">
+          {club.notes}
+        </p>
+      )}
+
+      <Button type="button" onClick={onEdit} disabled={isSubmitting}>
+        Edit Club
+      </Button>
+    </div>
   )
 }
 

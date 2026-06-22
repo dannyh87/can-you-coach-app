@@ -50,21 +50,38 @@ type MatchDayClientProps = {
   createMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
 }
 
+type ModalMode = 'create' | 'detail' | null
+
 export default function MatchDayClient({
   teams,
   matches,
   createMatchDayAction,
 }: MatchDayClientProps) {
   const router = useRouter()
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [modalMode, setModalMode] = useState<ModalMode>(null)
+  const [selectedMatch, setSelectedMatch] = useState<MatchDayRow | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const closeModal = () => {
     if (isSubmitting) return
-    setIsCreateModalOpen(false)
+    setModalMode(null)
+    setSelectedMatch(null)
     setError(null)
+  }
+
+  const openCreateModal = () => {
+    setSelectedMatch(null)
+    setError(null)
+    setMessage(null)
+    setModalMode('create')
+  }
+
+  const openDetailModal = (match: MatchDayRow) => {
+    setSelectedMatch(match)
+    setError(null)
+    setModalMode('detail')
   }
 
   const createMatch = async (formData: FormData) => {
@@ -75,7 +92,8 @@ export default function MatchDayClient({
     const result = await createMatchDayAction(formData)
 
     if (result.ok) {
-      setIsCreateModalOpen(false)
+      setModalMode(null)
+      setSelectedMatch(null)
       setMessage('Match created.')
       router.refresh()
     } else {
@@ -97,11 +115,7 @@ export default function MatchDayClient({
         actions={(
           <Button
             type="button"
-            onClick={() => {
-              setError(null)
-              setMessage(null)
-              setIsCreateModalOpen(true)
-            }}
+            onClick={openCreateModal}
           >
             Create match
           </Button>
@@ -115,7 +129,12 @@ export default function MatchDayClient({
           <>
           <div className="divide-y md:hidden">
             {matches.map((match) => (
-              <article key={match.id} className="p-4">
+              <button
+                key={match.id}
+                type="button"
+                onClick={() => openDetailModal(match)}
+                className="block w-full p-4 text-left hover:bg-blue-50/70"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold">{match.opposition}</h2>
@@ -147,15 +166,8 @@ export default function MatchDayClient({
                     <dd className="mt-1 font-semibold text-gray-900">{match.venueLabel}</dd>
                   </div>
                 </dl>
-                <ActionLink
-                  href={`/match-day/${match.id}`}
-                  variant="primary"
-                  fullWidth
-                  className="mt-4"
-                >
-                  Open match
-                </ActionLink>
-              </article>
+                <p className="mt-4 text-sm font-semibold text-blue-700">Tap to view actions</p>
+              </button>
             ))}
           </div>
 
@@ -174,7 +186,11 @@ export default function MatchDayClient({
               </DataTableHead>
               <DataTableBody>
                 {matches.map((match) => (
-                  <tr key={match.id}>
+                  <tr
+                    key={match.id}
+                    onClick={() => openDetailModal(match)}
+                    className="cursor-pointer hover:bg-blue-50/70"
+                  >
                     <DataTableCell>
                       {match.dateDisplay} · {match.kickoffTimeDisplay}
                     </DataTableCell>
@@ -191,13 +207,7 @@ export default function MatchDayClient({
                       <StatusBadge label={match.statusLabel} variant={getStatusBadgeVariant(match.statusLabel.toUpperCase().replace(' ', '_'))} />
                     </DataTableCell>
                     <DataTableCell>
-                      <ActionLink
-                        href={`/match-day/${match.id}`}
-                        variant="ghost"
-                        size="sm"
-                      >
-                        View details
-                      </ActionLink>
+                      <span className="text-sm font-semibold text-blue-700">View details</span>
                     </DataTableCell>
                   </tr>
                 ))}
@@ -207,26 +217,67 @@ export default function MatchDayClient({
         )}
       </SectionCard>
 
-      {isCreateModalOpen && (
+      {modalMode && (
         <ModalShell
-          title="Create match"
-          description="Set up the match record before choosing squad and events."
+          title={modalMode === 'create' ? 'Create match' : selectedMatch?.opposition ?? 'Match details'}
+          description={modalMode === 'create'
+            ? 'Set up the match record before choosing squad and events.'
+            : 'Review match details before opening the live match workspace.'}
           onClose={closeModal}
           isSubmitting={isSubmitting}
-          mode="create"
+          mode={modalMode === 'create' ? 'create' : 'detail'}
         >
             {error && (
               <Alert variant="error" className="mb-4">{error}</Alert>
             )}
 
-            <CreateMatchForm
-              teams={teams}
-              isSubmitting={isSubmitting}
-              onSubmit={createMatch}
-            />
+            {modalMode === 'create' && (
+              <CreateMatchForm
+                teams={teams}
+                isSubmitting={isSubmitting}
+                onSubmit={createMatch}
+              />
+            )}
+
+            {modalMode === 'detail' && selectedMatch && (
+              <MatchDetail match={selectedMatch} />
+            )}
         </ModalShell>
       )}
     </>
+  )
+}
+
+function MatchDetail({ match }: { match: MatchDayRow }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <DetailItem label="Opposition" value={match.opposition} />
+        <DetailItem label="Team" value={`${match.clubName} / ${match.teamName}`} />
+        <DetailItem label="Date" value={`${match.dateDisplay} · ${match.kickoffTimeDisplay}`} />
+        <DetailItem label="Type" value={match.matchTypeLabel} />
+        <DetailItem label="Venue" value={match.venueLabel} />
+        <DetailItem label="Score" value={`${match.ownScore}-${match.oppositionScore}`} />
+      </div>
+      <div className="rounded-lg border p-4">
+        <dt className="text-sm text-gray-500">Status</dt>
+        <dd className="mt-2">
+          <StatusBadge label={match.statusLabel} variant={getStatusBadgeVariant(match.statusLabel)} />
+        </dd>
+      </div>
+      <ActionLink href={`/match-day/${match.id}`} variant="primary">
+        Open match
+      </ActionLink>
+    </div>
+  )
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border p-4">
+      <dt className="text-sm text-gray-500">{label}</dt>
+      <dd className="mt-1 text-lg font-bold">{value}</dd>
+    </div>
   )
 }
 
