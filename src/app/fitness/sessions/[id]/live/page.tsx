@@ -12,7 +12,8 @@ import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
 } from '@/lib/fitnessSessionStatus'
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
+import { canRecordFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -39,17 +40,11 @@ const revalidateFitnessSessionPaths = (sessionId: string) => {
 }
 
 async function getOwnedSession(sessionId: string) {
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  if (!(await canRecordFitnessSession(user.id, sessionId))) return null
 
-  return prisma.fitnessTestSession.findFirst({
-    where: {
-      id: sessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  return prisma.fitnessTestSession.findUnique({
+    where: { id: sessionId },
     include: {
       team: {
         include: {

@@ -5,13 +5,14 @@ import { notFound, redirect } from 'next/navigation'
 
 import FitnessResultsCsvButton from '@/app/fitness/sessions/[id]/FitnessResultsCsvButton'
 import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { reopenFitnessTestSession } from '@/lib/fitnessSessionActions'
 import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
 } from '@/lib/fitnessSessionStatus'
+import { canRecordFitnessSession, canViewFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -58,24 +59,18 @@ const formatSessionStatusForCsv = (status: string) => {
 async function saveFitnessResults(formData: FormData) {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
 
   if (!fitnessTestSessionId) return
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
     include: { fitnessTestType: true },
   })
 
   if (!session) return
+  if (!(await canRecordFitnessSession(user.id, session.id))) return
   if (session.status === 'COMPLETED') return
   if (!getFitnessRecordingModes(session.fitnessTestType).manualEntry) return
 
@@ -141,23 +136,17 @@ async function saveFitnessResults(formData: FormData) {
 async function startFitnessTestSession(formData: FormData) {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
 
   if (!fitnessTestSessionId) return
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
   })
 
   if (!session || session.status !== 'DRAFT') return
+  if (!(await canRecordFitnessSession(user.id, session.id))) return
 
   await prisma.fitnessTestSession.update({
     where: { id: session.id },
@@ -205,16 +194,12 @@ export default async function FitnessSessionPage({
 }) {
   const { id } = await params
   const { saved, started } = await searchParams
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  if (!(await canViewFitnessSession(user.id, id))) notFound()
 
   const session = await prisma.fitnessTestSession.findFirst({
     where: {
       id,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
     },
     include: {
       team: {

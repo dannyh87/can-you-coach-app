@@ -5,12 +5,15 @@ import FitnessClient from '@/app/fitness/FitnessClient'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
-import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
+import { accessibleSessionWhere, accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
+import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
 } from '@/lib/fitnessSessionStatus'
+import { ensureDefaultClub } from '@/lib/localUser'
+import { canManageFitnessSession, canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -35,19 +38,6 @@ type FitnessActionResult =
   | { ok: true }
   | { ok: false; reason: string }
 
-async function userOwnsTeam(userId: string, teamId: string) {
-  const team = await prisma.team.findFirst({
-    where: {
-      id: teamId,
-      club: {
-        userId,
-      },
-    },
-  })
-
-  return Boolean(team)
-}
-
 async function userCanUseFitnessTestType(userId: string, fitnessTestTypeId: string) {
   const fitnessTestType = await prisma.fitnessTestType.findFirst({
     where: {
@@ -64,7 +54,7 @@ async function createFitnessTestSession(
 ): Promise<FitnessActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const teamId = getTextValue(formData, 'teamId')
   const fitnessTestTypeId = getTextValue(formData, 'fitnessTestTypeId')
   const date = getTextValue(formData, 'date')
@@ -74,7 +64,7 @@ async function createFitnessTestSession(
     return { ok: false, reason: 'Team, test type and date are required.' }
   }
 
-  if (!(await userOwnsTeam(user.id, teamId))) {
+  if (!(await canManageTeamData(user.id, teamId))) {
     return { ok: false, reason: 'You cannot create a session for this team.' }
   }
 
@@ -100,26 +90,23 @@ async function deleteFitnessTestSession(
 ): Promise<FitnessActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
 
   if (!fitnessTestSessionId) {
     return { ok: false, reason: 'Missing fitness test session.' }
   }
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
   })
 
   if (!session) {
     return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (!(await canManageFitnessSession(user.id, session.id))) {
+    return { ok: false, reason: 'You cannot delete this fitness test session.' }
   }
 
   if (session.status === 'IN_PROGRESS') {
@@ -137,15 +124,12 @@ async function deleteFitnessTestSession(
 }
 
 export default async function FitnessPage() {
-  const user = await getLocalUser()
-  await ensureDefaultClub(user.id)
+  const user = await getCurrentUser()
+  if (!isClerkEnabled()) await ensureDefaultClub(user.id)
+  const manageableTeamIds = await getManageableTeamIds(user.id)
 
   const teams = await prisma.team.findMany({
-    where: {
-      club: {
-        userId: user.id,
-      },
-    },
+    where: await accessibleTeamWhere(user.id),
     include: {
       club: true,
     },
@@ -160,13 +144,7 @@ export default async function FitnessPage() {
   })
 
   const sessions = await prisma.fitnessTestSession.findMany({
-    where: {
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+    where: await accessibleSessionWhere(user.id),
     include: {
       team: {
         include: {
@@ -183,7 +161,7 @@ export default async function FitnessPage() {
     orderBy: { date: 'desc' },
   })
 
-  const teamOptions = teams.map((team) => ({
+  const teamOptions = teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => ({
     id: team.id,
     name: team.name,
     clubName: team.club.name,

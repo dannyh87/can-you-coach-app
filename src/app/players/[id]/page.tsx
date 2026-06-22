@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
+import { canViewPlayer } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -20,16 +21,12 @@ export default async function PlayerPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  if (!(await canViewPlayer(user.id, id))) notFound()
 
   const player = await prisma.player.findFirst({
     where: {
       id,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
     },
     include: {
       team: {

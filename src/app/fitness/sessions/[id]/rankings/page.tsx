@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import EmptyState from '@/components/ui/EmptyState'
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
+import { canViewFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -41,16 +42,12 @@ export default async function FitnessSessionRankingsPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  if (!(await canViewFitnessSession(user.id, id))) notFound()
 
   const session = await prisma.fitnessTestSession.findFirst({
     where: {
       id,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
     },
     include: {
       team: {

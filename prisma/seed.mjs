@@ -115,6 +115,23 @@ async function main() {
     })
   }
 
+  await prisma.clubMembership.upsert({
+    where: {
+      userId_clubId: {
+        userId: user.id,
+        clubId: club.id,
+      },
+    },
+    update: {
+      role: 'OWNER',
+    },
+    create: {
+      userId: user.id,
+      clubId: club.id,
+      role: 'OWNER',
+    },
+  })
+
   let team = await prisma.team.findFirst({
     where: {
       clubId: club.id,

@@ -9,7 +9,8 @@ import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
 import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
+import { canManageMatchDay, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -163,17 +164,17 @@ const getMatchElapsedMilliseconds = (match: {
   return Math.max(0, firstHalfElapsed) + Math.max(0, secondHalfElapsed)
 }
 
-async function getOwnedMatch(matchDayId: string) {
-  const user = await getLocalUser()
+async function getActionableMatch(matchDayId: string, permission: 'manage' | 'run') {
+  const user = await getCurrentUser()
+  const allowed = permission === 'manage'
+    ? await canManageMatchDay(user.id, matchDayId)
+    : await canRunMatchDay(user.id, matchDayId)
+
+  if (!allowed) return null
 
   return prisma.matchDay.findFirst({
     where: {
       id: matchDayId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
     },
     include: {
       team: {
@@ -209,7 +210,7 @@ async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
   const matchDayId = getTextValue(formData, 'matchDayId')
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Squad can only be changed before the match starts.' }
@@ -266,7 +267,7 @@ async function updateMatchSquadPlayer(
     return { ok: false, reason: 'Squad status is invalid.' }
   }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Squad can only be changed before the match starts.' }
@@ -348,7 +349,7 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
 
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Tracking focus can only be changed before the match starts.' }
@@ -398,7 +399,7 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
   )
   if (invalidEventType) return { ok: false, reason: 'Event type is invalid.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Event setup can only be changed before the match starts.' }
@@ -429,7 +430,7 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
   const matchDayId = getTextValue(formData, 'matchDayId')
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'Completed matches cannot be started.' }
@@ -481,7 +482,7 @@ async function endFirstHalf(formData: FormData): Promise<MatchActionResult> {
   const matchDayId = getTextValue(formData, 'matchDayId')
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'Completed matches are read-only.' }
@@ -530,7 +531,7 @@ async function startSecondHalf(formData: FormData): Promise<MatchActionResult> {
   const matchDayId = getTextValue(formData, 'matchDayId')
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'Completed matches are read-only.' }
@@ -589,7 +590,7 @@ async function completeMatch(formData: FormData): Promise<MatchActionResult> {
   const matchDayId = getTextValue(formData, 'matchDayId')
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'This match is already completed.' }
@@ -653,7 +654,7 @@ async function updateMatchScore(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Scores must be whole numbers and cannot be negative.' }
   }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'IN_PROGRESS') {
     return { ok: false, reason: 'Goals can only be added or undone during live play.' }
@@ -687,7 +688,7 @@ async function togglePlayerOnPitch(formData: FormData): Promise<MatchActionResul
     return { ok: false, reason: 'On-pitch target state is invalid.' }
   }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'Completed matches are read-only.' }
@@ -775,7 +776,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Event type is invalid.' }
   }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'IN_PROGRESS') {
     return { ok: false, reason: 'Events can only be recorded during live match play.' }
@@ -857,7 +858,7 @@ async function deleteMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Match and event are required.' }
   }
 
-  const match = await getOwnedMatch(matchDayId)
+  const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status === 'COMPLETED') {
     return { ok: false, reason: 'Completed match events are read-only.' }
@@ -885,15 +886,12 @@ export default async function MatchDayDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  if (!(await canViewMatchDay(user.id, id))) notFound()
+
   const match = await prisma.matchDay.findFirst({
     where: {
       id,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
     },
     include: {
       team: {

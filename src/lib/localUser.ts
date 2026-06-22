@@ -14,16 +14,40 @@ export async function getLocalUser() {
 }
 
 export async function ensureDefaultClub(userId: string) {
-  const existingClubCount = await prisma.club.count({
+  const existingClub = await prisma.club.findFirst({
     where: { userId },
   })
 
-  if (existingClubCount > 0) return
+  if (existingClub) {
+    await prisma.clubMembership.upsert({
+      where: {
+        userId_clubId: {
+          userId,
+          clubId: existingClub.id,
+        },
+      },
+      update: { role: 'OWNER' },
+      create: {
+        userId,
+        clubId: existingClub.id,
+        role: 'OWNER',
+      },
+    })
+    return
+  }
 
-  await prisma.club.create({
+  const club = await prisma.club.create({
     data: {
       userId,
       name: 'Demo Club',
+    },
+  })
+
+  await prisma.clubMembership.create({
+    data: {
+      userId,
+      clubId: club.id,
+      role: 'OWNER',
     },
   })
 }

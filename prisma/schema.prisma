@@ -9,24 +9,61 @@ datasource db {
 
 model User {
   id                String             @id @default(cuid())
+  clerkUserId       String?            @unique
   email             String             @unique
-  passwordHash      String
+  passwordHash      String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   clubs             Club[]
   fitnessTestTypes  FitnessTestType[]
+  memberships       ClubMembership[]
+  spectatorAccess   SpectatorAccess?
+}
+
+enum ClubRole {
+  OWNER
+  COACH
+  ASSISTANT_COACH
+  VIEWER
 }
 
 model Club {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  location  String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  teams     Team[]
+  id          String             @id @default(cuid())
+  userId      String
+  name        String
+  location    String?
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teams       Team[]
+  memberships ClubMembership[]
+  spectators  SpectatorAccess[]
+}
+
+model ClubMembership {
+  id              String           @id @default(cuid())
+  userId          String
+  clubId          String
+  role            ClubRole
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club            Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  teamAssignments TeamAssignment[]
+
+  @@unique([userId, clubId])
+}
+
+model TeamAssignment {
+  id           String         @id @default(cuid())
+  membershipId String
+  teamId       String
+  createdAt    DateTime       @default(now())
+  membership   ClubMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  team         Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([membershipId, teamId])
 }
 
 model Team {
@@ -43,6 +80,7 @@ model Team {
   players             Player[]
   fitnessTestSessions FitnessTestSession[]
   matchDays           MatchDay[]
+  assignments         TeamAssignment[]
 }
 
 model MatchDay {
@@ -195,6 +233,21 @@ model Player {
   matchDayPlayers    MatchDayPlayer[]
   matchPlayerStints  MatchPlayerStint[]
   matchEvents         MatchEvent[]
+  spectatorAccess     SpectatorAccess[]
+}
+
+model SpectatorAccess {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  clubId    String
+  playerId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([clubId, playerId, userId])
 }
 
 model FitnessTestType {

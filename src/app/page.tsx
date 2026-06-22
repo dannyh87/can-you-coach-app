@@ -3,9 +3,10 @@ import Link from 'next/link'
 import ActionLink from '@/components/ui/ActionLink'
 import EmptyState from '@/components/ui/EmptyState'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
+import { accessibleMatchWhere, accessibleSessionWhere, accessibleTeamWhere } from '@/lib/accessWhere'
+import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
-import { getLocalUser } from '@/lib/localUser'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -79,14 +80,10 @@ const getFitnessSessionHref = (session: {
 }
 
 export default async function Home() {
-  const user = await getLocalUser()
-  const ownershipWhere = {
-    team: {
-      club: {
-        userId: user.id,
-      },
-    },
-  }
+  const user = await getCurrentUser()
+  const teamWhere = await accessibleTeamWhere(user.id)
+  const sessionWhere = await accessibleSessionWhere(user.id)
+  const matchWhere = await accessibleMatchWhere(user.id)
 
   const [
     teamCount,
@@ -96,20 +93,16 @@ export default async function Home() {
     recentFitnessSessions,
     recentMatches,
   ] = await Promise.all([
-    prisma.team.count({ where: { club: { userId: user.id } } }),
+    prisma.team.count({ where: teamWhere }),
     prisma.player.count({
       where: {
         isActive: true,
-        team: {
-          club: {
-            userId: user.id,
-          },
-        },
+        team: teamWhere,
       },
     }),
     prisma.fitnessTestSession.findMany({
       where: {
-        ...ownershipWhere,
+        ...sessionWhere,
         status: 'IN_PROGRESS',
       },
       include: {
@@ -122,7 +115,7 @@ export default async function Home() {
     }),
     prisma.matchDay.findMany({
       where: {
-        ...ownershipWhere,
+        ...matchWhere,
         status: { in: ['IN_PROGRESS', 'HALF_TIME'] },
       },
       include: {
@@ -132,7 +125,7 @@ export default async function Home() {
       take: 3,
     }),
     prisma.fitnessTestSession.findMany({
-      where: ownershipWhere,
+      where: sessionWhere,
       include: {
         team: { include: { club: true } },
         fitnessTestType: true,
@@ -142,7 +135,7 @@ export default async function Home() {
       take: 4,
     }),
     prisma.matchDay.findMany({
-      where: ownershipWhere,
+      where: matchWhere,
       include: {
         team: { include: { club: true } },
       },

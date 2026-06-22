@@ -1,6 +1,8 @@
 import ClubSetupClient from '@/app/club-setup/ClubSetupClient'
 import PageHeader from '@/components/ui/PageHeader'
-import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
+import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { ensureDefaultClub } from '@/lib/localUser'
+import { isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 
@@ -11,17 +13,6 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-async function userOwnsClub(userId: string, clubId: string) {
-  const club = await prisma.club.findFirst({
-    where: {
-      id: clubId,
-      userId,
-    },
-  })
-
-  return Boolean(club)
-}
-
 type SetupActionResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -29,7 +20,7 @@ type SetupActionResult =
 async function updateClub(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
   const name = getTextValue(formData, 'name')
   const location = getTextValue(formData, 'location')
@@ -39,8 +30,8 @@ async function updateClub(formData: FormData): Promise<SetupActionResult> {
     return { ok: false, reason: 'Club name is required.' }
   }
 
-  if (!(await userOwnsClub(user.id, id))) {
-    return { ok: false, reason: 'Club was not found.' }
+  if (!(await isOwnerForClub(user.id, id))) {
+    return { ok: false, reason: 'You cannot update this club.' }
   }
 
   await prisma.club.update({
@@ -60,7 +51,7 @@ async function updateClub(formData: FormData): Promise<SetupActionResult> {
 async function createTeam(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const clubId = getTextValue(formData, 'clubId')
   const name = getTextValue(formData, 'name')
   const ageGroup = getTextValue(formData, 'ageGroup')
@@ -72,7 +63,7 @@ async function createTeam(formData: FormData): Promise<SetupActionResult> {
     return { ok: false, reason: 'Club, team name, age group and season are required.' }
   }
 
-  if (!(await userOwnsClub(user.id, clubId))) {
+  if (!(await isOwnerForClub(user.id, clubId))) {
     return { ok: false, reason: 'You cannot add a team to this club.' }
   }
 
@@ -95,7 +86,7 @@ async function createTeam(formData: FormData): Promise<SetupActionResult> {
 async function updateTeam(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
   const clubId = getTextValue(formData, 'clubId')
   const name = getTextValue(formData, 'name')
@@ -108,7 +99,7 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
     return { ok: false, reason: 'Club, team name, age group and season are required.' }
   }
 
-  if (!(await userOwnsClub(user.id, clubId))) {
+  if (!(await isOwnerForClub(user.id, clubId))) {
     return { ok: false, reason: 'You cannot move this team to that club.' }
   }
 
@@ -116,7 +107,12 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
     where: {
       id,
       club: {
-        userId: user.id,
+        memberships: {
+          some: {
+            userId: user.id,
+            role: 'OWNER',
+          },
+        },
       },
     },
   })
@@ -143,7 +139,7 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
 async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
 
   if (!id) return { ok: false, reason: 'Missing team.' }
@@ -152,7 +148,12 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
     where: {
       id,
       club: {
-        userId: user.id,
+        memberships: {
+          some: {
+            userId: user.id,
+            role: 'OWNER',
+          },
+        },
       },
     },
     include: {
@@ -187,11 +188,18 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
 }
 
 export default async function ClubSetupPage() {
-  const user = await getLocalUser()
-  await ensureDefaultClub(user.id)
+  const user = await getCurrentUser()
+  if (!isClerkEnabled()) await ensureDefaultClub(user.id)
 
   const clubs = await prisma.club.findMany({
-    where: { userId: user.id },
+    where: {
+      memberships: {
+        some: {
+          userId: user.id,
+          role: 'OWNER',
+        },
+      },
+    },
     include: {
       teams: {
         include: {

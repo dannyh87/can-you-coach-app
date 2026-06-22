@@ -5,7 +5,10 @@ import MatchDayClient from '@/app/match-day/MatchDayClient'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
-import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
+import { accessibleMatchWhere, accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
+import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { ensureDefaultClub } from '@/lib/localUser'
+import { canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -48,24 +51,10 @@ const getStatusClasses = (status: string) => {
   return 'bg-gray-100 text-gray-700'
 }
 
-async function userOwnsTeam(userId: string, teamId: string) {
-  const team = await prisma.team.findFirst({
-    where: {
-      id: teamId,
-      club: {
-        userId,
-      },
-    },
-    select: { id: true },
-  })
-
-  return Boolean(team)
-}
-
 async function createMatchDay(formData: FormData): Promise<MatchActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const teamId = getTextValue(formData, 'teamId')
   const date = getTextValue(formData, 'date')
   const kickoffTime = getTextValue(formData, 'kickoffTime')
@@ -88,7 +77,7 @@ async function createMatchDay(formData: FormData): Promise<MatchActionResult> {
     return { ok: false, reason: 'Venue is invalid.' }
   }
 
-  if (!(await userOwnsTeam(user.id, teamId))) {
+  if (!(await canManageTeamData(user.id, teamId))) {
     return { ok: false, reason: 'You cannot create a match for this team.' }
   }
 
@@ -112,27 +101,18 @@ async function createMatchDay(formData: FormData): Promise<MatchActionResult> {
 }
 
 export default async function MatchDayPage() {
-  const user = await getLocalUser()
-  await ensureDefaultClub(user.id)
+  const user = await getCurrentUser()
+  if (!isClerkEnabled()) await ensureDefaultClub(user.id)
+  const manageableTeamIds = await getManageableTeamIds(user.id)
 
   const teams = await prisma.team.findMany({
-    where: {
-      club: {
-        userId: user.id,
-      },
-    },
+    where: await accessibleTeamWhere(user.id),
     include: { club: true },
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
 
   const matches = await prisma.matchDay.findMany({
-    where: {
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+    where: await accessibleMatchWhere(user.id),
     include: {
       team: {
         include: {
@@ -143,7 +123,7 @@ export default async function MatchDayPage() {
     orderBy: { kickoffAt: 'desc' },
   })
 
-  const teamOptions = teams.map((team) => ({
+  const teamOptions = teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => ({
     id: team.id,
     name: team.name,
     clubName: team.club.name,

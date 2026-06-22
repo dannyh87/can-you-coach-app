@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 
+import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
-import { getLocalUser } from '@/lib/localUser'
+import { canManageFitnessSession, canRecordFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 type StartFitnessTestMode = 'liveDropout' | 'liveTimedFinish'
@@ -24,7 +25,7 @@ export async function startFitnessTestSession(formData: FormData): Promise<
   | { ok: true; startedAt: string }
   | { ok: false; reason: string }
 > {
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
   const mode = getStartMode(formData)
 
@@ -36,15 +37,8 @@ export async function startFitnessTestSession(formData: FormData): Promise<
     return { ok: false, reason: 'Missing or invalid recording mode.' }
   }
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
     include: {
       fitnessTestType: true,
     },
@@ -52,6 +46,10 @@ export async function startFitnessTestSession(formData: FormData): Promise<
 
   if (!session) {
     return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (!(await canRecordFitnessSession(user.id, session.id))) {
+    return { ok: false, reason: 'You cannot record this fitness test.' }
   }
 
   const recordingModes = getFitnessRecordingModes(session.fitnessTestType)
@@ -99,26 +97,23 @@ export async function endFitnessTestSession(formData: FormData): Promise<
   | { ok: true; completedAt: string }
   | { ok: false; reason: string }
 > {
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
 
   if (!fitnessTestSessionId) {
     return { ok: false, reason: 'Missing fitness test session.' }
   }
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
   })
 
   if (!session) {
     return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (!(await canRecordFitnessSession(user.id, session.id))) {
+    return { ok: false, reason: 'You cannot record this fitness test.' }
   }
 
   if (session.status === 'DRAFT') {
@@ -156,26 +151,23 @@ export async function reopenFitnessTestSession(formData: FormData): Promise<
   | { ok: true }
   | { ok: false; reason: string }
 > {
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestSessionId = getTextValue(formData, 'fitnessTestSessionId')
 
   if (!fitnessTestSessionId) {
     return { ok: false, reason: 'Missing fitness test session.' }
   }
 
-  const session = await prisma.fitnessTestSession.findFirst({
-    where: {
-      id: fitnessTestSessionId,
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+  const session = await prisma.fitnessTestSession.findUnique({
+    where: { id: fitnessTestSessionId },
   })
 
   if (!session) {
     return { ok: false, reason: 'Fitness test session was not found.' }
+  }
+
+  if (!(await canManageFitnessSession(user.id, session.id))) {
+    return { ok: false, reason: 'You cannot reopen this fitness test.' }
   }
 
   if (session.status !== 'COMPLETED') {

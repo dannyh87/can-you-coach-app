@@ -5,7 +5,10 @@ import PlayersClient from '@/app/players/PlayersClient'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
-import { ensureDefaultClub, getLocalUser } from '@/lib/localUser'
+import { accessiblePlayerWhere, accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
+import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { ensureDefaultClub } from '@/lib/localUser'
+import { canManagePlayer, canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -38,34 +41,6 @@ const formatDateDisplayValue = (date: Date | null) => {
   return new Intl.DateTimeFormat('en-GB').format(date)
 }
 
-async function userOwnsTeam(userId: string, teamId: string) {
-  const team = await prisma.team.findFirst({
-    where: {
-      id: teamId,
-      club: {
-        userId,
-      },
-    },
-  })
-
-  return Boolean(team)
-}
-
-async function userOwnsPlayer(userId: string, playerId: string) {
-  const player = await prisma.player.findFirst({
-    where: {
-      id: playerId,
-      team: {
-        club: {
-          userId,
-        },
-      },
-    },
-  })
-
-  return Boolean(player)
-}
-
 type PlayerActionResult =
   | { ok: true }
   | { ok: false; reason: string }
@@ -73,7 +48,7 @@ type PlayerActionResult =
 async function createPlayer(formData: FormData): Promise<PlayerActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const teamId = getTextValue(formData, 'teamId')
   const firstName = getTextValue(formData, 'firstName')
   const surname = getTextValue(formData, 'surname')
@@ -86,7 +61,7 @@ async function createPlayer(formData: FormData): Promise<PlayerActionResult> {
     return { ok: false, reason: 'Team, name and position are required.' }
   }
 
-  if (!(await userOwnsTeam(user.id, teamId))) {
+  if (!(await canManageTeamData(user.id, teamId))) {
     return { ok: false, reason: 'You cannot add a player to this team.' }
   }
 
@@ -110,7 +85,7 @@ async function createPlayer(formData: FormData): Promise<PlayerActionResult> {
 async function updatePlayer(formData: FormData): Promise<PlayerActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
   const teamId = getTextValue(formData, 'teamId')
   const firstName = getTextValue(formData, 'firstName')
@@ -124,11 +99,11 @@ async function updatePlayer(formData: FormData): Promise<PlayerActionResult> {
     return { ok: false, reason: 'Team, name and position are required.' }
   }
 
-  if (!(await userOwnsPlayer(user.id, id))) {
+  if (!(await canManagePlayer(user.id, id))) {
     return { ok: false, reason: 'Player was not found.' }
   }
 
-  if (!(await userOwnsTeam(user.id, teamId))) {
+  if (!(await canManageTeamData(user.id, teamId))) {
     return { ok: false, reason: 'You cannot move this player to that team.' }
   }
 
@@ -153,11 +128,11 @@ async function updatePlayer(formData: FormData): Promise<PlayerActionResult> {
 async function archivePlayer(formData: FormData): Promise<PlayerActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
 
   if (!id) return { ok: false, reason: 'Missing player.' }
-  if (!(await userOwnsPlayer(user.id, id))) {
+  if (!(await canManagePlayer(user.id, id))) {
     return { ok: false, reason: 'Player was not found.' }
   }
 
@@ -174,11 +149,11 @@ async function archivePlayer(formData: FormData): Promise<PlayerActionResult> {
 async function restorePlayer(formData: FormData): Promise<PlayerActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
 
   if (!id) return { ok: false, reason: 'Missing player.' }
-  if (!(await userOwnsPlayer(user.id, id))) {
+  if (!(await canManagePlayer(user.id, id))) {
     return { ok: false, reason: 'Player was not found.' }
   }
 
@@ -193,15 +168,12 @@ async function restorePlayer(formData: FormData): Promise<PlayerActionResult> {
 }
 
 export default async function PlayersPage() {
-  const user = await getLocalUser()
-  await ensureDefaultClub(user.id)
+  const user = await getCurrentUser()
+  if (!isClerkEnabled()) await ensureDefaultClub(user.id)
+  const manageableTeamIds = await getManageableTeamIds(user.id)
 
   const teams = await prisma.team.findMany({
-    where: {
-      club: {
-        userId: user.id,
-      },
-    },
+    where: await accessibleTeamWhere(user.id),
     include: {
       club: true,
     },
@@ -209,13 +181,7 @@ export default async function PlayersPage() {
   })
 
   const players = await prisma.player.findMany({
-    where: {
-      team: {
-        club: {
-          userId: user.id,
-        },
-      },
-    },
+    where: await accessiblePlayerWhere(user.id),
     include: {
       team: {
         include: {
@@ -226,7 +192,7 @@ export default async function PlayersPage() {
     orderBy: [{ isActive: 'desc' }, { surname: 'asc' }, { firstName: 'asc' }],
   })
 
-  const teamOptions = teams.map((team) => ({
+  const teamOptions = teams.filter((team) => manageableTeamIds.includes(team.id)).map((team) => ({
     id: team.id,
     name: team.name,
     clubName: team.club.name,

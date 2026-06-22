@@ -2,7 +2,8 @@ import Link from 'next/link'
 
 import FitnessProgressChart from '@/components/FitnessProgressChart'
 import EmptyState from '@/components/ui/EmptyState'
-import { getLocalUser } from '@/lib/localUser'
+import { accessibleTeamWhere } from '@/lib/accessWhere'
+import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -106,14 +107,11 @@ export default async function FitnessProgressPage({
   searchParams: Promise<SearchParams>
 }) {
   const { teamId, fitnessTestTypeId, playerId } = await searchParams
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
+  const teamWhere = await accessibleTeamWhere(user.id)
 
   const teams = await prisma.team.findMany({
-    where: {
-      club: {
-        userId: user.id,
-      },
-    },
+    where: teamWhere,
     include: {
       club: true,
     },
@@ -130,10 +128,8 @@ export default async function FitnessProgressPage({
   const selectedTeam = teamId
     ? await prisma.team.findFirst({
         where: {
+          AND: [teamWhere],
           id: teamId,
-          club: {
-            userId: user.id,
-          },
         },
         include: {
           club: true,
@@ -171,11 +167,6 @@ export default async function FitnessProgressPage({
               teamId: selectedTeam.id,
               fitnessTestTypeId: selectedFitnessTestType.id,
               status: 'COMPLETED',
-              team: {
-                club: {
-                  userId: user.id,
-                },
-              },
             },
           },
           include: {

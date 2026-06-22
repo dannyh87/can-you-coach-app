@@ -11,7 +11,7 @@ import {
   serializeAllowedRecordingModes,
   type FitnessRecordingMode,
 } from '@/lib/fitnessRecordingModes'
-import { getLocalUser } from '@/lib/localUser'
+import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +39,7 @@ async function createFitnessTestType(
 ): Promise<FitnessTestTypeActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const name = getTextValue(formData, 'name')
   const resultUnit = getTextValue(formData, 'resultUnit')
   const higherIsBetter = getTextValue(formData, 'higherIsBetter') === 'true'
@@ -96,7 +96,7 @@ async function updateFitnessTestType(
 ): Promise<FitnessTestTypeActionResult> {
   'use server'
 
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const id = getTextValue(formData, 'id')
   const name = getTextValue(formData, 'name')
   const resultUnit = getTextValue(formData, 'resultUnit')
@@ -147,7 +147,7 @@ async function updateFitnessTestType(
 }
 
 export default async function FitnessTestTypesPage() {
-  const user = await getLocalUser()
+  const user = await getCurrentUser()
   const fitnessTestTypes = await prisma.fitnessTestType.findMany({
     where: {
       OR: [{ isDefault: true }, { userId: user.id }],
