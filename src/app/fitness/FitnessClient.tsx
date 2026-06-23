@@ -17,7 +17,6 @@ import {
 import FormField from '@/components/ui/FormField'
 import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
-import StatCard from '@/components/ui/StatCard'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 
@@ -101,6 +100,7 @@ export default function FitnessClient({
   const [sortBy, setSortBy] = useState<FitnessSortOption>('newest')
   const liveCount = sessions.filter((session) => session.status === 'IN_PROGRESS').length
   const completedCount = sessions.filter((session) => session.status === 'COMPLETED').length
+  const draftCount = sessions.filter((session) => session.status === 'DRAFT').length
   const teamFilterOptions = Array.from(
     new Set(sessions.map((session) => `${session.clubName} / ${session.teamName}`))
   ).sort((a, b) => a.localeCompare(b))
@@ -158,6 +158,15 @@ export default function FitnessClient({
   const clearFilters = () => {
     setSearchTerm('')
     setStatusFilter('all')
+    setTeamFilter('all')
+    setTestTypeFilter('all')
+    setRecordingModeFilter('all')
+    setSortBy('newest')
+  }
+
+  const showCompletedResults = () => {
+    setSearchTerm('')
+    setStatusFilter('COMPLETED')
     setTeamFilter('all')
     setTestTypeFilter('all')
     setRecordingModeFilter('all')
@@ -244,34 +253,52 @@ export default function FitnessClient({
         <Alert variant="success" className="mb-6">{message}</Alert>
       )}
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-3">
-        <StatCard label="Total sessions" value={sessions.length} />
-        <StatCard label="Live" value={liveCount} tone="warning" />
-        <StatCard label="Completed" value={completedCount} tone="success" />
-      </section>
-
-      <section className="mb-6 grid gap-3 rounded-2xl border border-blue-100 bg-blue-50 p-4 sm:grid-cols-3">
-        <WorkflowStep step="1" title="Create or select a test" description="Set the team, test type and date." />
-        <WorkflowStep step="2" title="Record results" description="Use the available manual or live mode." />
-        <WorkflowStep step="3" title="Review progress" description="Compare rankings, trends and exports." />
+      <section className="mb-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-950 to-slate-950 p-4 text-white shadow-sm sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-blue-200">Fitness tasks</p>
+            <h2 className="mt-1 text-2xl font-extrabold tracking-tight">What do you need to do?</h2>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[620px]">
+            <Button type="button" onClick={openAddModal} size="lg" className="bg-white text-blue-950 hover:bg-blue-50">
+              Start Fitness Test
+            </Button>
+            <Button type="button" onClick={showCompletedResults} variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+              View Results
+            </Button>
+            <ActionLink href="/fitness/progress" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+              View Progress
+            </ActionLink>
+            <ActionLink href="/fitness/test-types" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
+              Test Library
+            </ActionLink>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-blue-950">
+          <span className="rounded-full bg-white px-3 py-1">Sessions {sessions.length}</span>
+          <span className="rounded-full bg-amber-100 px-3 py-1">Live {liveCount}</span>
+          <span className="rounded-full bg-slate-100 px-3 py-1">Created {draftCount}</span>
+          <span className="rounded-full bg-green-100 px-3 py-1">Completed {completedCount}</span>
+        </div>
       </section>
 
       <SectionCard
-        title="Fitness Test Sessions"
-        description="Open a session to continue recording or review results."
+        title="Fitness Sessions"
+        description="Continue live tests or review completed results."
         actions={(
           <Button
             type="button"
             onClick={openAddModal}
+            size="sm"
           >
-            Add Fitness Test Session
+            Start Fitness Test
           </Button>
         )}
         bodyClassName="p-0"
       >
 
-        <div className="border-b border-slate-100 p-4">
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="border-b border-slate-100 bg-slate-50/60 p-3 sm:p-4">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px_auto] md:items-end">
             <label className="text-sm font-medium lg:col-span-2">
               Search
               <input
@@ -295,87 +322,88 @@ export default function FitnessClient({
                 <option value="COMPLETED">Completed</option>
               </select>
             </label>
-
-            <label className="text-sm font-medium">
-              Team
-              <select
-                value={teamFilter}
-                onChange={(event) => setTeamFilter(event.target.value)}
-                className={fieldClassName}
-              >
-                <option value="all">All teams</option>
-                {teamFilterOptions.map((team) => (
-                  <option key={team} value={team}>
-                    {team}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-medium">
-              Test type
-              <select
-                value={testTypeFilter}
-                onChange={(event) => setTestTypeFilter(event.target.value)}
-                className={fieldClassName}
-              >
-                <option value="all">All test types</option>
-                {testTypeFilterOptions.map((testType) => (
-                  <option key={testType} value={testType}>
-                    {testType}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="text-sm font-medium">
-              Sort
-              <select
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value as FitnessSortOption)}
-                className={fieldClassName}
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="testTypeAsc">Test type A-Z</option>
-                <option value="teamAsc">Team A-Z</option>
-                <option value="statusAsc">Status</option>
-                <option value="mostResults">Most results</option>
-                <option value="fewestResults">Fewest results</option>
-              </select>
-            </label>
+            {hasActiveFilters && (
+              <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
             <p>
               Showing {filteredAndSortedSessions.length} of {sessions.length} sessions.
             </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="font-medium text-gray-700">
-                Recording mode
-                <select
-                  value={recordingModeFilter}
-                  onChange={(event) => setRecordingModeFilter(event.target.value)}
-                  className="ml-2 rounded border p-2 text-sm font-normal text-gray-900"
-                >
-                  <option value="all">All</option>
-                  {recordingModeFilterOptions.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {mode}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="text-sm font-medium text-blue-600 hover:underline"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
+            <details className="w-full rounded-xl border border-slate-200 bg-white p-3 md:w-auto md:min-w-[360px]">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                More filters
+              </summary>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Team
+                  <select
+                    value={teamFilter}
+                    onChange={(event) => setTeamFilter(event.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="all">All teams</option>
+                    {teamFilterOptions.map((team) => (
+                      <option key={team} value={team}>
+                        {team}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium text-slate-700">
+                  Test type
+                  <select
+                    value={testTypeFilter}
+                    onChange={(event) => setTestTypeFilter(event.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="all">All test types</option>
+                    {testTypeFilterOptions.map((testType) => (
+                      <option key={testType} value={testType}>
+                        {testType}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium text-slate-700">
+                  Recording mode
+                  <select
+                    value={recordingModeFilter}
+                    onChange={(event) => setRecordingModeFilter(event.target.value)}
+                    className={fieldClassName}
+                  >
+                    <option value="all">All modes</option>
+                    {recordingModeFilterOptions.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {mode}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="text-sm font-medium text-slate-700">
+                  Sort
+                  <select
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value as FitnessSortOption)}
+                    className={fieldClassName}
+                  >
+                    <option value="newest">Newest first</option>
+                    <option value="oldest">Oldest first</option>
+                    <option value="testTypeAsc">Test type A-Z</option>
+                    <option value="teamAsc">Team A-Z</option>
+                    <option value="statusAsc">Status</option>
+                    <option value="mostResults">Most results</option>
+                    <option value="fewestResults">Fewest results</option>
+                  </select>
+                </label>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -404,24 +432,22 @@ export default function FitnessClient({
                     </div>
                     <StatusBadge label={session.statusLabel} variant={getStatusBadgeVariant(session.statusLabel)} />
                   </div>
-                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-lg bg-slate-50 p-3">
-                      <dt className="text-gray-500">Date</dt>
-                      <dd className="mt-1 font-semibold text-gray-900">{session.dateDisplay}</dd>
+                  <dl className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                    <div className="rounded-full bg-slate-100 px-3 py-1">
+                      <dt className="sr-only">Date</dt>
+                      <dd>{session.dateDisplay}</dd>
                     </div>
-                    <div className="rounded-lg bg-slate-50 p-3">
-                      <dt className="text-gray-500">Results</dt>
-                      <dd className="mt-1 font-semibold text-gray-900">{session.resultCount}</dd>
+                    <div className="rounded-full bg-slate-100 px-3 py-1">
+                      <dt className="sr-only">Results</dt>
+                      <dd>{session.resultCount} results</dd>
                     </div>
-                    <div className="col-span-2 rounded-lg bg-slate-50 p-3">
-                      <dt className="text-gray-500">Recording mode</dt>
-                      <dd className="mt-1 font-semibold text-gray-900">
-                        {session.recordingModeLabel}
-                      </dd>
+                    <div className="rounded-full bg-slate-100 px-3 py-1">
+                      <dt className="sr-only">Recording mode</dt>
+                      <dd>{session.recordingModeLabel}</dd>
                     </div>
                   </dl>
                 </button>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-2">
                   <SessionActions session={session} />
                 </div>
               </article>
@@ -471,7 +497,7 @@ export default function FitnessClient({
       {modalMode && (
         <ModalShell
           title={modalMode === 'add'
-            ? 'Add Fitness Test Session'
+            ? 'Start Fitness Test'
             : modalMode === 'delete'
               ? 'Confirm Delete Session'
               : selectedSession?.fitnessTestTypeName ?? 'Fitness Session'}
@@ -590,28 +616,6 @@ function CreateSessionForm({
         </Button>
       </div>
     </form>
-  )
-}
-
-function WorkflowStep({
-  step,
-  title,
-  description,
-}: {
-  step: string
-  title: string
-  description: string
-}) {
-  return (
-    <div className="flex gap-3 rounded-xl bg-white/80 p-3">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
-        {step}
-      </span>
-      <div>
-        <h2 className="text-sm font-bold text-blue-950">{title}</h2>
-        <p className="mt-1 text-sm text-blue-900">{description}</p>
-      </div>
-    </div>
   )
 }
 

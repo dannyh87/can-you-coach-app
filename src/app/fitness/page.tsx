@@ -208,20 +208,7 @@ export default async function FitnessPage() {
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
       <PageHeader
         title="Fitness Testing"
-        description="Create a test session, record results using the right mode, then review rankings and progress with the squad."
-        actions={(
-          <>
-            <Link href="/fitness/progress" className="text-sm font-semibold text-blue-800 hover:underline">
-              View Progress
-            </Link>
-            <Link href="/fitness/test-types" className="text-sm font-semibold text-blue-800 hover:underline">
-              Fitness Test Types
-            </Link>
-            <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
-              Club Setup
-            </Link>
-          </>
-        )}
+        description="Start a test, continue recording, or review results."
       />
 
       {teams.length === 0 ? (
