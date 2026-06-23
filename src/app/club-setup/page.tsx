@@ -106,20 +106,16 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
   const team = await prisma.team.findFirst({
     where: {
       id,
-      club: {
-        is: {
-          memberships: {
-            some: {
-              userId: user.id,
-              role: 'OWNER',
-            },
-          },
-        },
-      },
+    },
+    select: {
+      id: true,
+      clubId: true,
     },
   })
 
-  if (!team) return { ok: false, reason: 'Team was not found.' }
+  if (!team || !(await isOwnerForClub(user.id, team.clubId))) {
+    return { ok: false, reason: 'Team was not found.' }
+  }
 
   await prisma.team.update({
     where: { id },
@@ -149,16 +145,6 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
   const team = await prisma.team.findFirst({
     where: {
       id,
-      club: {
-        is: {
-          memberships: {
-            some: {
-              userId: user.id,
-              role: 'OWNER',
-            },
-          },
-        },
-      },
     },
     include: {
       _count: {
@@ -171,7 +157,9 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
     },
   })
 
-  if (!team) return { ok: false, reason: 'Team was not found.' }
+  if (!team || !(await isOwnerForClub(user.id, team.clubId))) {
+    return { ok: false, reason: 'Team was not found.' }
+  }
 
   if (
     team._count.players > 0 ||
