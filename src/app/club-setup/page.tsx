@@ -183,13 +183,18 @@ export default async function ClubSetupPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
 
+  const ownerMemberships = await prisma.clubMembership.findMany({
+    where: {
+      userId: user.id,
+      role: 'OWNER',
+    },
+    select: { clubId: true },
+  })
+
   const clubs = await prisma.club.findMany({
     where: {
-      memberships: {
-        some: {
-          userId: user.id,
-          role: 'OWNER',
-        },
+      id: {
+        in: ownerMemberships.map((membership) => membership.clubId),
       },
     },
     include: {
