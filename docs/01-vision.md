@@ -49,3 +49,29 @@ The app is intentionally pragmatic. It is designed for volunteer and grassroots 
 ## Long-Term Direction
 
 The long-term product can grow into player development reporting across fitness, technical, tactical, and match involvement data. The current build establishes the data model and workflows needed to test that direction with real coaches.
+
+## Product Direction: Coaching Development Loop
+
+Can You Coach should not try to compete directly with FA Matchday or Full-Time as a match administration app. Match Day should remain a lightweight coaching observation and review tool, not a duplicate fixture, registration, referee, or league admin system.
+
+The stronger long-term direction is to help coaches turn what they see into what they coach:
+
+Observation -> Training Theme -> Training Block -> Session Plan -> Player/Team Outcomes -> Review
+
+Future feature development should explore Training Blocks and Session Planning using the FA 4 Corner Model:
+
+- Technical/Tactical
+- Physical
+- Psychological
+- Social
+
+Over time, the app should help coaches:
+
+- capture what went well or poorly in a match
+- turn observations into a coaching theme
+- build a 4-week training block
+- design training sessions linked to that theme
+- set player and team outcomes
+- review whether those outcomes improved over time
+
+This is not part of the current MVP implementation. Match Day should stay lightweight, coaching-focused, and connected to observation and review rather than growing into a full match administration replacement.
