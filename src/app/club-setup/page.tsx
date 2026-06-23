@@ -107,10 +107,12 @@ async function updateTeam(formData: FormData): Promise<SetupActionResult> {
     where: {
       id,
       club: {
-        memberships: {
-          some: {
-            userId: user.id,
-            role: 'OWNER',
+        is: {
+          memberships: {
+            some: {
+              userId: user.id,
+              role: 'OWNER',
+            },
           },
         },
       },
@@ -148,10 +150,12 @@ async function deleteTeam(formData: FormData): Promise<SetupActionResult> {
     where: {
       id,
       club: {
-        memberships: {
-          some: {
-            userId: user.id,
-            role: 'OWNER',
+        is: {
+          memberships: {
+            some: {
+              userId: user.id,
+              role: 'OWNER',
+            },
           },
         },
       },
