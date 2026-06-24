@@ -120,6 +120,11 @@ export default function MatchControlClient({
   const awayLabel = venue === 'AWAY' ? teamName : opposition
   const homeScore = venue === 'AWAY' ? oppositionScore : ownScore
   const awayScore = venue === 'AWAY' ? ownScore : oppositionScore
+  const scoreStatusMessage = canUpdateScore
+    ? 'Score controls are live while the match clock is running.'
+    : status === 'HALF_TIME'
+      ? 'Score changes are paused at half-time.'
+      : 'Score controls are locked because the match is not live.'
 
   useEffect(() => {
     if (!activeHalfStartedAt) return
@@ -244,30 +249,38 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className="mt-6 space-y-4 rounded-2xl bg-gray-50 p-5 shadow-sm">
-      <div>
-        <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Live match</p>
-        <h2 className="mt-1 text-2xl font-bold">Score and clock</h2>
+    <section className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-4 shadow-sm sm:mt-6 sm:p-5">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Live match</p>
+          <h2 className="mt-1 text-xl font-bold sm:text-2xl">Score and clock</h2>
+        </div>
+        <p className={`rounded-full px-3 py-1 text-xs font-semibold ${canUpdateScore ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>
+          {canUpdateScore ? 'Score live' : 'Score paused'}
+        </p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-        <div className="rounded-xl bg-white p-5 text-center shadow-sm">
+      <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+        <div className="rounded-xl bg-white p-4 text-center shadow-sm sm:p-5">
           <p className="text-sm font-medium text-gray-500">Score</p>
-          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
-            <p className="break-words text-sm font-bold sm:text-lg">{homeLabel}</p>
+          <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
+            <p className="break-words text-xs font-bold sm:text-lg">{homeLabel}</p>
             <p className="text-4xl font-bold tabular-nums sm:text-6xl">
               {homeScore}-{awayScore}
             </p>
-            <p className="break-words text-sm font-bold sm:text-lg">{awayLabel}</p>
+            <p className="break-words text-xs font-bold sm:text-lg">{awayLabel}</p>
           </div>
+          <p className={`mt-3 rounded-lg px-3 py-2 text-xs font-medium ${canUpdateScore ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`}>
+            {scoreStatusMessage}
+          </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
           <TimerCard label="Current half" value={currentHalfLabel} highlight />
           <TimerCard label="Elapsed time" value={formatDuration(currentElapsed)} highlight />
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3">
         <TimerCard label="First half duration" value={formatDuration(firstHalfDuration)} />
         <TimerCard label="Second half duration" value={formatDuration(secondHalfDuration)} />
       </div>
@@ -291,14 +304,14 @@ export default function MatchControlClient({
       )}
 
       {!isCompleted && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3 lg:grid-cols-2">
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Match controls</h2>
             {lifecycleButton ? (
               <button
                 type="button"
                 onClick={() => runLifecycleAction(lifecycleButton)}
-                className="mt-3 w-full rounded-lg bg-green-700 px-4 py-4 text-lg font-bold text-white disabled:opacity-50"
+                className="mt-3 w-full rounded-lg bg-green-700 px-4 py-3 text-base font-bold text-white disabled:opacity-50 sm:py-4 sm:text-lg"
                 disabled={Boolean(pendingAction)}
               >
                 {pendingAction === lifecycleButton.label
@@ -317,7 +330,7 @@ export default function MatchControlClient({
             <p className="mt-1 text-sm text-gray-500">
               Add goals during live play. These buttons update the score only and do not record player events.
             </p>
-            <p className="mt-2 text-sm font-medium text-blue-800">
+            <p className="mt-2 text-xs font-medium text-blue-800 sm:text-sm">
               To record who had a shot, assist, pass or goal event, use Event recording below.
             </p>
 
@@ -326,8 +339,8 @@ export default function MatchControlClient({
                 Goal recording is paused at half-time. Start the second half to continue.
               </p>
             ) : (
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="mt-3 space-y-2 sm:space-y-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <GoalButton
                     label={`${teamName} GOAL!`}
                     disabled={Boolean(pendingAction) || !canUpdateScore}
@@ -349,7 +362,7 @@ export default function MatchControlClient({
                     }
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
                   <UndoGoalButton
                     label={`Undo ${teamName} goal`}
                     disabled={Boolean(pendingAction) || !canUpdateScore || ownScore <= 0}
@@ -396,9 +409,9 @@ function TimerCard({
   highlight?: boolean
 }) {
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className={`mt-1 font-bold tabular-nums ${highlight ? 'text-3xl' : 'text-xl'}`}>
+    <div className="rounded-xl bg-white p-3 shadow-sm sm:p-4">
+      <p className="text-xs text-gray-500 sm:text-sm">{label}</p>
+      <p className={`mt-1 font-bold tabular-nums ${highlight ? 'text-2xl sm:text-3xl' : 'text-base sm:text-xl'}`}>
         {value}
       </p>
     </div>
@@ -418,7 +431,7 @@ function GoalButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg bg-green-700 px-4 py-4 text-base font-extrabold text-white disabled:opacity-50"
+      className="rounded-lg bg-green-700 px-3 py-3 text-sm font-extrabold text-white disabled:opacity-50 sm:px-4 sm:py-4 sm:text-base"
       disabled={disabled}
     >
       {label}
@@ -439,7 +452,7 @@ function UndoGoalButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border bg-white px-4 py-3 text-sm font-semibold text-red-700 disabled:opacity-50"
+      className="rounded-lg border bg-white px-3 py-2.5 text-xs font-semibold text-red-700 disabled:opacity-50 sm:px-4 sm:py-3 sm:text-sm"
       disabled={disabled}
     >
       {label}

@@ -194,11 +194,11 @@ export default function MatchEventsClient({
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="rounded-xl bg-white p-3 shadow-sm sm:p-4">
       <div>
-        <h2 className="text-xl font-bold">Event recording</h2>
-        <p className="mt-1 text-sm text-gray-400">
-          Choose player first or event first, then tap once to record the action.
+        <h2 className="text-lg font-bold sm:text-xl">Event recording</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Pick the fastest flow for the moment, then tap once to record.
         </p>
       </div>
 
@@ -248,19 +248,21 @@ export default function MatchEventsClient({
       )}
 
       {canRecord && players.length > 0 && (
-        <div className="mt-4 space-y-5">
+        <div className="mt-4 space-y-4">
           {eventOptions.length === 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               No event types were selected before kick-off, so there are no event buttons available for this match. Goal buttons can still update the score, but player event recording is unavailable.
             </p>
           ) : (
             <>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-                <p className="font-bold">Selected event buttons</p>
-                <p className="mt-1">
+              <details className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+                <summary className="cursor-pointer font-bold">
+                  Event buttons selected ({eventOptions.length})
+                </summary>
+                <p className="mt-2">
                   {eventOptions.map((eventOption) => eventOption.label).join(', ')}
                 </p>
-              </div>
+              </details>
 
               {visibleCategories.length === 0 ? (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -268,7 +270,7 @@ export default function MatchEventsClient({
                 </p>
               ) : (
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                     Event category
                   </h3>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -286,7 +288,7 @@ export default function MatchEventsClient({
                             )
                             if (firstCategoryEvent) setSelectedEventType(firstCategoryEvent.value)
                           }}
-                          className={`rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-40 ${
+                          className={`rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:text-sm ${
                             isSelected
                               ? 'border-blue-600 bg-blue-50 text-blue-900'
                               : 'bg-white text-gray-900'
@@ -303,35 +305,42 @@ export default function MatchEventsClient({
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-2 rounded-xl bg-gray-100 p-1">
-            <button
-              type="button"
-              onClick={() => setRecordingMode('PLAYER_FIRST')}
-              className={`rounded-lg px-4 py-3 text-sm font-bold transition sm:text-base ${
-                recordingMode === 'PLAYER_FIRST'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-700'
-              }`}
-            >
-              Player first
-            </button>
-            <button
-              type="button"
-              onClick={() => setRecordingMode('EVENT_FIRST')}
-              className={`rounded-lg px-4 py-3 text-sm font-bold transition sm:text-base ${
-                recordingMode === 'EVENT_FIRST'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-gray-700'
-              }`}
-            >
-              Event first
-            </button>
+          <div className="rounded-xl bg-gray-100 p-1">
+            <p className="px-2 pb-1 pt-1 text-xs font-medium text-gray-600">
+              Choose how you want to record
+            </p>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => setRecordingMode('PLAYER_FIRST')}
+                className={`rounded-lg px-3 py-2.5 text-left text-sm font-bold transition sm:px-4 sm:py-3 sm:text-base ${
+                  recordingMode === 'PLAYER_FIRST'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-700'
+                }`}
+              >
+                <span className="block">Player first</span>
+                <span className="block text-xs font-medium opacity-80">Pick player, tap event</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecordingMode('EVENT_FIRST')}
+                className={`rounded-lg px-3 py-2.5 text-left text-sm font-bold transition sm:px-4 sm:py-3 sm:text-base ${
+                  recordingMode === 'EVENT_FIRST'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-gray-700'
+                }`}
+              >
+                <span className="block">Event first</span>
+                <span className="block text-xs font-medium opacity-80">Pick event, tap player</span>
+              </button>
+            </div>
           </div>
 
           {eventOptions.length > 0 && recordingMode === 'PLAYER_FIRST' ? (
             <>
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   1. Players available for event tracking
                 </h3>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -343,14 +352,14 @@ export default function MatchEventsClient({
                         key={player.matchDayPlayerId}
                         type="button"
                         onClick={() => setSelectedPlayerId(player.matchDayPlayerId)}
-                        className={`rounded-lg border p-4 text-left font-medium ${
+                        className={`rounded-lg border p-3 text-left font-medium sm:p-4 ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50 text-blue-900'
                             : 'bg-white text-gray-900'
                         }`}
                       >
-                        <span className="block text-base font-bold">{formatPlayerName(player)}</span>
-                        <span className="mt-1 block text-sm text-gray-500">
+                        <span className="block truncate text-sm font-bold sm:text-base">{formatPlayerName(player)}</span>
+                        <span className="mt-1 block text-xs text-gray-500 sm:text-sm">
                           {formatSquadNumber(player.squadNumber)}
                         </span>
                       </button>
@@ -360,7 +369,7 @@ export default function MatchEventsClient({
               </div>
 
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   2. Tap event
                 </h3>
                 {selectedPlayer && (
@@ -368,7 +377,7 @@ export default function MatchEventsClient({
                     Selected player: <span className="font-bold">{formatPlayerName(selectedPlayer)}</span>. Now tap an event.
                   </p>
                 )}
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
@@ -383,7 +392,7 @@ export default function MatchEventsClient({
                         key={eventOption.value}
                         type="button"
                         onClick={() => recordEvent(eventOption.value, selectedPlayer)}
-                        className="rounded-lg border bg-white px-3 py-4 text-sm font-bold disabled:opacity-50"
+                        className="rounded-lg border bg-white px-3 py-3 text-sm font-bold disabled:opacity-50 sm:py-4"
                         disabled={!selectedPlayer || Boolean(pendingAction)}
                       >
                         {pendingAction === pendingKey ? 'Saving...' : eventOption.label}
@@ -396,10 +405,10 @@ export default function MatchEventsClient({
           ) : eventOptions.length > 0 ? (
             <>
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   1. Select event
                 </h3>
-                <div className="mt-2 grid grid-cols-2 gap-2">
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
@@ -412,7 +421,7 @@ export default function MatchEventsClient({
                         key={eventOption.value}
                         type="button"
                         onClick={() => setSelectedEventType(eventOption.value)}
-                        className={`rounded-lg border px-3 py-4 text-sm font-bold ${
+                        className={`rounded-lg border px-3 py-3 text-sm font-bold sm:py-4 ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50 text-blue-900'
                             : 'bg-white text-gray-900'
@@ -426,7 +435,7 @@ export default function MatchEventsClient({
               </div>
 
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   2. Players available for event tracking
                 </h3>
                 {selectedEvent && (
@@ -445,13 +454,13 @@ export default function MatchEventsClient({
                         key={player.matchDayPlayerId}
                         type="button"
                         onClick={() => recordEvent(effectiveSelectedEventType, player)}
-                        className="rounded-lg border bg-white p-4 text-left font-medium text-gray-900 disabled:opacity-50"
+                        className="rounded-lg border bg-white p-3 text-left font-medium text-gray-900 disabled:opacity-50 sm:p-4"
                         disabled={!effectiveSelectedEventType || Boolean(pendingAction)}
                       >
-                        <span className="block text-base font-bold">
+                        <span className="block truncate text-sm font-bold sm:text-base">
                           {pendingAction === pendingKey ? 'Saving...' : formatPlayerName(player)}
                         </span>
-                        <span className="mt-1 block text-sm text-gray-500">
+                        <span className="mt-1 block text-xs text-gray-500 sm:text-sm">
                           {formatSquadNumber(player.squadNumber)}
                         </span>
                       </button>
@@ -464,10 +473,12 @@ export default function MatchEventsClient({
         </div>
       )}
 
-      <div className="mt-6">
-        <h3 className="text-lg font-bold">Recent events and corrections</h3>
-        <p className="mt-1 text-sm text-gray-500">
-          Use undo only when an event was tapped by mistake.
+      <details className="mt-5 rounded-xl border bg-gray-50 p-3">
+        <summary className="cursor-pointer text-sm font-bold text-gray-900">
+          Recent events and corrections ({events.length})
+        </summary>
+        <p className="mt-2 text-sm text-gray-500">
+          Open this when you need to check or undo a mistaken tap.
         </p>
         {events.length === 0 ? (
           <p className="mt-2 rounded-lg border p-4 text-sm text-gray-500">
@@ -476,7 +487,7 @@ export default function MatchEventsClient({
         ) : (
           <div className="mt-3 divide-y rounded-lg border">
             {events.map((event) => (
-              <article key={event.id} className="p-3">
+              <article key={event.id} className="p-2.5 sm:p-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold">
@@ -501,7 +512,7 @@ export default function MatchEventsClient({
             ))}
           </div>
         )}
-      </div>
+      </details>
 
     </section>
   )

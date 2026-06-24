@@ -101,15 +101,15 @@ export default function MatchPitchClient({
   }
 
   return (
-    <section className="rounded-xl bg-white p-4 shadow-sm">
+    <section className="rounded-xl bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Players and substitutions</h2>
-          <p className="mt-1 text-sm text-gray-400">
+          <h2 className="text-lg font-bold sm:text-xl">Players and substitutions</h2>
+          <p className="mt-1 text-sm text-gray-500">
             Tap Sub on or Sub off to track minutes from the touchline.
           </p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm">
+        <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
           <span className="font-bold">{onPitchCount}</span> on pitch
         </div>
       </div>
@@ -155,22 +155,22 @@ export default function MatchPitchClient({
             Sub players on to make them available for Event recording. Only tracked players currently on the pitch can have events recorded.
           </p>
         )}
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-2 md:grid-cols-2 lg:gap-3">
           {players.map((player) => {
             const displayedMilliseconds = getDisplayedMilliseconds(player)
             const targetState = player.isOnPitch ? 'OFF' : 'ON'
 
             return (
-              <article key={player.matchDayPlayerId} className="rounded-xl bg-gray-50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-bold">{getPlayerName(player)}</h3>
-                    <p className="mt-1 text-sm text-gray-400">
+              <article key={player.matchDayPlayerId} className="rounded-xl bg-gray-50 p-3 sm:p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-base font-bold sm:text-lg">{getPlayerName(player)}</h3>
+                    <p className="mt-1 text-xs text-gray-500 sm:text-sm">
                       {formatSquadNumber(player.squadNumber)} · {formatSquadStatus(player.squadStatus)}
                     </p>
                   </div>
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                       player.isOnPitch
                         ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-700'
@@ -180,16 +180,16 @@ export default function MatchPitchClient({
                   </span>
                 </div>
 
-                <div className="mt-4 rounded-lg bg-white p-3 text-sm">
-                  <p className="text-gray-500">Minutes played</p>
-                  <p className="mt-1 text-xl font-bold">{formatMinutes(displayedMilliseconds)}</p>
+                <div className="mt-3 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                  <p className="text-gray-500">Minutes</p>
+                  <p className="font-bold tabular-nums">{formatMinutes(displayedMilliseconds)}</p>
                 </div>
 
                 {!isReadOnly && (
                   <button
                     type="button"
                     onClick={() => togglePlayer(player, targetState)}
-                    className={`mt-4 w-full rounded-lg px-4 py-4 text-lg font-bold text-white disabled:opacity-50 ${
+                    className={`mt-3 w-full rounded-lg px-4 py-3 text-base font-bold text-white disabled:opacity-50 sm:py-4 sm:text-lg ${
                       player.isOnPitch ? 'bg-red-700' : 'bg-green-700'
                     }`}
                     disabled={!canToggle || pendingPlayerId === player.matchDayPlayerId}

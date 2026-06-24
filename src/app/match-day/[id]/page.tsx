@@ -1227,26 +1227,26 @@ export default async function MatchDayDetailPage({
       )}
 
       {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
-        <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <summary className="cursor-pointer text-lg font-bold text-slate-950">
+        <details className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:mt-6 sm:p-4">
+          <summary className="cursor-pointer font-bold text-slate-950">
             Match setup
           </summary>
-          <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+          <div className="mt-3 grid gap-2 text-slate-700 md:grid-cols-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <h2 className="font-bold text-amber-950">Squad setup locked</h2>
               <p className="mt-1 text-amber-900">
                 Starters, substitutes and not involved players are locked after kick-off to protect minutes and substitution history.
               </p>
               {/* TODO: Add safe mid-game squad edits that preserve existing stints and events. */}
             </div>
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
               <h2 className="font-bold text-amber-950">Event setup locked</h2>
               <p className="mt-1 text-amber-900">
                 Tracked event categories are locked after kick-off so existing event records stay consistent.
               </p>
               {/* TODO: Add safe mid-game event category edits without removing existing recorded events. */}
             </div>
-            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
               <h2 className="font-bold text-blue-950">Safe setup view</h2>
               <p className="mt-1 text-blue-900">
                 Use players/substitutions and event recording below for live coaching observations. Setup edits can be expanded in a future version.
@@ -1257,14 +1257,32 @@ export default async function MatchDayDetailPage({
       )}
 
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-6 rounded-2xl bg-gray-50 p-4 sm:p-5">
-          <div>
-            <h2 className="text-2xl font-bold">Live match</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Squad and event setup were locked when the match started. Goal buttons update the score only; player events are recorded below for tracked players who are currently on the pitch.
-            </p>
+        <section className="mt-4 rounded-2xl bg-gray-50 p-3 sm:mt-6 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold sm:text-2xl">Live match</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Score, substitutions and event recording are separated so each tap does one job.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="#players-and-substitutions"
+                className="inline-flex rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100"
+              >
+                Substitutions
+              </a>
+              <a
+                href="#event-recording"
+                className="inline-flex rounded-lg bg-blue-800 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-900"
+              >
+                Events
+              </a>
+            </div>
           </div>
-          <div className="mt-4 grid gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-950 md:grid-cols-3">
+          <details className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+            <summary className="cursor-pointer font-bold">Live recording tips</summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div>
               <p className="font-bold">1. Put players on</p>
               <p className="mt-1 text-blue-900">Use substitutions to make players available for tracking.</p>
@@ -1277,21 +1295,8 @@ export default async function MatchDayDetailPage({
               <p className="font-bold">3. Update score separately</p>
               <p className="mt-1 text-blue-900">GOAL buttons do not create player event records.</p>
             </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href="#players-and-substitutions"
-              className="inline-flex rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100"
-            >
-              Players and substitutions
-            </a>
-            <a
-              href="#event-recording"
-              className="inline-flex rounded-lg bg-blue-800 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-900"
-            >
-              Event recording
-            </a>
-          </div>
+            </div>
+          </details>
           <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
               <MatchPitchClient
