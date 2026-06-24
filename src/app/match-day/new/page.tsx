@@ -6,10 +6,12 @@ import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
 import {
-  getMatchPhaseGroups,
+  getRecordableMatchEventTaxonomy,
+  getRecordableMatchPhaseGroups,
+} from '@/lib/eventDefinitions'
+import {
   inferAgePhase,
   isMatchEventType,
-  matchEventTaxonomy,
 } from '@/lib/matchEventTaxonomy'
 import { canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -66,11 +68,12 @@ async function createMatchFromWizard(formData: FormData) {
       .filter(({ playerId, squadStatus }) => activePlayerIds.has(playerId) && squadStatuses.includes(squadStatus as (typeof squadStatuses)[number]))
       .map(({ playerId, squadStatus }) => [playerId, squadStatus as (typeof squadStatuses)[number]])
   )
+  const recordableEventTaxonomy = await getRecordableMatchEventTaxonomy()
   const selectedEvents = (selectedEventTypes.length > 0
     ? selectedEventTypes.filter(isMatchEventType)
-    : matchEventTaxonomy.map((eventDefinition) => eventDefinition.value)
+    : recordableEventTaxonomy.map((eventDefinition) => eventDefinition.value)
   )
-    .map((eventType) => matchEventTaxonomy.find((eventDefinition) => eventDefinition.value === eventType))
+    .map((eventType) => recordableEventTaxonomy.find((eventDefinition) => eventDefinition.value === eventType))
     .filter((eventDefinition) => eventDefinition !== undefined)
 
   const match = await prisma.matchDay.create({
@@ -117,6 +120,8 @@ export default async function NewMatchDayPage() {
     },
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
+  const recordableEventTaxonomy = await getRecordableMatchEventTaxonomy()
+  const matchPhaseGroups = getRecordableMatchPhaseGroups(recordableEventTaxonomy)
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -138,7 +143,7 @@ export default async function NewMatchDayPage() {
             preferredPosition: player.preferredPosition,
           })),
         }))}
-        matchPhaseGroups={getMatchPhaseGroups().map((group) => ({
+        matchPhaseGroups={matchPhaseGroups.map((group) => ({
           value: group.value,
           label: group.label,
           events: group.events.map((event) => ({

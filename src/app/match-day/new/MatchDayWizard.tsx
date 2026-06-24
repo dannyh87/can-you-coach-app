@@ -5,7 +5,7 @@ import { useMemo, useState, useTransition } from 'react'
 import Button from '@/components/ui/Button'
 import { fieldClassName } from '@/components/ui/formStyles'
 import { WizardActions, WizardOptionCard, WizardShell } from '@/components/ui/Wizard'
-import { agePhaseLabels, getRecommendedEventTypes, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
+import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 
@@ -46,6 +46,15 @@ type WizardResult = { ok: false; reason: string } | void
 
 const today = () => new Date().toISOString().split('T')[0]
 
+const getRecommendedEventTypes = (events: TaxonomyEvent[], agePhase: AgePhase) => {
+  const defaultEvents = events.filter((event) => event.enabledByDefault)
+  const matchingEvents = defaultEvents.filter((event) =>
+    agePhase === 'ALL' || event.agePhases.includes(agePhase)
+  )
+
+  return (matchingEvents.length > 0 ? matchingEvents : defaultEvents).map((event) => event.value)
+}
+
 export default function MatchDayWizard({
   teams,
   matchPhaseGroups,
@@ -69,9 +78,13 @@ export default function MatchDayWizard({
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const selectedTeam = teams.find((team) => team.id === teamId) ?? teams[0]
+  const allEvents = useMemo(
+    () => matchPhaseGroups.flatMap((group) => group.events),
+    [matchPhaseGroups]
+  )
   const recommendedEventTypes = useMemo(
-    () => getRecommendedEventTypes(selectedTeam?.inferredAgePhase ?? 'ALL'),
-    [selectedTeam?.inferredAgePhase]
+    () => getRecommendedEventTypes(allEvents, selectedTeam?.inferredAgePhase ?? 'ALL'),
+    [allEvents, selectedTeam?.inferredAgePhase]
   )
   const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>(recommendedEventTypes)
   const totalSteps = 6
@@ -179,7 +192,7 @@ export default function MatchDayWizard({
               selected={team.id === teamId}
               onClick={() => {
                 setTeamId(team.id)
-                setSelectedEventTypes(getRecommendedEventTypes(team.inferredAgePhase))
+                setSelectedEventTypes(getRecommendedEventTypes(allEvents, team.inferredAgePhase))
                 setEventView('phases')
                 setSelectedMatchPhase(null)
                 setSelectedCategory(null)
