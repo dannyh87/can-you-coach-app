@@ -168,6 +168,32 @@ model MatchEvent {
   player                Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
 }
 
+model EventDefinition {
+  id                String                         @id @default(cuid())
+  scope             EventDefinitionScope           @default(GLOBAL)
+  clubId            String?
+  legacyEventType   MatchEventType?                @unique
+  name              String
+  slug              String                         @unique
+  normalizedName    String                         @unique
+  description       String?
+  matchPhase        EventDefinitionMatchPhase
+  category          EventDefinitionCategory
+  agePhases         EventDefinitionAgePhase[]
+  fourCorner        EventDefinitionFourCorner
+  positionRelevance EventDefinitionPosition[]
+  enabledByDefault  Boolean                        @default(false)
+  benchmarkable     Boolean                        @default(false)
+  isActive          Boolean                        @default(true)
+  archivedAt        DateTime?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+
+  @@index([scope, isActive])
+  @@index([enabledByDefault])
+  @@index([benchmarkable])
+}
+
 enum MatchType {
   LEAGUE
   CUP
@@ -214,6 +240,54 @@ enum MatchEventCategory {
   IN_POSSESSION
   OUT_OF_POSSESSION
   TRANSITION
+}
+
+enum EventDefinitionScope {
+  GLOBAL
+  CLUB
+}
+
+enum EventDefinitionMatchPhase {
+  IN_POSSESSION
+  OUT_OF_POSSESSION
+  TRANSITION
+  SET_PIECES
+  DISCIPLINE_MATCH_ADMIN
+}
+
+enum EventDefinitionCategory {
+  PASSING
+  RECEIVING
+  DRIBBLING_1V1
+  SHOOTING
+  DEFENDING
+  GOALKEEPING
+  DISCIPLINE
+  INJURIES
+  OTHER
+}
+
+enum EventDefinitionAgePhase {
+  FOUNDATION
+  YOUTH
+  ADULT
+}
+
+enum EventDefinitionFourCorner {
+  TECHNICAL
+  TACTICAL
+  PHYSICAL
+  PSYCHOLOGICAL_SOCIAL
+}
+
+enum EventDefinitionPosition {
+  ALL
+  GOALKEEPER
+  DEFENDER
+  MIDFIELDER
+  FORWARD
+  WIDE_PLAYER
+  CENTRAL_PLAYER
 }
 
 model Player {
