@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 type ActionResult =
   | { ok: true }
@@ -38,8 +38,12 @@ type EventLibraryClientProps = {
   createEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
   updateEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
   archiveEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
+  archiveEventDefinitionsAction: (formData: FormData) => Promise<ActionResult>
   restoreEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
 }
+
+type SortKey = 'name' | 'matchPhase' | 'category' | 'recordability' | 'default' | 'benchmarkable'
+type SortDirection = 'asc' | 'desc'
 
 const getOptionLabel = (options: readonly Option[], value: string) =>
   options.find((option) => option.value === value)?.label ?? value
@@ -57,15 +61,62 @@ export default function EventLibraryClient({
   createEventDefinitionAction,
   updateEventDefinitionAction,
   archiveEventDefinitionAction,
+  archiveEventDefinitionsAction,
   restoreEventDefinitionAction,
 }: EventLibraryClientProps) {
   const router = useRouter()
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [matchPhaseFilter, setMatchPhaseFilter] = useState('ALL')
+  const [categoryFilter, setCategoryFilter] = useState('ALL')
+  const [recordabilityFilter, setRecordabilityFilter] = useState('ALL')
+  const [defaultFilter, setDefaultFilter] = useState('ALL')
+  const [benchmarkableFilter, setBenchmarkableFilter] = useState('ALL')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [selectedEventIds, setSelectedEventIds] = useState<string[]>([])
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const activeEvents = eventDefinitions.filter((eventDefinition) => eventDefinition.isActive)
   const archivedEvents = eventDefinitions.filter((eventDefinition) => !eventDefinition.isActive)
   const recordableCount = eventDefinitions.filter((eventDefinition) => eventDefinition.legacyEventType).length
+  const visibleActiveEvents = useMemo(() => {
+    const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+
+    return activeEvents
+      .filter((eventDefinition) => {
+        if (normalizedSearchTerm && !eventDefinition.name.toLowerCase().includes(normalizedSearchTerm)) return false
+        if (matchPhaseFilter !== 'ALL' && eventDefinition.matchPhase !== matchPhaseFilter) return false
+        if (categoryFilter !== 'ALL' && eventDefinition.category !== categoryFilter) return false
+        if (recordabilityFilter === 'RECORDABLE' && !eventDefinition.legacyEventType) return false
+        if (recordabilityFilter === 'LIBRARY_ONLY' && eventDefinition.legacyEventType) return false
+        if (defaultFilter === 'ON' && !eventDefinition.enabledByDefault) return false
+        if (defaultFilter === 'OFF' && eventDefinition.enabledByDefault) return false
+        if (benchmarkableFilter === 'YES' && !eventDefinition.benchmarkable) return false
+        if (benchmarkableFilter === 'NO' && eventDefinition.benchmarkable) return false
+        return true
+      })
+      .sort((firstEvent, secondEvent) => {
+        const firstValue = getSortValue(firstEvent, sortKey)
+        const secondValue = getSortValue(secondEvent, sortKey)
+        const comparison = firstValue.localeCompare(secondValue)
+        return sortDirection === 'asc' ? comparison : -comparison
+      })
+  }, [
+    activeEvents,
+    benchmarkableFilter,
+    categoryFilter,
+    defaultFilter,
+    matchPhaseFilter,
+    recordabilityFilter,
+    searchTerm,
+    sortDirection,
+    sortKey,
+  ])
+  const visibleActiveEventIds = visibleActiveEvents.map((eventDefinition) => eventDefinition.id)
+  const selectedVisibleEventCount = visibleActiveEventIds.filter((eventDefinitionId) => selectedEventIds.includes(eventDefinitionId)).length
+  const allVisibleSelected = visibleActiveEventIds.length > 0 && selectedVisibleEventCount === visibleActiveEventIds.length
 
   const runFormAction = async ({
     form,
@@ -91,6 +142,63 @@ export default function EventLibraryClient({
     if (result.ok) {
       setMessage(successMessage)
       if (resetOnSuccess) form.reset()
+      router.refresh()
+    } else {
+      setError(result.reason)
+    }
+
+    setPendingAction(null)
+  }
+
+  const toggleSort = (nextSortKey: SortKey) => {
+    if (sortKey === nextSortKey) {
+      setSortDirection((currentDirection) => currentDirection === 'asc' ? 'desc' : 'asc')
+      return
+    }
+
+    setSortKey(nextSortKey)
+    setSortDirection('asc')
+  }
+
+  const toggleSelectedEvent = (eventDefinitionId: string) => {
+    setSelectedEventIds((currentIds) =>
+      currentIds.includes(eventDefinitionId)
+        ? currentIds.filter((currentId) => currentId !== eventDefinitionId)
+        : [...currentIds, eventDefinitionId]
+    )
+  }
+
+  const toggleAllVisibleEvents = () => {
+    setSelectedEventIds((currentIds) => {
+      if (allVisibleSelected) {
+        return currentIds.filter((currentId) => !visibleActiveEventIds.includes(currentId))
+      }
+
+      return Array.from(new Set([...currentIds, ...visibleActiveEventIds]))
+    })
+  }
+
+  const bulkArchiveSelectedEvents = async () => {
+    if (pendingAction || selectedEventIds.length === 0) return
+
+    const confirmed = window.confirm(
+      `Archive ${selectedEventIds.length} selected events? They will no longer appear in new Match Day setup defaults.`
+    )
+    if (!confirmed) return
+
+    setPendingAction('bulk-archive')
+    setMessage(null)
+    setError(null)
+
+    const formData = new FormData()
+    selectedEventIds.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
+
+    const result = await archiveEventDefinitionsAction(formData)
+
+    if (result.ok) {
+      setMessage(`${selectedEventIds.length} selected events archived.`)
+      setSelectedEventIds([])
+      setEditingEventId(null)
       router.refresh()
     } else {
       setError(result.reason)
@@ -168,41 +276,86 @@ export default function EventLibraryClient({
             </p>
           </div>
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
-            {activeEvents.length} active
+            {visibleActiveEvents.length} of {activeEvents.length} active
           </span>
         </div>
 
-        <div className="mt-4 space-y-3">
-          {activeEvents.map((eventDefinition) => (
-            <EventDefinitionCard
-              key={eventDefinition.id}
-              eventDefinition={eventDefinition}
-              matchPhaseOptions={matchPhaseOptions}
-              categoryOptions={categoryOptions}
-              agePhaseOptions={agePhaseOptions}
-              fourCornerOptions={fourCornerOptions}
-              positionOptions={positionOptions}
-              pendingAction={pendingAction}
-              runFormAction={runFormAction}
-              updateEventDefinitionAction={updateEventDefinitionAction}
-              archiveEventDefinitionAction={archiveEventDefinitionAction}
-              restoreEventDefinitionAction={restoreEventDefinitionAction}
-            />
-          ))}
-        </div>
+        <EventFilters
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          matchPhaseFilter={matchPhaseFilter}
+          setMatchPhaseFilter={setMatchPhaseFilter}
+          categoryFilter={categoryFilter}
+          setCategoryFilter={setCategoryFilter}
+          recordabilityFilter={recordabilityFilter}
+          setRecordabilityFilter={setRecordabilityFilter}
+          defaultFilter={defaultFilter}
+          setDefaultFilter={setDefaultFilter}
+          benchmarkableFilter={benchmarkableFilter}
+          setBenchmarkableFilter={setBenchmarkableFilter}
+          matchPhaseOptions={matchPhaseOptions}
+          categoryOptions={categoryOptions}
+        />
+
+        {selectedEventIds.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+            <p className="font-bold">{selectedEventIds.length} selected</p>
+            <button
+              type="button"
+              onClick={bulkArchiveSelectedEvents}
+              className="rounded-lg bg-amber-800 px-4 py-2 font-bold text-white disabled:opacity-50"
+              disabled={Boolean(pendingAction)}
+            >
+              {pendingAction === 'bulk-archive' ? 'Archiving...' : 'Archive selected'}
+            </button>
+          </div>
+        )}
+
+        <EventDefinitionsTable
+          events={visibleActiveEvents}
+          isActiveTable
+          selectedEventIds={selectedEventIds}
+          allVisibleSelected={allVisibleSelected}
+          onToggleSelectedEvent={toggleSelectedEvent}
+          onToggleAllVisibleEvents={toggleAllVisibleEvents}
+          sortKey={sortKey}
+          sortDirection={sortDirection}
+          onSort={toggleSort}
+          editingEventId={editingEventId}
+          setEditingEventId={setEditingEventId}
+          matchPhaseOptions={matchPhaseOptions}
+          categoryOptions={categoryOptions}
+          agePhaseOptions={agePhaseOptions}
+          fourCornerOptions={fourCornerOptions}
+          positionOptions={positionOptions}
+          pendingAction={pendingAction}
+          runFormAction={runFormAction}
+          updateEventDefinitionAction={updateEventDefinitionAction}
+          archiveEventDefinitionAction={archiveEventDefinitionAction}
+          restoreEventDefinitionAction={restoreEventDefinitionAction}
+        />
       </section>
 
       <details className="mt-6 rounded-2xl border bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-lg font-bold">
           Archived events ({archivedEvents.length})
         </summary>
-        <div className="mt-4 space-y-3">
+        <div className="mt-4">
           {archivedEvents.length === 0 ? (
             <p className="rounded-lg border p-4 text-sm text-gray-500">No archived events.</p>
-          ) : archivedEvents.map((eventDefinition) => (
-            <EventDefinitionCard
-              key={eventDefinition.id}
-              eventDefinition={eventDefinition}
+          ) : (
+            <EventDefinitionsTable
+              events={archivedEvents}
+              isActiveTable={false}
+              selectedEventIds={[]}
+              allVisibleSelected={false}
+              onToggleSelectedEvent={() => undefined}
+              onToggleAllVisibleEvents={() => undefined}
+              sortKey={sortKey}
+              sortDirection={sortDirection}
+              onSort={toggleSort}
+              editingEventId={editingEventId}
+              setEditingEventId={setEditingEventId}
               matchPhaseOptions={matchPhaseOptions}
               categoryOptions={categoryOptions}
               agePhaseOptions={agePhaseOptions}
@@ -214,11 +367,18 @@ export default function EventLibraryClient({
               archiveEventDefinitionAction={archiveEventDefinitionAction}
               restoreEventDefinitionAction={restoreEventDefinitionAction}
             />
-          ))}
+          )}
         </div>
       </details>
     </main>
   )
+}
+
+function getSortValue(eventDefinition: EventDefinition, sortKey: SortKey) {
+  if (sortKey === 'recordability') return eventDefinition.legacyEventType ? '0' : '1'
+  if (sortKey === 'default') return eventDefinition.enabledByDefault ? '0' : '1'
+  if (sortKey === 'benchmarkable') return eventDefinition.benchmarkable ? '0' : '1'
+  return eventDefinition[sortKey].toLowerCase()
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -230,8 +390,123 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-function EventDefinitionCard({
-  eventDefinition,
+function EventFilters({
+  searchTerm,
+  setSearchTerm,
+  matchPhaseFilter,
+  setMatchPhaseFilter,
+  categoryFilter,
+  setCategoryFilter,
+  recordabilityFilter,
+  setRecordabilityFilter,
+  defaultFilter,
+  setDefaultFilter,
+  benchmarkableFilter,
+  setBenchmarkableFilter,
+  matchPhaseOptions,
+  categoryOptions,
+}: {
+  searchTerm: string
+  setSearchTerm: (value: string) => void
+  matchPhaseFilter: string
+  setMatchPhaseFilter: (value: string) => void
+  categoryFilter: string
+  setCategoryFilter: (value: string) => void
+  recordabilityFilter: string
+  setRecordabilityFilter: (value: string) => void
+  defaultFilter: string
+  setDefaultFilter: (value: string) => void
+  benchmarkableFilter: string
+  setBenchmarkableFilter: (value: string) => void
+  matchPhaseOptions: readonly Option[]
+  categoryOptions: readonly Option[]
+}) {
+  return (
+    <div className="mt-4 grid gap-3 rounded-xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
+      <label className="text-sm font-medium lg:col-span-2">
+        Search
+        <input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          className="mt-1 w-full rounded-lg border px-3 py-2"
+          placeholder="Search event name"
+        />
+      </label>
+      <FilterSelect label="Match phase" value={matchPhaseFilter} onChange={setMatchPhaseFilter} options={matchPhaseOptions} />
+      <FilterSelect label="Category" value={categoryFilter} onChange={setCategoryFilter} options={categoryOptions} />
+      <FilterSelect
+        label="Recordability"
+        value={recordabilityFilter}
+        onChange={setRecordabilityFilter}
+        options={[
+          { value: 'RECORDABLE', label: 'Recordable now' },
+          { value: 'LIBRARY_ONLY', label: 'Library only' },
+        ]}
+      />
+      <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-1 lg:grid-cols-1">
+        <FilterSelect
+          label="Default"
+          value={defaultFilter}
+          onChange={setDefaultFilter}
+          options={[
+            { value: 'ON', label: 'Default on' },
+            { value: 'OFF', label: 'Default off' },
+          ]}
+        />
+        <FilterSelect
+          label="Benchmarkable"
+          value={benchmarkableFilter}
+          onChange={setBenchmarkableFilter}
+          options={[
+            { value: 'YES', label: 'Benchmarkable' },
+            { value: 'NO', label: 'Not benchmarkable' },
+          ]}
+        />
+      </div>
+    </div>
+  )
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: readonly Option[]
+}) {
+  return (
+    <label className="text-sm font-medium">
+      {label}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-lg border px-3 py-2"
+      >
+        <option value="ALL">All</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function EventDefinitionsTable({
+  events,
+  isActiveTable,
+  selectedEventIds,
+  allVisibleSelected,
+  onToggleSelectedEvent,
+  onToggleAllVisibleEvents,
+  sortKey,
+  sortDirection,
+  onSort,
+  editingEventId,
+  setEditingEventId,
   matchPhaseOptions,
   categoryOptions,
   agePhaseOptions,
@@ -243,7 +518,17 @@ function EventDefinitionCard({
   archiveEventDefinitionAction,
   restoreEventDefinitionAction,
 }: {
-  eventDefinition: EventDefinition
+  events: EventDefinition[]
+  isActiveTable: boolean
+  selectedEventIds: string[]
+  allVisibleSelected: boolean
+  onToggleSelectedEvent: (eventDefinitionId: string) => void
+  onToggleAllVisibleEvents: () => void
+  sortKey: SortKey
+  sortDirection: SortDirection
+  onSort: (sortKey: SortKey) => void
+  editingEventId: string | null
+  setEditingEventId: (eventDefinitionId: string | null) => void
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
   agePhaseOptions: readonly Option[]
@@ -261,106 +546,272 @@ function EventDefinitionCard({
   archiveEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
   restoreEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
 }) {
-  const pendingEdit = pendingAction === `edit:${eventDefinition.id}`
-  const pendingArchive = pendingAction === `archive:${eventDefinition.id}`
-  const pendingRestore = pendingAction === `restore:${eventDefinition.id}`
+  return (
+    <div className="mt-4 overflow-x-auto rounded-xl border bg-white shadow-sm">
+      <table className="min-w-[1180px] w-full divide-y divide-gray-200 text-left text-sm">
+        <thead className="bg-gray-50 text-xs font-bold uppercase tracking-wide text-gray-500">
+          <tr>
+            <th className="w-10 px-3 py-3">
+              {isActiveTable && (
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={onToggleAllVisibleEvents}
+                  aria-label="Select all visible events"
+                />
+              )}
+            </th>
+            <SortableHeader label="Event name" sortKey="name" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <SortableHeader label="Recordability" sortKey="recordability" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <SortableHeader label="Match phase" sortKey="matchPhase" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <SortableHeader label="Category" sortKey="category" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <th className="px-3 py-3">Age phases</th>
+            <th className="px-3 py-3">Positions</th>
+            <th className="px-3 py-3">4 Corner</th>
+            <SortableHeader label="Default" sortKey="default" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <SortableHeader label="Benchmarkable" sortKey="benchmarkable" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <th className="px-3 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {events.length === 0 ? (
+            <tr>
+              <td colSpan={11} className="px-3 py-6 text-center text-gray-500">No events match the current view.</td>
+            </tr>
+          ) : events.map((eventDefinition) => {
+            const selected = selectedEventIds.includes(eventDefinition.id)
+            const pendingEdit = pendingAction === `edit:${eventDefinition.id}`
+            const pendingArchive = pendingAction === `archive:${eventDefinition.id}`
+            const pendingRestore = pendingAction === `restore:${eventDefinition.id}`
+            const isEditing = editingEventId === eventDefinition.id
+
+            return (
+              <FragmentRow
+                key={eventDefinition.id}
+                eventDefinition={eventDefinition}
+                selected={selected}
+                isEditing={isEditing}
+                isActiveTable={isActiveTable}
+                matchPhaseOptions={matchPhaseOptions}
+                categoryOptions={categoryOptions}
+                agePhaseOptions={agePhaseOptions}
+                fourCornerOptions={fourCornerOptions}
+                positionOptions={positionOptions}
+                pendingAction={pendingAction}
+                pendingEdit={pendingEdit}
+                pendingArchive={pendingArchive}
+                pendingRestore={pendingRestore}
+                onToggleSelectedEvent={onToggleSelectedEvent}
+                setEditingEventId={setEditingEventId}
+                runFormAction={runFormAction}
+                updateEventDefinitionAction={updateEventDefinitionAction}
+                archiveEventDefinitionAction={archiveEventDefinitionAction}
+                restoreEventDefinitionAction={restoreEventDefinitionAction}
+              />
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function SortableHeader({
+  label,
+  sortKey,
+  activeSortKey,
+  sortDirection,
+  onSort,
+}: {
+  label: string
+  sortKey: SortKey
+  activeSortKey: SortKey
+  sortDirection: SortDirection
+  onSort: (sortKey: SortKey) => void
+}) {
+  const isActive = activeSortKey === sortKey
 
   return (
-    <article className={`rounded-xl border p-4 shadow-sm ${eventDefinition.isActive ? 'bg-white' : 'bg-gray-50'}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-bold">{eventDefinition.name}</h3>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${eventDefinition.legacyEventType ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-              {eventDefinition.legacyEventType ? 'Recordable now' : 'Library only'}
-            </span>
-            {!eventDefinition.isActive && (
-              <span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-bold text-gray-700">
-                Archived
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-gray-500">
-            {getOptionLabel(matchPhaseOptions, eventDefinition.matchPhase)} · {getOptionLabel(categoryOptions, eventDefinition.category)} · {getOptionLabel(fourCornerOptions, eventDefinition.fourCorner)}
-          </p>
-          {eventDefinition.description && (
-            <p className="mt-2 text-sm text-gray-700">{eventDefinition.description}</p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs font-semibold">
-          <span className={eventDefinition.enabledByDefault ? 'text-green-700' : 'text-gray-500'}>
-            {eventDefinition.enabledByDefault ? 'Default on' : 'Default off'}
-          </span>
-          <span className={eventDefinition.benchmarkable ? 'text-blue-700' : 'text-gray-500'}>
-            {eventDefinition.benchmarkable ? 'Benchmarkable' : 'Not benchmarkable'}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-2 text-sm text-gray-600 md:grid-cols-2">
-        <p><span className="font-semibold text-gray-900">Age:</span> {formatList(agePhaseOptions, eventDefinition.agePhases)}</p>
-        <p><span className="font-semibold text-gray-900">Positions:</span> {formatList(positionOptions, eventDefinition.positionRelevance)}</p>
-        {eventDefinition.legacyEventType && (
-          <p><span className="font-semibold text-gray-900">Runtime enum:</span> {eventDefinition.legacyEventType}</p>
-        )}
-      </div>
-
-      <details className="mt-4 rounded-lg bg-gray-50 p-3">
-        <summary className="cursor-pointer text-sm font-bold">Edit metadata</summary>
-        <form
-          className="mt-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            runFormAction({
-              form: event.currentTarget,
-              action: updateEventDefinitionAction,
-              pendingLabel: `edit:${eventDefinition.id}`,
-              successMessage: 'Event metadata updated.',
-            })
-          }}
-        >
-          <input type="hidden" name="eventDefinitionId" value={eventDefinition.id} />
-          <EventDefinitionFields
-            eventDefinition={eventDefinition}
-            matchPhaseOptions={matchPhaseOptions}
-            categoryOptions={categoryOptions}
-            agePhaseOptions={agePhaseOptions}
-            fourCornerOptions={fourCornerOptions}
-            positionOptions={positionOptions}
-          />
-          <button
-            type="submit"
-            className="mt-4 rounded-lg bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
-            disabled={Boolean(pendingAction)}
-          >
-            {pendingEdit ? 'Saving...' : 'Save changes'}
-          </button>
-        </form>
-      </details>
-
-      <form
-        className="mt-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          runFormAction({
-            form: event.currentTarget,
-            action: eventDefinition.isActive ? archiveEventDefinitionAction : restoreEventDefinitionAction,
-            pendingLabel: `${eventDefinition.isActive ? 'archive' : 'restore'}:${eventDefinition.id}`,
-            successMessage: eventDefinition.isActive ? 'Event archived.' : 'Event restored.',
-          })
-        }}
+    <th className="px-3 py-3">
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className="inline-flex items-center gap-1 font-bold hover:text-blue-800"
       >
-        <input type="hidden" name="eventDefinitionId" value={eventDefinition.id} />
-        <button
-          type="submit"
-          className={`rounded-lg border px-4 py-2 text-sm font-bold disabled:opacity-50 ${eventDefinition.isActive ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-green-200 bg-green-50 text-green-800'}`}
-          disabled={Boolean(pendingAction)}
-        >
-          {pendingArchive ? 'Archiving...' : pendingRestore ? 'Restoring...' : eventDefinition.isActive ? 'Archive event' : 'Restore event'}
-        </button>
-      </form>
-    </article>
+        {label}
+        <span className="text-[10px]">{isActive ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+      </button>
+    </th>
   )
+}
+
+function FragmentRow({
+  eventDefinition,
+  selected,
+  isEditing,
+  isActiveTable,
+  matchPhaseOptions,
+  categoryOptions,
+  agePhaseOptions,
+  fourCornerOptions,
+  positionOptions,
+  pendingAction,
+  pendingEdit,
+  pendingArchive,
+  pendingRestore,
+  onToggleSelectedEvent,
+  setEditingEventId,
+  runFormAction,
+  updateEventDefinitionAction,
+  archiveEventDefinitionAction,
+  restoreEventDefinitionAction,
+}: {
+  eventDefinition: EventDefinition
+  selected: boolean
+  isEditing: boolean
+  isActiveTable: boolean
+  matchPhaseOptions: readonly Option[]
+  categoryOptions: readonly Option[]
+  agePhaseOptions: readonly Option[]
+  fourCornerOptions: readonly Option[]
+  positionOptions: readonly Option[]
+  pendingAction: string | null
+  pendingEdit: boolean
+  pendingArchive: boolean
+  pendingRestore: boolean
+  onToggleSelectedEvent: (eventDefinitionId: string) => void
+  setEditingEventId: (eventDefinitionId: string | null) => void
+  runFormAction: (options: {
+    form: HTMLFormElement
+    action: (formData: FormData) => Promise<ActionResult>
+    pendingLabel: string
+    successMessage: string
+    resetOnSuccess?: boolean
+  }) => Promise<void>
+  updateEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
+  archiveEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
+  restoreEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
+}) {
+  return (
+    <>
+      <tr className={selected ? 'bg-blue-50' : 'bg-white'}>
+        <td className="px-3 py-3 align-top">
+          {isActiveTable && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={() => onToggleSelectedEvent(eventDefinition.id)}
+              aria-label={`Select ${eventDefinition.name}`}
+            />
+          )}
+        </td>
+        <td className="px-3 py-3 align-top">
+          <p className="font-bold text-gray-950">{eventDefinition.name}</p>
+          {eventDefinition.description && (
+            <p className="mt-1 line-clamp-2 max-w-64 text-xs text-gray-500">{eventDefinition.description}</p>
+          )}
+          {eventDefinition.legacyEventType && (
+            <p className="mt-1 text-xs text-gray-400">{eventDefinition.legacyEventType}</p>
+          )}
+        </td>
+        <td className="px-3 py-3 align-top">
+          <Badge tone={eventDefinition.legacyEventType ? 'green' : 'blue'}>
+            {eventDefinition.legacyEventType ? 'Recordable now' : 'Library only'}
+          </Badge>
+        </td>
+        <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(matchPhaseOptions, eventDefinition.matchPhase)}</td>
+        <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(categoryOptions, eventDefinition.category)}</td>
+        <td className="px-3 py-3 align-top text-gray-700">{formatList(agePhaseOptions, eventDefinition.agePhases)}</td>
+        <td className="px-3 py-3 align-top text-gray-700">{formatList(positionOptions, eventDefinition.positionRelevance)}</td>
+        <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(fourCornerOptions, eventDefinition.fourCorner)}</td>
+        <td className="px-3 py-3 align-top">
+          <Badge tone={eventDefinition.enabledByDefault ? 'green' : 'gray'}>
+            {eventDefinition.enabledByDefault ? 'Default on' : 'Default off'}
+          </Badge>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <Badge tone={eventDefinition.benchmarkable ? 'blue' : 'gray'}>
+            {eventDefinition.benchmarkable ? 'Benchmarkable' : 'No'}
+          </Badge>
+        </td>
+        <td className="px-3 py-3 align-top">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setEditingEventId(isEditing ? null : eventDefinition.id)}
+              className="rounded-lg border px-3 py-2 text-xs font-bold text-blue-800 hover:bg-blue-50"
+            >
+              {isEditing ? 'Close edit' : 'Edit metadata'}
+            </button>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                runFormAction({
+                  form: event.currentTarget,
+                  action: eventDefinition.isActive ? archiveEventDefinitionAction : restoreEventDefinitionAction,
+                  pendingLabel: `${eventDefinition.isActive ? 'archive' : 'restore'}:${eventDefinition.id}`,
+                  successMessage: eventDefinition.isActive ? 'Event archived.' : 'Event restored.',
+                })
+              }}
+            >
+              <input type="hidden" name="eventDefinitionId" value={eventDefinition.id} />
+              <button
+                type="submit"
+                className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${eventDefinition.isActive ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-green-200 bg-green-50 text-green-800'}`}
+                disabled={Boolean(pendingAction)}
+              >
+                {pendingArchive ? 'Archiving...' : pendingRestore ? 'Restoring...' : eventDefinition.isActive ? 'Archive' : 'Restore'}
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {isEditing && (
+        <tr className="bg-gray-50">
+          <td colSpan={11} className="px-4 py-4">
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                runFormAction({
+                  form: event.currentTarget,
+                  action: updateEventDefinitionAction,
+                  pendingLabel: `edit:${eventDefinition.id}`,
+                  successMessage: 'Event metadata updated.',
+                })
+              }}
+            >
+              <input type="hidden" name="eventDefinitionId" value={eventDefinition.id} />
+              <EventDefinitionFields
+                eventDefinition={eventDefinition}
+                matchPhaseOptions={matchPhaseOptions}
+                categoryOptions={categoryOptions}
+                agePhaseOptions={agePhaseOptions}
+                fourCornerOptions={fourCornerOptions}
+                positionOptions={positionOptions}
+              />
+              <button
+                type="submit"
+                className="mt-4 rounded-lg bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+                disabled={Boolean(pendingAction)}
+              >
+                {pendingEdit ? 'Saving...' : 'Save changes'}
+              </button>
+            </form>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function Badge({ children, tone }: { children: React.ReactNode; tone: 'green' | 'blue' | 'gray' }) {
+  const toneClasses = {
+    green: 'bg-green-100 text-green-800',
+    blue: 'bg-blue-100 text-blue-800',
+    gray: 'bg-gray-100 text-gray-700',
+  }
+
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${toneClasses[tone]}`}>{children}</span>
 }
 
 function EventDefinitionFields({

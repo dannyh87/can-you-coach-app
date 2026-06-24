@@ -13,6 +13,8 @@ const navigationLinks = [
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
+  // TODO: Only show this link for users who pass canManageGlobalEventLibrary once nav is user-aware.
+  { href: '/super-admin/events', label: 'Super Admin' },
 ]
 
 export const metadata: Metadata = {

@@ -254,6 +254,41 @@ async function archiveEventDefinition(formData: FormData): Promise<EventDefiniti
   return { ok: true }
 }
 
+async function archiveEventDefinitions(formData: FormData): Promise<EventDefinitionActionResult> {
+  'use server'
+
+  const permission = await requireSuperAdmin()
+  if (!permission.ok) return permission
+
+  const eventDefinitionIds = Array.from(new Set(
+    formData
+      .getAll('eventDefinitionId')
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  ))
+
+  if (eventDefinitionIds.length === 0) {
+    return { ok: false, reason: 'Select at least one event to archive.' }
+  }
+
+  await prisma.eventDefinition.updateMany({
+    where: {
+      id: { in: eventDefinitionIds },
+      scope: 'GLOBAL',
+      isActive: true,
+    },
+    data: {
+      isActive: false,
+      archivedAt: new Date(),
+      enabledByDefault: false,
+    },
+  })
+
+  revalidatePath('/super-admin/events')
+  return { ok: true }
+}
+
 async function restoreEventDefinition(formData: FormData): Promise<EventDefinitionActionResult> {
   'use server'
 
@@ -315,6 +350,7 @@ export default async function SuperAdminEventsPage() {
       createEventDefinitionAction={createEventDefinition}
       updateEventDefinitionAction={updateEventDefinition}
       archiveEventDefinitionAction={archiveEventDefinition}
+      archiveEventDefinitionsAction={archiveEventDefinitions}
       restoreEventDefinitionAction={restoreEventDefinition}
     />
   )
