@@ -10,6 +10,14 @@ import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  formatMatchEventType,
+  getMatchEventPrismaCategory,
+  isMatchEventType,
+  matchEventCategories,
+  matchEventDefinitions,
+  matchEventTypes,
+} from '@/lib/matchEventTaxonomy'
 import { canManageMatchDay, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
@@ -17,23 +25,6 @@ export const dynamic = 'force-dynamic'
 
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const pitchTargetStates = ['ON', 'OFF'] as const
-const matchEventCategories = [
-  { value: 'ATTACKING', label: 'Attacking' },
-  { value: 'IN_POSSESSION', label: 'In possession' },
-  { value: 'OUT_OF_POSSESSION', label: 'Out of possession' },
-  { value: 'TRANSITION', label: 'Transition' },
-] as const
-const matchEventDefinitions = [
-  { value: 'GOAL', label: 'Goal', category: 'ATTACKING' },
-  { value: 'ASSIST', label: 'Assist', category: 'ATTACKING' },
-  { value: 'SHOT_ON_TARGET', label: 'Shot on target', category: 'ATTACKING' },
-  { value: 'SHOT_OFF_TARGET', label: 'Shot off target', category: 'ATTACKING' },
-  { value: 'PASS_COMPLETE', label: 'Pass complete', category: 'IN_POSSESSION' },
-  { value: 'PASS_INCOMPLETE', label: 'Pass incomplete', category: 'IN_POSSESSION' },
-  { value: 'ONE_V_ONE_SUCCESS', label: '1v1 success', category: 'IN_POSSESSION' },
-  { value: 'ONE_V_ONE_UNSUCCESSFUL', label: '1v1 unsuccessful', category: 'IN_POSSESSION' },
-] as const
-const matchEventTypes = matchEventDefinitions.map((eventDefinition) => eventDefinition.value)
 
 type SquadActionResult =
   | { ok: true }
@@ -82,14 +73,6 @@ const formatMatchTime = (matchSecond: number) => {
   const seconds = matchSecond % 60
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
-
-const formatEventType = (eventType: string) =>
-  matchEventDefinitions.find((eventDefinition) => eventDefinition.value === eventType)?.label ??
-  eventType
-
-const getEventCategory = (eventType: (typeof matchEventTypes)[number]) =>
-  matchEventDefinitions.find((eventDefinition) => eventDefinition.value === eventType)?.category ??
-  'ATTACKING'
 
 const getStatusClasses = (status: string) => {
   if (status === 'COMPLETED') return 'bg-green-100 text-green-800'
@@ -394,9 +377,7 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
     return { ok: false, reason: 'Select at least one event type.' }
   }
 
-  const invalidEventType = eventTypes.find(
-    (eventType) => !matchEventTypes.includes(eventType as (typeof matchEventTypes)[number])
-  )
+  const invalidEventType = eventTypes.find((eventType) => !isMatchEventType(eventType))
   if (invalidEventType) return { ok: false, reason: 'Event type is invalid.' }
 
   const match = await getActionableMatch(matchDayId, 'manage')
@@ -408,13 +389,13 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
   await prisma.$transaction([
     prisma.matchDayEventType.deleteMany({ where: { matchDayId: match.id } }),
     ...eventTypes.map((eventType) => {
-      const typedEventType = eventType as (typeof matchEventTypes)[number]
+      if (!isMatchEventType(eventType)) throw new Error('Event type is invalid.')
 
       return prisma.matchDayEventType.create({
         data: {
           matchDayId: match.id,
-          eventType: typedEventType,
-          category: getEventCategory(typedEventType),
+          eventType,
+          category: getMatchEventPrismaCategory(eventType),
         },
       })
     }),
@@ -772,7 +753,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Match, player and event type are required.' }
   }
 
-  if (!matchEventTypes.includes(eventType as (typeof matchEventTypes)[number])) {
+  if (!isMatchEventType(eventType)) {
     return { ok: false, reason: 'Event type is invalid.' }
   }
 
@@ -785,7 +766,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const selectedEvent = await prisma.matchDayEventType.findFirst({
     where: {
       matchDayId: match.id,
-      eventType: eventType as (typeof matchEventTypes)[number],
+      eventType,
     },
     select: { id: true },
   })
@@ -836,7 +817,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     data: {
       matchDayId: match.id,
       playerId: squadPlayer.playerId,
-      eventType: eventType as (typeof matchEventTypes)[number],
+        eventType,
       half: activeHalf.half,
       matchSecond,
       ownScoreAtTime: match.ownScore,
@@ -1070,7 +1051,7 @@ export default async function MatchDayDetailPage({
     .map((row) => {
       const eventCounts = Array.from(row.eventCounts.entries()).map(([eventType, count]) => ({
         key: eventType,
-        label: formatEventType(eventType),
+        label: formatMatchEventType(eventType),
         count,
       }))
 
@@ -1110,7 +1091,7 @@ export default async function MatchDayDetailPage({
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = match.matchEvents.map((event) => ({
     id: event.id,
-    label: formatEventType(event.eventType),
+    label: formatMatchEventType(event.eventType),
     half: event.half,
     matchSecond: event.matchSecond,
     playerName: event.player
@@ -1135,7 +1116,7 @@ export default async function MatchDayDetailPage({
     playerName: event.player
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player',
-    event: formatEventType(event.eventType),
+    event: formatMatchEventType(event.eventType),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
   const showHeaderScore = match.status !== 'DRAFT'

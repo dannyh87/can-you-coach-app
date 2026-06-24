@@ -5,6 +5,12 @@ import MatchDayWizard from '@/app/match-day/new/MatchDayWizard'
 import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
+import {
+  getMatchPhaseGroups,
+  inferAgePhase,
+  isMatchEventType,
+  matchEventTaxonomy,
+} from '@/lib/matchEventTaxonomy'
 import { canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
@@ -13,16 +19,6 @@ export const dynamic = 'force-dynamic'
 const matchTypes = ['LEAGUE', 'CUP', 'FRIENDLY'] as const
 const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
-const eventDefinitions = [
-  { value: 'GOAL', label: 'Goal', category: 'ATTACKING', categoryLabel: 'Attacking' },
-  { value: 'ASSIST', label: 'Assist', category: 'ATTACKING', categoryLabel: 'Attacking' },
-  { value: 'SHOT_ON_TARGET', label: 'Shot on target', category: 'ATTACKING', categoryLabel: 'Attacking' },
-  { value: 'SHOT_OFF_TARGET', label: 'Shot off target', category: 'ATTACKING', categoryLabel: 'Attacking' },
-  { value: 'PASS_COMPLETE', label: 'Pass complete', category: 'IN_POSSESSION', categoryLabel: 'In possession' },
-  { value: 'PASS_INCOMPLETE', label: 'Pass incomplete', category: 'IN_POSSESSION', categoryLabel: 'In possession' },
-  { value: 'ONE_V_ONE_SUCCESS', label: '1v1 success', category: 'IN_POSSESSION', categoryLabel: 'In possession' },
-  { value: 'ONE_V_ONE_UNSUCCESSFUL', label: '1v1 unsuccessful', category: 'IN_POSSESSION', categoryLabel: 'In possession' },
-] as const
 
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -39,8 +35,8 @@ async function createMatchFromWizard(formData: FormData) {
   const opposition = getTextValue(formData, 'opposition')
   const matchType = getTextValue(formData, 'matchType')
   const venue = getTextValue(formData, 'venue')
-  const selectedCategories = formData
-    .getAll('eventCategory')
+  const selectedEventTypes = formData
+    .getAll('eventType')
     .filter((value): value is string => typeof value === 'string')
   const playerStatuses = formData
     .getAll('playerStatus')
@@ -70,10 +66,12 @@ async function createMatchFromWizard(formData: FormData) {
       .filter(({ playerId, squadStatus }) => activePlayerIds.has(playerId) && squadStatuses.includes(squadStatus as (typeof squadStatuses)[number]))
       .map(({ playerId, squadStatus }) => [playerId, squadStatus as (typeof squadStatuses)[number]])
   )
-  const categories = selectedCategories.length > 0
-    ? new Set(selectedCategories)
-    : new Set(eventDefinitions.map((eventDefinition) => eventDefinition.category))
-  const selectedEvents = eventDefinitions.filter((eventDefinition) => categories.has(eventDefinition.category))
+  const selectedEvents = (selectedEventTypes.length > 0
+    ? selectedEventTypes.filter(isMatchEventType)
+    : matchEventTaxonomy.map((eventDefinition) => eventDefinition.value)
+  )
+    .map((eventType) => matchEventTaxonomy.find((eventDefinition) => eventDefinition.value === eventType))
+    .filter((eventDefinition) => eventDefinition !== undefined)
 
   const match = await prisma.matchDay.create({
     data: {
@@ -96,7 +94,7 @@ async function createMatchFromWizard(formData: FormData) {
       matchDayEventTypes: {
         create: selectedEvents.map((eventDefinition) => ({
           eventType: eventDefinition.value,
-          category: eventDefinition.category,
+          category: eventDefinition.prismaCategory,
         })),
       },
     },
@@ -131,6 +129,8 @@ export default async function NewMatchDayPage() {
           id: team.id,
           name: team.name,
           clubName: team.club.name,
+          ageGroup: team.ageGroup,
+          inferredAgePhase: inferAgePhase(team.ageGroup),
           players: team.players.map((player) => ({
             id: player.id,
             name: `${player.firstName} ${player.surname}`,
@@ -138,8 +138,22 @@ export default async function NewMatchDayPage() {
             preferredPosition: player.preferredPosition,
           })),
         }))}
-        eventCategories={Array.from(new Map(eventDefinitions.map((eventDefinition) => [eventDefinition.category, eventDefinition.categoryLabel])).entries()).map(([value, label]) => ({ value, label }))}
-        eventDefinitions={eventDefinitions.map((eventDefinition) => ({ value: eventDefinition.value, label: eventDefinition.label, category: eventDefinition.category }))}
+        matchPhaseGroups={getMatchPhaseGroups().map((group) => ({
+          value: group.value,
+          label: group.label,
+          events: group.events.map((event) => ({
+            value: event.value,
+            label: event.label,
+            category: event.category,
+            categoryLabel: event.categoryLabel,
+            matchPhase: event.matchPhase,
+            matchPhaseLabel: event.matchPhaseLabel,
+            agePhases: event.agePhases,
+            fourCorner: event.fourCorner,
+            positionRelevance: event.positionRelevance,
+            enabledByDefault: event.enabledByDefault,
+          })),
+        }))}
         createAction={createMatchFromWizard}
       />
     </main>

@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
+
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
 type MatchEventType =
@@ -72,9 +74,6 @@ const formatPlayerName = (player: EventPlayer) =>
 
 const formatSquadNumber = (squadNumber: number | null) =>
   squadNumber === null ? 'No squad number' : `#${squadNumber}`
-
-const formatEventType = (eventOptions: readonly EventOption[], eventType: MatchEventType) =>
-  eventOptions.find((option) => option.value === eventType)?.label ?? eventType
 
 const formatHalf = (half: MatchHalf) =>
   half === 'FIRST_HALF' ? '1H' : '2H'
@@ -162,7 +161,7 @@ export default function MatchEventsClient({
     const result = await recordMatchEventAction(formData)
 
     if (result.ok) {
-      setMessage(`${formatEventType(eventOptions, eventType)} recorded for ${formatPlayerName(player)}.`)
+      setMessage(`${formatMatchEventType(eventType)} recorded for ${formatPlayerName(player)}.`)
       router.refresh()
     } else {
       setError(result.reason)
@@ -481,7 +480,7 @@ export default function MatchEventsClient({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold">
-                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {formatEventType(eventOptions, event.eventType)}
+                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {formatMatchEventType(event.eventType)}
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
                       {event.playerName} · {event.ownScoreAtTime}-{event.oppositionScoreAtTime}
