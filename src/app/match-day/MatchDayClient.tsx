@@ -71,13 +71,6 @@ export default function MatchDayClient({
     setError(null)
   }
 
-  const openCreateModal = () => {
-    setSelectedMatch(null)
-    setError(null)
-    setMessage(null)
-    setModalMode('create')
-  }
-
   const openDetailModal = (match: MatchDayRow) => {
     setSelectedMatch(match)
     setError(null)
@@ -113,12 +106,9 @@ export default function MatchDayClient({
         title="Matches"
         description="Review created match records and open details."
         actions={(
-          <Button
-            type="button"
-            onClick={openCreateModal}
-          >
-            Create match
-          </Button>
+          <ActionLink href="/match-day/new" variant="primary">
+            Create Match Day
+          </ActionLink>
         )}
         bodyClassName="p-0"
       >

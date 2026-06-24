@@ -1245,6 +1245,36 @@ export default async function MatchDayDetailPage({
         />
       )}
 
+      {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
+        <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <summary className="cursor-pointer text-lg font-bold text-slate-950">
+            Match setup
+          </summary>
+          <div className="mt-4 grid gap-3 text-sm text-slate-700 md:grid-cols-3">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <h2 className="font-bold text-amber-950">Squad setup locked</h2>
+              <p className="mt-1 text-amber-900">
+                Starters, substitutes and not involved players are locked after kick-off to protect minutes and substitution history.
+              </p>
+              {/* TODO: Add safe mid-game squad edits that preserve existing stints and events. */}
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <h2 className="font-bold text-amber-950">Event setup locked</h2>
+              <p className="mt-1 text-amber-900">
+                Tracked event categories are locked after kick-off so existing event records stay consistent.
+              </p>
+              {/* TODO: Add safe mid-game event category edits without removing existing recorded events. */}
+            </div>
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+              <h2 className="font-bold text-blue-950">Safe setup view</h2>
+              <p className="mt-1 text-blue-900">
+                Use players/substitutions and event recording below for live coaching observations. Setup edits can be expanded in a future version.
+              </p>
+            </div>
+          </div>
+        </details>
+      )}
+
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
         <section className="mt-6 rounded-2xl bg-gray-50 p-4 sm:p-5">
           <div>
