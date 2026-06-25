@@ -8,12 +8,19 @@ export const isClerkEnabled = () =>
   Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY)
 
 export async function getCurrentUser() {
+  const user = await getOptionalCurrentUser()
+  if (!user) redirect('/sign-in')
+
+  return user
+}
+
+export async function getOptionalCurrentUser() {
   if (!isClerkEnabled()) {
     return getLocalUser()
   }
 
   const clerkUser = await currentUser()
-  if (!clerkUser) redirect('/sign-in')
+  if (!clerkUser) return null
 
   const email = clerkUser.primaryEmailAddress?.emailAddress
   if (!email) {

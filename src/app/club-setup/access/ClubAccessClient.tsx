@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -29,6 +30,13 @@ type ClubAccessRow = {
     teamName: string
   }>
 }
+
+const roleDescriptions = [
+  { role: 'Club Admin', description: 'Full club setup, users, teams and players.' },
+  { role: 'Coach', description: 'Manage assigned teams and create/manage sessions.' },
+  { role: 'Assistant Coach', description: 'Record and help with assigned teams.' },
+  { role: 'Parent Contributor', description: 'Linked-player-only access. No club membership.' },
+]
 
 type ClubAccessClientProps = {
   clubs: ClubAccessRow[]
@@ -94,9 +102,15 @@ export default function ClubAccessClient({
 
   if (clubs.length === 0) {
     return (
-      <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        You need Club Admin access to manage users.
-      </p>
+      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm">
+        <h2 className="text-xl font-bold">No club admin access</h2>
+        <p className="mt-2 text-sm">
+          Only Club Admins can manage staff and parent links. Ask a Club Admin to update your access.
+        </p>
+        <Link href="/" className="mt-4 inline-flex rounded-lg bg-amber-800 px-4 py-2 text-sm font-bold text-white hover:bg-amber-900">
+          Back to home
+        </Link>
+      </section>
     )
   }
 
@@ -121,6 +135,7 @@ export default function ClubAccessClient({
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-xl font-bold text-slate-950">Add staff access</h2>
             <p className="mt-1 text-sm text-slate-600">Staff users get club/team permissions through club membership.</p>
+            <RoleHelp />
             <form
               className="mt-4 grid gap-3 md:grid-cols-3"
               onSubmit={(event) => {
@@ -149,13 +164,22 @@ export default function ClubAccessClient({
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-xl font-bold text-slate-950">Staff access</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              The current Club Admin/Owner already has access. Add coaches and assistants when they need their own login.
+            </p>
             <div className="mt-4 space-y-3">
+              {selectedClub.staff.length <= 1 && (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                  No other staff added yet.
+                </p>
+              )}
               {selectedClub.staff.map((staff) => (
                 <article key={staff.id} className="rounded-xl border border-slate-200 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <p className="font-bold text-slate-950">{staff.email}</p>
                       <p className="mt-1 text-sm text-slate-500">{formatRole(staff.role)}</p>
+                      <TeamAssignmentSummary staff={staff} teams={selectedClub.teams} />
                     </div>
                     {staff.isCurrentUser && <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-800">You</span>}
                   </div>
@@ -184,6 +208,7 @@ export default function ClubAccessClient({
                       className="mt-3"
                       onSubmit={(event) => {
                         event.preventDefault()
+                        if (!window.confirm(`Remove staff access for ${staff.email}?`)) return
                         runAction({
                           form: event.currentTarget,
                           action: removeStaffAccessAction,
@@ -206,6 +231,12 @@ export default function ClubAccessClient({
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-xl font-bold text-slate-950">Add parent contributor</h2>
             <p className="mt-1 text-sm text-slate-600">Parent contributors are linked to players only. They do not receive club membership.</p>
+            <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+              <p className="font-bold">Parent contributors are read-only for now.</p>
+              <p className="mt-1 text-blue-900">
+                They can view linked player information in My Player. They cannot see full squad data, edit setup, score, substitutions, fitness data or admin settings. Parent event recording will be added later.
+              </p>
+            </div>
             <form
               className="mt-4 grid gap-3 md:grid-cols-2"
               onSubmit={(event) => {
@@ -214,7 +245,7 @@ export default function ClubAccessClient({
                   form: event.currentTarget,
                   action: addParentAccessAction,
                   pendingLabel: 'add-parent',
-                  successMessage: 'Parent player links saved.',
+                  successMessage: 'Parent linked to selected players.',
                   resetOnSuccess: true,
                 })
               }}
@@ -234,7 +265,9 @@ export default function ClubAccessClient({
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-xl font-bold text-slate-950">Parent contributor links</h2>
             {selectedClub.parentLinks.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-600">No parent contributors linked yet.</p>
+              <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                No parent contributors linked yet. Add a parent by email and choose one or more players.
+              </p>
             ) : (
               <div className="mt-4 divide-y rounded-xl border border-slate-200">
                 {selectedClub.parentLinks.map((link) => (
@@ -246,11 +279,12 @@ export default function ClubAccessClient({
                     <form
                       onSubmit={(event) => {
                         event.preventDefault()
+                        if (!window.confirm(`Remove parent/player link for ${link.email} and ${link.playerName}?`)) return
                         runAction({
                           form: event.currentTarget,
                           action: removeParentAccessAction,
                           pendingLabel: `remove-parent:${link.id}`,
-                          successMessage: 'Parent player link removed.',
+                          successMessage: 'Parent/player link removed.',
                         })
                       }}
                     >
@@ -283,6 +317,45 @@ function RoleSelect({ defaultValue }: { defaultValue: StaffRole }) {
   )
 }
 
+function RoleHelp() {
+  return (
+    <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:grid-cols-2">
+      {roleDescriptions.map((roleDescription) => (
+        <div key={roleDescription.role}>
+          <p className="font-bold text-slate-950">{roleDescription.role}</p>
+          <p className="text-slate-600">{roleDescription.description}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TeamAssignmentSummary({
+  staff,
+  teams,
+}: {
+  staff: ClubAccessRow['staff'][number]
+  teams: ClubAccessRow['teams']
+}) {
+  if (staff.role === 'OWNER') {
+    return <p className="mt-2 text-xs font-bold text-green-700">All teams</p>
+  }
+
+  if (staff.teamIds.length === 0) {
+    return <p className="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-900">No teams assigned</p>
+  }
+
+  const teamNames = teams
+    .filter((team) => staff.teamIds.includes(team.id))
+    .map((team) => team.name)
+
+  return (
+    <p className="mt-2 text-xs text-slate-500">
+      {teamNames.length <= 2 ? teamNames.join(', ') : `${teamNames.length} assigned teams`}
+    </p>
+  )
+}
+
 function TeamCheckboxes({
   teams,
   selectedTeamIds,
@@ -293,7 +366,12 @@ function TeamCheckboxes({
   return (
     <fieldset className="md:col-span-2">
       <legend className="text-sm font-bold text-slate-700">Assigned teams</legend>
-      <p className="mt-1 text-xs text-slate-500">Club Admins get all teams. Coaches and assistants use selected teams.</p>
+      <p className="mt-1 text-xs text-slate-500">Team selection applies to Coach and Assistant Coach. Club Admins automatically get all teams.</p>
+      {teams.length === 0 && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Create teams before assigning staff to specific teams.
+        </p>
+      )}
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {teams.map((team) => (
           <label key={team.id} className="flex items-center gap-2 rounded-lg border bg-white p-3 text-sm">
@@ -310,6 +388,11 @@ function PlayerCheckboxes({ teams }: { teams: ClubAccessRow['teams'] }) {
   return (
     <fieldset className="md:col-span-2">
       <legend className="text-sm font-bold text-slate-700">Linked players</legend>
+      {teams.every((team) => team.players.length === 0) && (
+        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Add active players before linking parent contributors.
+        </p>
+      )}
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
         {teams.map((team) => (
           <div key={team.id} className="rounded-xl border border-slate-200 p-3">

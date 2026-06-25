@@ -113,6 +113,9 @@ export default async function MyPlayerPage() {
         title="My Player"
         description="Read-only spectator access for your linked player or players."
       />
+      <p className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-950">
+        You are linked to {linkedPlayerRows.length} player{linkedPlayerRows.length === 1 ? '' : 's'}. This view is read-only.
+      </p>
 
       <div className="space-y-6">
         {linkedPlayerRows.map(({ spectatorAccess, fitnessResults, matchDayPlayers }) => {
@@ -120,7 +123,8 @@ export default async function MyPlayerPage() {
 
           return (
             <section key={spectatorAccess.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-sm font-bold uppercase tracking-wide text-slate-500">
+              <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Linked player</p>
+              <p className="mt-1 text-sm font-bold uppercase tracking-wide text-slate-500">
                 {spectatorAccess.club.name} / {player.team.name}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold text-slate-950">
@@ -149,7 +153,9 @@ export default async function MyPlayerPage() {
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">Recent Fitness Results</h2>
                   {fitnessResults.length === 0 ? (
-                    <p className="mt-3 text-sm text-slate-600">No fitness results are available yet.</p>
+                    <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                      No fitness results available for this player yet.
+                    </p>
                   ) : (
                     <div className="mt-4 space-y-3">
                       {fitnessResults.map((result) => (
@@ -176,7 +182,9 @@ export default async function MyPlayerPage() {
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">Recent Match Reports</h2>
                   {matchDayPlayers.length === 0 ? (
-                    <p className="mt-3 text-sm text-slate-600">No match reports are available yet.</p>
+                    <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                      No match reports available for this player yet.
+                    </p>
                   ) : (
                     <div className="mt-4 space-y-3">
                       {matchDayPlayers.map((matchDayPlayer) => {

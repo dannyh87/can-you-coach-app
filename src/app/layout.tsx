@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { Inter } from 'next/font/google'
 import Link from 'next/link'
-import { isClerkEnabled } from '@/lib/auth'
+import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -22,11 +23,21 @@ export const metadata: Metadata = {
   description: 'Track. Learn. Improve.',
 }
 
-export default function RootLayout({
+const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
+  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  blue: 'border-blue-200 bg-blue-50 text-blue-800',
+  green: 'border-green-200 bg-green-50 text-green-800',
+  amber: 'border-amber-200 bg-amber-50 text-amber-900',
+  purple: 'border-purple-200 bg-purple-50 text-purple-800',
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const user = await getOptionalCurrentUser()
+  const accessSummary = user ? await getCurrentAccessSummary(user) : null
   const body = (
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 antialiased`}>
@@ -51,6 +62,15 @@ export default function RootLayout({
                   </Link>
                 ))}
               </nav>
+
+              {accessSummary && (
+                <span
+                  title={accessSummary.title}
+                  className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${accessBadgeClasses[accessSummary.tone]}`}
+                >
+                  {accessSummary.label}
+                </span>
+              )}
 
               {isClerkEnabled() && (
                 <Link
