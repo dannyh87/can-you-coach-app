@@ -116,6 +116,12 @@ export default async function MyPlayerPage() {
       <p className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-950">
         You are linked to {linkedPlayerRows.length} player{linkedPlayerRows.length === 1 ? '' : 's'}. This view is read-only.
       </p>
+      <Link
+        href="/my-player/matches"
+        className="mb-6 inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+      >
+        Match observations
+      </Link>
 
       <div className="space-y-6">
         {linkedPlayerRows.map(({ spectatorAccess, fitnessResults, matchDayPlayers }) => {

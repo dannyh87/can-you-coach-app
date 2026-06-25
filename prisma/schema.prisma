@@ -18,6 +18,8 @@ model User {
   fitnessTestTypes  FitnessTestType[]
   memberships       ClubMembership[]
   spectatorAccess   SpectatorAccess[]
+  submittedMatchEvents SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
+  acceptedSubmittedMatchEvents SubmittedMatchEvent[] @relation("AcceptedSubmittedMatchEvents")
 }
 
 enum ClubRole {
@@ -105,6 +107,7 @@ model MatchDay {
   matchPlayerStints MatchPlayerStint[]
   matchEvents     MatchEvent[]
   matchDayEventTypes MatchDayEventType[]
+  submittedMatchEvents SubmittedMatchEvent[]
 }
 
 model MatchDayEventType {
@@ -166,6 +169,32 @@ model MatchEvent {
   updatedAt             DateTime       @updatedAt
   matchDay              MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   player                Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
+}
+
+model SubmittedMatchEvent {
+  id                    String                    @id @default(cuid())
+  matchDayId            String
+  playerId              String
+  submittedByUserId     String
+  eventType             MatchEventType
+  half                  MatchHalf
+  matchSecond           Int
+  ownScoreAtTime        Int
+  oppositionScoreAtTime Int
+  note                  String?
+  status                SubmittedMatchEventStatus @default(PENDING)
+  acceptedAt            DateTime?
+  acceptedByUserId      String?
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  matchDay              MatchDay                  @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                Player                    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  submittedBy           User                      @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy            User?                     @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([matchDayId, playerId])
+  @@index([submittedByUserId])
+  @@index([status])
 }
 
 model EventDefinition {
@@ -242,6 +271,12 @@ enum MatchEventCategory {
   TRANSITION
 }
 
+enum SubmittedMatchEventStatus {
+  PENDING
+  ACCEPTED
+  IGNORED
+}
+
 enum EventDefinitionScope {
   GLOBAL
   CLUB
@@ -308,6 +343,7 @@ model Player {
   matchPlayerStints  MatchPlayerStint[]
   matchEvents         MatchEvent[]
   spectatorAccess     SpectatorAccess[]
+  submittedMatchEvents SubmittedMatchEvent[]
 }
 
 model SpectatorAccess {
