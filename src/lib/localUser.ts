@@ -1,13 +1,15 @@
 import { prisma } from '@/lib/prisma'
-
-const LOCAL_USER_EMAIL = 'local-coach@can-you-coach.local'
+import { getRoleTesterSelectedEmail, LOCAL_COACH_EMAIL } from '@/lib/roleTester'
 
 export async function getLocalUser() {
+  const selectedEmail = await getRoleTesterSelectedEmail()
+  const email = selectedEmail ?? LOCAL_COACH_EMAIL
+
   return prisma.user.upsert({
-    where: { email: LOCAL_USER_EMAIL },
+    where: { email },
     update: {},
     create: {
-      email: LOCAL_USER_EMAIL,
+      email,
       passwordHash: 'local-mvp-user',
     },
   })

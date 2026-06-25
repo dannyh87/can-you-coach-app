@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
+import { isRoleTesterEnabled } from '@/lib/roleTester'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -62,6 +63,15 @@ export default async function RootLayout({
                   </Link>
                 ))}
               </nav>
+
+              {isRoleTesterEnabled() && (
+                <Link
+                  href="/dev/role-tester"
+                  className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 sm:text-sm"
+                >
+                  Role tester
+                </Link>
+              )}
 
               {accessSummary && (
                 <span
