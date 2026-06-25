@@ -72,9 +72,11 @@ export default function MatchDayWizard({
   const [venue, setVenue] = useState('HOME')
   const [teamId, setTeamId] = useState(teams[0]?.id ?? '')
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, SquadStatus>>({})
-  const [eventView, setEventView] = useState<'phases' | 'categories' | 'events'>('phases')
-  const [selectedMatchPhase, setSelectedMatchPhase] = useState<MatchPhase | null>(null)
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [eventSearchTerm, setEventSearchTerm] = useState('')
+  const [eventMatchPhaseFilter, setEventMatchPhaseFilter] = useState('ALL')
+  const [eventCategoryFilter, setEventCategoryFilter] = useState('ALL')
+  const [eventPositionFilter, setEventPositionFilter] = useState('ALL')
+  const [eventFourCornerFilter, setEventFourCornerFilter] = useState('ALL')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const selectedTeam = teams.find((team) => team.id === teamId) ?? teams[0]
@@ -97,19 +99,6 @@ export default function MatchDayWizard({
   const goBack = () => setStep((currentStep) => Math.max(1, currentStep - 1))
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
-  }
-  const toggleCategory = (category: string) => {
-    const categoryEvents = matchPhaseGroups.flatMap((group) => group.events).filter((event) => event.category === category)
-    const allSelected = categoryEvents.every((event) => selectedEventTypeSet.has(event.value))
-
-    setSelectedEventTypes((currentEventTypes) => {
-      const currentSet = new Set(currentEventTypes)
-      categoryEvents.forEach((event) => {
-        if (allSelected) currentSet.delete(event.value)
-        else currentSet.add(event.value)
-      })
-      return Array.from(currentSet)
-    })
   }
   const applyDefaultEvents = () => setSelectedEventTypes(recommendedEventTypes)
   const toggleEventType = (eventType: string) => {
@@ -193,9 +182,6 @@ export default function MatchDayWizard({
               onClick={() => {
                 setTeamId(team.id)
                 setSelectedEventTypes(getRecommendedEventTypes(allEvents, team.inferredAgePhase))
-                setEventView('phases')
-                setSelectedMatchPhase(null)
-                setSelectedCategory(null)
               }}
             />
           ))}
@@ -250,18 +236,21 @@ export default function MatchDayWizard({
       )}
 
       {step === 5 && (
-        <EventDrillDownSelector
+        <EventPicker
           agePhase={selectedTeam?.inferredAgePhase ?? 'ALL'}
-          eventView={eventView}
-          setEventView={setEventView}
-          selectedMatchPhase={selectedMatchPhase}
-          setSelectedMatchPhase={setSelectedMatchPhase}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          matchPhaseGroups={matchPhaseGroups}
+          events={allEvents}
+          eventSearchTerm={eventSearchTerm}
+          setEventSearchTerm={setEventSearchTerm}
+          eventMatchPhaseFilter={eventMatchPhaseFilter}
+          setEventMatchPhaseFilter={setEventMatchPhaseFilter}
+          eventCategoryFilter={eventCategoryFilter}
+          setEventCategoryFilter={setEventCategoryFilter}
+          eventPositionFilter={eventPositionFilter}
+          setEventPositionFilter={setEventPositionFilter}
+          eventFourCornerFilter={eventFourCornerFilter}
+          setEventFourCornerFilter={setEventFourCornerFilter}
           selectedEventTypeSet={selectedEventTypeSet}
           selectedEventCount={selectedEventTypes.length}
-          onToggleCategory={toggleCategory}
           onToggleEvent={toggleEventType}
           onUseDefaults={applyDefaultEvents}
         />
@@ -302,175 +291,156 @@ function getStepTitle(step: number) {
   return 'Review and create'
 }
 
-function EventDrillDownSelector({
+function EventPicker({
   agePhase,
-  eventView,
-  setEventView,
-  selectedMatchPhase,
-  setSelectedMatchPhase,
-  selectedCategory,
-  setSelectedCategory,
-  matchPhaseGroups,
+  events,
+  eventSearchTerm,
+  setEventSearchTerm,
+  eventMatchPhaseFilter,
+  setEventMatchPhaseFilter,
+  eventCategoryFilter,
+  setEventCategoryFilter,
+  eventPositionFilter,
+  setEventPositionFilter,
+  eventFourCornerFilter,
+  setEventFourCornerFilter,
   selectedEventTypeSet,
   selectedEventCount,
-  onToggleCategory,
   onToggleEvent,
   onUseDefaults,
 }: {
   agePhase: AgePhase
-  eventView: 'phases' | 'categories' | 'events'
-  setEventView: (view: 'phases' | 'categories' | 'events') => void
-  selectedMatchPhase: MatchPhase | null
-  setSelectedMatchPhase: (matchPhase: MatchPhase | null) => void
-  selectedCategory: string | null
-  setSelectedCategory: (category: string | null) => void
-  matchPhaseGroups: MatchPhaseGroup[]
+  events: TaxonomyEvent[]
+  eventSearchTerm: string
+  setEventSearchTerm: (value: string) => void
+  eventMatchPhaseFilter: string
+  setEventMatchPhaseFilter: (value: string) => void
+  eventCategoryFilter: string
+  setEventCategoryFilter: (value: string) => void
+  eventPositionFilter: string
+  setEventPositionFilter: (value: string) => void
+  eventFourCornerFilter: string
+  setEventFourCornerFilter: (value: string) => void
   selectedEventTypeSet: Set<string>
   selectedEventCount: number
-  onToggleCategory: (category: string) => void
   onToggleEvent: (eventType: string) => void
   onUseDefaults: () => void
 }) {
-  const selectableGroups = matchPhaseGroups.filter((group) => group.events.length > 0)
-  const selectedGroup = matchPhaseGroups.find((group) => group.value === selectedMatchPhase)
-  const categories = getCategoryGroups(selectedGroup?.events ?? [])
-  const selectedCategoryGroup = categories.find((category) => category.value === selectedCategory)
+  const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
+  const matchPhaseOptions = getUniqueOptions(events, 'matchPhase', 'matchPhaseLabel')
+  const categoryOptions = getUniqueOptions(events, 'category', 'categoryLabel')
+  const positionOptions = Array.from(new Set(events.flatMap((event) => event.positionRelevance))).sort()
+  const fourCornerOptions = Array.from(new Set(events.map((event) => event.fourCorner))).sort()
+  const visibleEvents = events.filter((event) => {
+    if (normalizedSearchTerm && !event.label.toLowerCase().includes(normalizedSearchTerm)) return false
+    if (eventMatchPhaseFilter !== 'ALL' && event.matchPhase !== eventMatchPhaseFilter) return false
+    if (eventCategoryFilter !== 'ALL' && event.category !== eventCategoryFilter) return false
+    if (eventPositionFilter !== 'ALL' && !event.positionRelevance.includes(eventPositionFilter)) return false
+    if (eventFourCornerFilter !== 'ALL' && event.fourCorner !== eventFourCornerFilter) return false
+    return true
+  })
+  const selectedEvents = events.filter((event) => selectedEventTypeSet.has(event.value))
 
-  if (eventView === 'categories' && selectedGroup) {
-    return (
-      <div className="space-y-3">
-        <EventSetupHeader
-          agePhase={agePhase}
-          selectedEventCount={selectedEventCount}
-          onUseDefaults={onUseDefaults}
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setEventView('phases')
-            setSelectedMatchPhase(null)
-          }}
-          className="text-sm font-semibold text-blue-800 hover:underline"
-        >
-          Back to focus areas
-        </button>
-        <div className="grid gap-3">
-          {categories.map((category) => {
-            const selectedCount = category.events.filter((event) => selectedEventTypeSet.has(event.value)).length
-            return (
-              <button
-                key={category.value}
-                type="button"
-                onClick={() => {
-                  setSelectedCategory(category.value)
-                  setEventView('events')
-                }}
-                className="rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-200 hover:bg-blue-50/40"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-slate-950">{category.label}</span>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-                    {selectedCount} of {category.events.length} selected
-                  </span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+  return (
+    <div className="space-y-4">
+      <EventSetupHeader agePhase={agePhase} selectedEventCount={selectedEventCount} onUseDefaults={onUseDefaults} />
 
-  if (eventView === 'events' && selectedCategoryGroup) {
-    return (
-      <div className="space-y-3">
-        <EventSetupHeader
-          agePhase={agePhase}
-          selectedEventCount={selectedEventCount}
-          onUseDefaults={onUseDefaults}
-        />
-        <div className="flex flex-wrap gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => {
-              setEventView('categories')
-              setSelectedCategory(null)
-            }}
-            className="font-semibold text-blue-800 hover:underline"
-          >
-            Back to categories
-          </button>
-          <button
-            type="button"
-            onClick={() => onToggleCategory(selectedCategoryGroup.value)}
-            className="font-semibold text-blue-800 hover:underline"
-          >
-            Toggle all in {selectedCategoryGroup.label}
-          </button>
-        </div>
-        <div className="grid gap-2">
-          {selectedCategoryGroup.events.map((event) => {
-            const selected = selectedEventTypeSet.has(event.value)
-            return (
+      {selectedEvents.length > 0 && (
+        <div className="rounded-xl border border-blue-100 bg-white p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected events</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectedEvents.map((event) => (
               <button
                 key={event.value}
                 type="button"
                 onClick={() => onToggleEvent(event.value)}
-                className={`rounded-xl border p-4 text-left ${
-                  selected ? 'border-blue-700 bg-blue-50' : 'border-slate-200 bg-white'
-                }`}
+                className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-900 hover:bg-blue-200"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-slate-950">{event.label}</p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {event.fourCorner.replace('_', ' ').toLowerCase()} · Relevant: {event.positionRelevance.join(', ')}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${selected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                    {selected ? 'Selected' : 'Add'}
-                  </span>
-                </div>
+                {event.label} ×
               </button>
-            )
-          })}
+            ))}
+          </div>
         </div>
-      </div>
-    )
-  }
+      )}
 
-  return (
-    <div className="space-y-3">
-      <EventSetupHeader
-        agePhase={agePhase}
-        selectedEventCount={selectedEventCount}
-        onUseDefaults={onUseDefaults}
-      />
-      <div className="grid gap-3">
-        {selectableGroups.map((group) => {
-          const selectedCount = group.events.filter((event) => selectedEventTypeSet.has(event.value)).length
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+        <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
+          Search events
+          <input
+            value={eventSearchTerm}
+            onChange={(event) => setEventSearchTerm(event.target.value)}
+            className={fieldClassName}
+            placeholder="Search by event name"
+          />
+        </label>
+        <EventFilterSelect label="Match phase" value={eventMatchPhaseFilter} onChange={setEventMatchPhaseFilter} options={matchPhaseOptions} />
+        <EventFilterSelect label="Category" value={eventCategoryFilter} onChange={setEventCategoryFilter} options={categoryOptions} />
+        <EventFilterSelect
+          label="Position relevance"
+          value={eventPositionFilter}
+          onChange={setEventPositionFilter}
+          options={positionOptions.map((value) => ({ value, label: formatEventMeta(value) }))}
+        />
+        <EventFilterSelect
+          label="4 Corner"
+          value={eventFourCornerFilter}
+          onChange={setEventFourCornerFilter}
+          options={fourCornerOptions.map((value) => ({ value, label: formatEventMeta(value) }))}
+        />
+        {/* TODO: Add tag filters when event tags exist in the data model. */}
+      </div>
+
+      <div className="grid gap-2">
+        {visibleEvents.length === 0 ? (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            No events match the current filters.
+          </p>
+        ) : visibleEvents.map((event) => {
+          const selected = selectedEventTypeSet.has(event.value)
+
           return (
-            <button
-              key={group.value}
-              type="button"
-              onClick={() => {
-                setSelectedMatchPhase(group.value)
-                setEventView('categories')
-              }}
-              className="rounded-xl border border-slate-200 bg-white p-4 text-left hover:border-blue-200 hover:bg-blue-50/40"
+            <label
+              key={event.value}
+              className={`rounded-xl border p-3 text-left transition ${
+                selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
+              }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-slate-950">{group.label}</span>
-                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">
-                  {selectedCount} selected
-                </span>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleEvent(event.value)}
+                  className="mt-1"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-bold text-slate-950">{event.label}</p>
+                    {event.enabledByDefault && (
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800">
+                        Default
+                      </span>
+                    )}
+                    {selected && (
+                      <span className="rounded-full bg-blue-800 px-2 py-0.5 text-[11px] font-bold text-white">
+                        Selected
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {event.matchPhaseLabel} · {event.categoryLabel} · {formatEventMeta(event.fourCorner)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Relevant: {event.positionRelevance.map(formatEventMeta).join(', ')}
+                  </p>
+                </div>
               </div>
-            </button>
+            </label>
           )
         })}
       </div>
+
       <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        More areas such as out of possession, transition, set pieces and discipline are planned for the future event library.
+        Showing {visibleEvents.length} of {events.length} available observation events. Library-only events are not shown here yet.
       </p>
     </div>
   )
@@ -485,37 +455,106 @@ function EventSetupHeader({
   selectedEventCount: number
   onUseDefaults: () => void
 }) {
+  const workloadGuidance = getWorkloadGuidance(selectedEventCount)
+
   return (
-    <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-bold">
-          Suggested for {agePhaseLabels[agePhase]} · {selectedEventCount} events selected
-        </p>
+    <div className={`rounded-xl border p-3 text-sm ${workloadGuidance.className}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide opacity-80">Choose what you want to observe</p>
+          <p className="mt-1 text-xl font-extrabold">
+            {selectedEventCount} event{selectedEventCount === 1 ? '' : 's'} selected
+          </p>
+          <p className="mt-1 font-semibold">{workloadGuidance.label}</p>
+        </div>
         <button type="button" onClick={onUseDefaults} className="font-semibold text-blue-800 hover:underline">
           Use defaults
         </button>
       </div>
-      <p className="mt-1 text-blue-900">
-        These are coaching observation buttons, not match admin fields. You can customise them before creating the match.
+      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+        <span className="rounded-full bg-white/70 px-2.5 py-1">Suggested for {agePhaseLabels[agePhase]}</span>
+        <span className="rounded-full bg-white/70 px-2.5 py-1">4-8 focused</span>
+        <span className="rounded-full bg-white/70 px-2.5 py-1">9-12 busy</span>
+        <span className="rounded-full bg-white/70 px-2.5 py-1">13+ too much</span>
+      </div>
+      <p className="mt-2">
+        These are coaching observation buttons, not match admin fields. Choose only what you can realistically record live.
       </p>
     </div>
   )
 }
 
-function getCategoryGroups(events: TaxonomyEvent[]) {
-  const groups = new Map<string, { value: string; label: string; events: TaxonomyEvent[] }>()
+function EventFilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <label className="text-sm font-semibold text-slate-700">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className={fieldClassName}>
+        <option value="ALL">All</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function getUniqueOptions(
+  events: TaxonomyEvent[],
+  valueKey: 'matchPhase' | 'category',
+  labelKey: 'matchPhaseLabel' | 'categoryLabel'
+) {
+  const options = new Map<string, string>()
 
   for (const event of events) {
-    const group = groups.get(event.category) ?? {
-      value: event.category,
-      label: event.categoryLabel,
-      events: [],
-    }
-    group.events.push(event)
-    groups.set(event.category, group)
+    options.set(event[valueKey], event[labelKey])
   }
 
-  return Array.from(groups.values())
+  return Array.from(options.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((firstOption, secondOption) => firstOption.label.localeCompare(secondOption.label))
+}
+
+function formatEventMeta(value: string) {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function getWorkloadGuidance(selectedEventCount: number) {
+  if (selectedEventCount === 0) {
+    return {
+      label: 'Select a few events or use defaults.',
+      className: 'border-amber-200 bg-amber-50 text-amber-950',
+    }
+  }
+  if (selectedEventCount <= 8) {
+    return {
+      label: 'Focused match view.',
+      className: 'border-green-200 bg-green-50 text-green-950',
+    }
+  }
+  if (selectedEventCount <= 12) {
+    return {
+      label: 'Busy but manageable.',
+      className: 'border-blue-200 bg-blue-50 text-blue-950',
+    }
+  }
+
+  return {
+    label: 'This may be too much for one person to record live.',
+    className: 'border-red-200 bg-red-50 text-red-950',
+  }
 }
 
 function getStepDescription(step: number) {
