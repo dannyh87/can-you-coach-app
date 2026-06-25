@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import ClubSetupClient from '@/app/club-setup/ClubSetupClient'
 import PageHeader from '@/components/ui/PageHeader'
 import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
@@ -240,6 +241,12 @@ export default async function ClubSetupPage() {
         title="Club Setup"
         description="Add your club and teams once so the rest of the app is ready to use."
       />
+      <Link
+        href="/club-setup/access"
+        className="mb-4 inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+      >
+        Manage access
+      </Link>
 
       <ClubSetupClient
         clubs={clubRows}
