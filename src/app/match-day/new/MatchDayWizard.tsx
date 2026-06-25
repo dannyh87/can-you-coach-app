@@ -94,8 +94,18 @@ export default function MatchDayWizard({
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
   const substituteCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'SUBSTITUTE').length ?? 0
   const involvedCount = starterCount + substituteCount
+  const missingRequiredFields = [!opposition.trim() ? 'opposition' : null].filter(Boolean)
+  const canCreateMatch = missingRequiredFields.length === 0
 
-  const goNext = () => setStep((currentStep) => Math.min(totalSteps, currentStep + 1))
+  const goNext = () => {
+    if (step === 1 && !opposition.trim()) {
+      setError('Add the opposition before continuing.')
+      return
+    }
+
+    setError(null)
+    setStep((currentStep) => Math.min(totalSteps, currentStep + 1))
+  }
   const goBack = () => setStep((currentStep) => Math.max(1, currentStep - 1))
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
@@ -142,6 +152,11 @@ export default function MatchDayWizard({
           <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
             Opposition
             <input value={opposition} onChange={(event) => setOpposition(event.target.value)} className={fieldClassName} placeholder="Who are you playing?" />
+            {!opposition.trim() && (
+              <span className="mt-1 block text-xs font-semibold text-amber-700">
+                Opposition is required before creating the match.
+              </span>
+            )}
           </label>
           <label className="text-sm font-semibold text-slate-700">
             Date
@@ -258,6 +273,11 @@ export default function MatchDayWizard({
 
       {step === 6 && selectedTeam && (
         <div className="space-y-3">
+          {!canCreateMatch && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              Add the opposition before creating this match.
+            </p>
+          )}
           <ReviewRow label="Opposition" value={opposition || 'Not set'} />
           <ReviewRow label="Date" value={`${date} at ${kickoffTime}`} />
           <ReviewRow label="Team" value={`${selectedTeam.clubName} / ${selectedTeam.name}`} />
@@ -274,7 +294,7 @@ export default function MatchDayWizard({
           {step < totalSteps ? (
             <Button type="button" onClick={goNext}>Next</Button>
           ) : (
-            <Button type="button" onClick={createMatch} disabled={isPending || !opposition.trim()}>{isPending ? 'Creating...' : 'Create Match'}</Button>
+            <Button type="button" onClick={createMatch} disabled={isPending || !canCreateMatch}>{isPending ? 'Creating...' : 'Create Match'}</Button>
           )}
         </div>
       </WizardActions>
