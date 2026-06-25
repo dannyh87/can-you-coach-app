@@ -17,7 +17,7 @@ model User {
   clubs             Club[]
   fitnessTestTypes  FitnessTestType[]
   memberships       ClubMembership[]
-  spectatorAccess   SpectatorAccess?
+  spectatorAccess   SpectatorAccess[]
 }
 
 enum ClubRole {
@@ -312,7 +312,7 @@ model Player {
 
 model SpectatorAccess {
   id        String   @id @default(cuid())
-  userId    String   @unique
+  userId    String
   clubId    String
   playerId  String
   createdAt DateTime @default(now())
@@ -322,6 +322,7 @@ model SpectatorAccess {
   player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([clubId, playerId, userId])
+  @@index([userId])
 }
 
 model FitnessTestType {

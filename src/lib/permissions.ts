@@ -70,11 +70,11 @@ export async function canRecordTeamData(userId: string, teamId: string) {
 }
 
 export async function canViewPlayer(userId: string, playerId: string) {
-  const spectatorAccess = await prisma.spectatorAccess.findUnique({
-    where: { userId },
+  const spectatorAccess = await prisma.spectatorAccess.findFirst({
+    where: { userId, playerId },
     select: { playerId: true },
   })
-  if (spectatorAccess?.playerId === playerId) return true
+  if (spectatorAccess) return true
 
   const player = await prisma.player.findUnique({
     where: { id: playerId },

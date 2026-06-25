@@ -92,7 +92,7 @@ export async function accessibleTeamWhere(userId: string): Promise<Prisma.TeamWh
 }
 
 export async function accessiblePlayerWhere(userId: string): Promise<Prisma.PlayerWhereInput> {
-  const spectatorAccess = await prisma.spectatorAccess.findUnique({
+  const spectatorAccess = await prisma.spectatorAccess.findMany({
     where: { userId },
     select: { playerId: true },
   })
@@ -102,7 +102,9 @@ export async function accessiblePlayerWhere(userId: string): Promise<Prisma.Play
   return {
     OR: [
       { teamId: { in: teamIds } },
-      ...(spectatorAccess ? [{ id: spectatorAccess.playerId }] : []),
+      ...(spectatorAccess.length > 0
+        ? [{ id: { in: spectatorAccess.map((access) => access.playerId) } }]
+        : []),
     ],
   }
 }
