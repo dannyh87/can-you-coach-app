@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
+import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -15,8 +16,6 @@ const navigationLinks = [
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
-  // TODO: Only show this link for users who pass canManageGlobalEventLibrary once nav is user-aware.
-  { href: '/super-admin/events', label: 'Super Admin' },
 ]
 
 export const metadata: Metadata = {
@@ -39,6 +38,9 @@ export default async function RootLayout({
 }) {
   const user = await getOptionalCurrentUser()
   const accessSummary = user ? await getCurrentAccessSummary(user) : null
+  const userNavigationLinks = user && canManageGlobalEventLibrary(user)
+    ? [...navigationLinks, { href: '/super-admin/events', label: 'Super Admin' }]
+    : navigationLinks
   const body = (
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 antialiased`}>
@@ -53,7 +55,7 @@ export default async function RootLayout({
                 className="-mx-1 flex gap-1 overflow-x-auto pb-1 text-sm sm:mx-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
                 aria-label="Main navigation"
               >
-                {navigationLinks.map((link) => (
+                {userNavigationLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}

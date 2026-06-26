@@ -7,7 +7,16 @@ const clerkEnabled = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
 )
 
-const disabledMiddleware = () => NextResponse.next()
+const disabledMiddleware = () => {
+  if (process.env.NODE_ENV === 'production') {
+    return new NextResponse(
+      'Clerk authentication is not configured. Production requires NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.',
+      { status: 500 }
+    )
+  }
+
+  return NextResponse.next()
+}
 
 const enabledMiddleware = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {

@@ -15,5 +15,9 @@ export function canManageGlobalEventLibrary(user: { email: string }) {
 
   if (allowedEmails.length > 0) return allowedEmails.includes(userEmail)
 
-  return !isClerkEnabled() && userEmail === localDevelopmentSuperAdminEmail
+  return (
+    !isClerkEnabled() &&
+    process.env.NODE_ENV !== 'production' &&
+    userEmail === localDevelopmentSuperAdminEmail
+  )
 }
