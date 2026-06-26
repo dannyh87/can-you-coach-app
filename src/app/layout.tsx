@@ -66,10 +66,10 @@ export default async function RootLayout({
 
               {isRoleTesterEnabled() && (
                 <Link
-                  href="/dev/role-tester"
+                  href="/super-admin/dev-tools"
                   className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 sm:text-sm"
                 >
-                  Role tester
+                  Dev Tools
                 </Link>
               )}
 
