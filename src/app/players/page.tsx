@@ -220,9 +220,14 @@ export default async function PlayersPage() {
         title="Players"
         description="Keep your squad list ready for training, fitness testing and match day tracking."
         actions={(
-          <Link href="/club-setup" className="text-sm font-semibold text-blue-800 hover:underline">
-            Club Setup
-          </Link>
+          <div className="flex flex-wrap gap-3 text-sm font-semibold">
+            <Link href="/players/import" className="text-blue-800 hover:underline">
+              Import players
+            </Link>
+            <Link href="/club-setup" className="text-blue-800 hover:underline">
+              Club Setup
+            </Link>
+          </div>
         )}
       />
 

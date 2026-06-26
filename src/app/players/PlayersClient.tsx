@@ -19,19 +19,7 @@ import SectionCard from '@/components/ui/SectionCard'
 import StatCard from '@/components/ui/StatCard'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
-
-const positions = [
-  'Goalkeeper',
-  'Right Back',
-  'Centre Back',
-  'Left Back',
-  'Defensive Midfielder',
-  'Central Midfielder',
-  'Attacking Midfielder',
-  'Right Wing',
-  'Left Wing',
-  'Striker',
-]
+import { playerPositions } from '@/lib/playerPositions'
 
 type PlayerActionResult =
   | { ok: true }
@@ -562,7 +550,7 @@ function PlayerForm({
           <option value="" disabled>
             Select position
           </option>
-          {positions.map((position) => (
+          {playerPositions.map((position) => (
             <option key={position} value={position}>
               {position}
             </option>
