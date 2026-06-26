@@ -201,6 +201,7 @@ export default async function FitnessPage() {
       manualEntry: recordingModes.manualEntry,
       liveDropout: recordingModes.liveDropout,
       liveTimedFinish: recordingModes.liveTimedFinish,
+      canDelete: manageableTeamIds.includes(session.teamId) && session.status !== 'IN_PROGRESS',
     }
   })
 

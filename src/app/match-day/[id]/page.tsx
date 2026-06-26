@@ -6,6 +6,7 @@ import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
 import MatchEventSetupClient from '@/app/match-day/[id]/MatchEventSetupClient'
 import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
 import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
+import ParentSubmissionsPanel from '@/app/match-day/[id]/ParentSubmissionsPanel'
 import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
@@ -899,6 +900,25 @@ export default async function MatchDayDetailPage({
       matchDayEventTypes: {
         orderBy: { createdAt: 'asc' },
       },
+      submittedMatchEvents: {
+        include: {
+          player: {
+            select: {
+              id: true,
+              firstName: true,
+              surname: true,
+              squadNumber: true,
+            },
+          },
+          submittedBy: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
     },
   })
 
@@ -1119,6 +1139,22 @@ export default async function MatchDayDetailPage({
     event: formatMatchEventType(event.eventType),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
+  const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
+    id: submission.id,
+    playerName: `${submission.player.firstName} ${submission.player.surname}`,
+    squadNumber: submission.player.squadNumber,
+    eventLabel: formatMatchEventType(submission.eventType),
+    submitterLabel: submission.submittedBy.email,
+    halfLabel: formatHalfLabel(submission.half),
+    matchTime: formatMatchTime(submission.matchSecond),
+    status: submission.status,
+    statusLabel: formatStatus(submission.status),
+    createdAtLabel: formatDateTime(submission.createdAt),
+    note: submission.note,
+  }))
+  const pendingParentSubmissionCount = match.submittedMatchEvents.filter(
+    (submission) => submission.status === 'PENDING'
+  ).length
   const showHeaderScore = match.status !== 'DRAFT'
 
   return (
@@ -1320,24 +1356,47 @@ export default async function MatchDayDetailPage({
               />
             </div>
           </div>
+          <div className="mt-4">
+            <ParentSubmissionsPanel
+              submissions={parentSubmissionRows}
+              pendingCount={pendingParentSubmissionCount}
+            />
+          </div>
         </section>
       )}
 
       {match.status === 'COMPLETED' && (
+        <>
+          <section className="mt-6">
+            <MatchSummaryReport
+              headline={headline}
+              finalScore={finalScore}
+              statusLabel={statusLabel}
+              matchDate={formatDateTime(match.kickoffAt)}
+              minutesRows={minutesRows}
+              teamEventTotals={teamEventTotals}
+              playerEventCounts={playerEventCounts}
+              mostInvolvedPlayers={mostInvolvedPlayers}
+              timelineEvents={timelineEvents}
+              csvMetadata={csvMetadata}
+              summaryCsvRows={summaryCsvRows}
+              eventCsvRows={eventCsvRows}
+            />
+          </section>
+          <section className="mt-4">
+            <ParentSubmissionsPanel
+              submissions={parentSubmissionRows}
+              pendingCount={pendingParentSubmissionCount}
+            />
+          </section>
+        </>
+      )}
+
+      {match.status === 'DRAFT' && parentSubmissionRows.length > 0 && (
         <section className="mt-6">
-          <MatchSummaryReport
-            headline={headline}
-            finalScore={finalScore}
-            statusLabel={statusLabel}
-            matchDate={formatDateTime(match.kickoffAt)}
-            minutesRows={minutesRows}
-            teamEventTotals={teamEventTotals}
-            playerEventCounts={playerEventCounts}
-            mostInvolvedPlayers={mostInvolvedPlayers}
-            timelineEvents={timelineEvents}
-            csvMetadata={csvMetadata}
-            summaryCsvRows={summaryCsvRows}
-            eventCsvRows={eventCsvRows}
+          <ParentSubmissionsPanel
+            submissions={parentSubmissionRows}
+            pendingCount={pendingParentSubmissionCount}
           />
         </section>
       )}

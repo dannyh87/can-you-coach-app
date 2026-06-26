@@ -42,20 +42,23 @@ type MatchDayRow = {
   oppositionScore: number
   statusLabel: string
   statusClasses: string
+  canDelete: boolean
 }
 
 type MatchDayClientProps = {
   teams: TeamOption[]
   matches: MatchDayRow[]
   createMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
+  deleteMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
 }
 
-type ModalMode = 'create' | 'detail' | null
+type ModalMode = 'create' | 'detail' | 'delete' | null
 
 export default function MatchDayClient({
   teams,
   matches,
   createMatchDayAction,
+  deleteMatchDayAction,
 }: MatchDayClientProps) {
   const router = useRouter()
   const [modalMode, setModalMode] = useState<ModalMode>(null)
@@ -77,6 +80,18 @@ export default function MatchDayClient({
     setModalMode('detail')
   }
 
+  const openDeleteModal = (match: MatchDayRow) => {
+    setSelectedMatch(match)
+    setError(null)
+    setModalMode('delete')
+  }
+
+  const returnToDetailModal = () => {
+    if (isSubmitting) return
+    setError(null)
+    setModalMode('detail')
+  }
+
   const createMatch = async (formData: FormData) => {
     setIsSubmitting(true)
     setError(null)
@@ -88,6 +103,30 @@ export default function MatchDayClient({
       setModalMode(null)
       setSelectedMatch(null)
       setMessage('Match created.')
+      router.refresh()
+    } else {
+      setError(result.reason)
+    }
+
+    setIsSubmitting(false)
+  }
+
+  const deleteMatch = async () => {
+    if (!selectedMatch) return
+
+    setIsSubmitting(true)
+    setError(null)
+    setMessage(null)
+
+    const formData = new FormData()
+    formData.set('matchDayId', selectedMatch.id)
+
+    const result = await deleteMatchDayAction(formData)
+
+    if (result.ok) {
+      setModalMode(null)
+      setSelectedMatch(null)
+      setMessage('Match Day record deleted.')
       router.refresh()
     } else {
       setError(result.reason)
@@ -119,11 +158,11 @@ export default function MatchDayClient({
           <>
           <div className="divide-y md:hidden">
             {matches.map((match) => (
+              <article key={match.id} className="p-4 hover:bg-blue-50/70">
               <button
-                key={match.id}
                 type="button"
                 onClick={() => openDetailModal(match)}
-                className="block w-full p-4 text-left hover:bg-blue-50/70"
+                className="block w-full text-left"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -158,6 +197,16 @@ export default function MatchDayClient({
                 </dl>
                 <p className="mt-4 text-sm font-semibold text-blue-700">Tap to view actions</p>
               </button>
+              {match.canDelete && (
+                <button
+                  type="button"
+                  onClick={() => openDeleteModal(match)}
+                  className="mt-3 text-sm font-bold text-red-700 hover:underline"
+                >
+                  Delete
+                </button>
+              )}
+              </article>
             ))}
           </div>
 
@@ -197,7 +246,21 @@ export default function MatchDayClient({
                       <StatusBadge label={match.statusLabel} variant={getStatusBadgeVariant(match.statusLabel.toUpperCase().replace(' ', '_'))} />
                     </DataTableCell>
                     <DataTableCell>
-                      <span className="text-sm font-semibold text-blue-700">View details</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-blue-700">View details</span>
+                        {match.canDelete && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              openDeleteModal(match)
+                            }}
+                            className="text-sm font-bold text-red-700 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </DataTableCell>
                   </tr>
                 ))}
@@ -210,12 +273,14 @@ export default function MatchDayClient({
       {modalMode && (
         <ModalShell
           title={modalMode === 'create' ? 'Create match' : selectedMatch?.opposition ?? 'Match details'}
-          description={modalMode === 'create'
-            ? 'Set up the match record before choosing squad and events.'
-            : 'Review match details before opening the live match workspace.'}
+          description={modalMode === 'delete'
+            ? 'Deletion is permanent and removes all saved data for this match.'
+            : modalMode === 'create'
+              ? 'Set up the match record before choosing squad and events.'
+              : 'Review match details before opening the live match workspace.'}
           onClose={closeModal}
           isSubmitting={isSubmitting}
-          mode={modalMode === 'create' ? 'create' : 'detail'}
+          mode={modalMode === 'delete' ? 'danger' : modalMode === 'create' ? 'create' : 'detail'}
         >
             {error && (
               <Alert variant="error" className="mb-4">{error}</Alert>
@@ -230,7 +295,16 @@ export default function MatchDayClient({
             )}
 
             {modalMode === 'detail' && selectedMatch && (
-              <MatchDetail match={selectedMatch} />
+              <MatchDetail match={selectedMatch} onDelete={() => openDeleteModal(selectedMatch)} />
+            )}
+
+            {modalMode === 'delete' && selectedMatch && (
+              <DeleteMatchConfirmation
+                match={selectedMatch}
+                isSubmitting={isSubmitting}
+                onCancel={returnToDetailModal}
+                onConfirm={deleteMatch}
+              />
             )}
         </ModalShell>
       )}
@@ -238,7 +312,7 @@ export default function MatchDayClient({
   )
 }
 
-function MatchDetail({ match }: { match: MatchDayRow }) {
+function MatchDetail({ match, onDelete }: { match: MatchDayRow; onDelete: () => void }) {
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -258,6 +332,63 @@ function MatchDetail({ match }: { match: MatchDayRow }) {
       <ActionLink href={`/match-day/${match.id}`} variant="primary">
         Open match
       </ActionLink>
+      {match.canDelete && (
+        <div className="rounded-lg border border-red-100 bg-red-50 p-4">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-red-700">Match admin</h3>
+          <p className="mt-1 text-sm text-red-700">
+            Delete removes the squad setup, match events, parent submissions and reports for this match.
+          </p>
+          <Button
+            type="button"
+            onClick={onDelete}
+            variant="secondary"
+            className="mt-3 border-red-200 text-red-700"
+          >
+            Delete Match Day
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DeleteMatchConfirmation({
+  match,
+  isSubmitting,
+  onCancel,
+  onConfirm,
+}: {
+  match: MatchDayRow
+  isSubmitting: boolean
+  onCancel: () => void
+  onConfirm: () => Promise<void>
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border p-4">
+        <h3 className="text-lg font-bold">Vs {match.opposition}</h3>
+        <p className="mt-1 text-sm text-gray-500">
+          {match.clubName} / {match.teamName} - {match.dateDisplay} · {match.kickoffTimeDisplay}
+        </p>
+        <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+          <DetailItem label="Status" value={match.statusLabel} />
+          <DetailItem label="Score" value={`${match.ownScore}-${match.oppositionScore}`} />
+        </dl>
+      </div>
+
+      <Alert variant="error">
+        Delete this Match Day against {match.opposition}? This will remove the squad setup, match events,
+        parent submissions and reports for this match. This cannot be undone.
+      </Alert>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={onCancel} variant="secondary" disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button type="button" onClick={onConfirm} variant="danger" disabled={isSubmitting}>
+          {isSubmitting ? 'Deleting...' : 'Confirm Delete Match Day'}
+        </Button>
+      </div>
     </div>
   )
 }

@@ -59,6 +59,7 @@ type FitnessSessionRow = {
   manualEntry: boolean
   liveDropout: boolean
   liveTimedFinish: boolean
+  canDelete: boolean
 }
 
 type ModalMode = 'add' | 'detail' | 'delete' | null
@@ -179,7 +180,8 @@ export default function FitnessClient({
     setModalMode('detail')
   }
 
-  const openDeleteModal = () => {
+  const openDeleteModal = (session?: FitnessSessionRow) => {
+    if (session) setSelectedSession(session)
     setError(null)
     setModalMode('delete')
   }
@@ -438,6 +440,15 @@ export default function FitnessClient({
                 </button>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <SessionActions session={session} />
+                  {session.canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => openDeleteModal(session)}
+                      className="rounded-lg border border-red-200 px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -452,6 +463,7 @@ export default function FitnessClient({
                   <DataTableHeader>Status</DataTableHeader>
                   <DataTableHeader>Results</DataTableHeader>
                   <DataTableHeader>Recording mode</DataTableHeader>
+                  <DataTableHeader>Action</DataTableHeader>
                 </tr>
               </DataTableHead>
               <DataTableBody>
@@ -474,6 +486,22 @@ export default function FitnessClient({
                     <DataTableCell>{session.resultCount}</DataTableCell>
                     <DataTableCell>
                       {session.recordingModeLabel}
+                    </DataTableCell>
+                    <DataTableCell>
+                      {session.canDelete ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openDeleteModal(session)
+                          }}
+                          className="text-sm font-bold text-red-700 hover:underline"
+                        >
+                          Delete
+                        </button>
+                      ) : (
+                        <span className="text-sm text-slate-400">-</span>
+                      )}
                     </DataTableCell>
                   </tr>
                 ))}
@@ -518,7 +546,7 @@ export default function FitnessClient({
               <SessionDetail
                 session={selectedSession}
                 isSubmitting={isSubmitting}
-                onDelete={openDeleteModal}
+                onDelete={() => openDeleteModal()}
               />
             )}
 
@@ -664,7 +692,7 @@ function SessionDetail({
         </div>
       </div>
 
-        {session.status !== 'IN_PROGRESS' && (
+        {session.canDelete && (
         <div className="rounded-lg border border-red-100 bg-red-50 p-4">
           <h3 className="text-sm font-bold uppercase tracking-wide text-red-700">
             Session admin
@@ -776,8 +804,8 @@ function DeleteSessionConfirmation({
       </div>
 
       <Alert variant="error">
-        This will permanently delete this fitness test session and its saved
-        results. This action cannot be undone.
+        Delete this fitness test session? This will permanently remove recorded results for this session.
+        This action cannot be undone.
       </Alert>
 
       <div className="flex flex-wrap gap-2">

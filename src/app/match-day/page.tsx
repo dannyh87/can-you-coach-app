@@ -8,7 +8,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { accessibleMatchWhere, accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { ensureDefaultClub } from '@/lib/localUser'
-import { canManageTeamData } from '@/lib/permissions'
+import { canManageMatchDay, canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -100,6 +100,44 @@ async function createMatchDay(formData: FormData): Promise<MatchActionResult> {
   return { ok: true }
 }
 
+async function deleteMatchDay(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const matchDayId = getTextValue(formData, 'matchDayId')
+
+  if (!matchDayId) {
+    return { ok: false, reason: 'Missing Match Day record.' }
+  }
+
+  const match = await prisma.matchDay.findUnique({
+    where: { id: matchDayId },
+    select: { id: true, status: true },
+  })
+
+  if (!match) {
+    return { ok: false, reason: 'Match Day record was not found.' }
+  }
+
+  if (!(await canManageMatchDay(user.id, match.id))) {
+    return { ok: false, reason: 'You cannot delete this Match Day record.' }
+  }
+
+  if (match.status === 'IN_PROGRESS' || match.status === 'HALF_TIME') {
+    return {
+      ok: false,
+      reason: 'Live or half-time matches cannot be deleted. Complete or reset the match before deleting it.',
+    }
+  }
+
+  await prisma.matchDay.delete({ where: { id: match.id } })
+
+  revalidatePath('/match-day')
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/my-player/matches')
+  return { ok: true }
+}
+
 export default async function MatchDayPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
@@ -145,6 +183,7 @@ export default async function MatchDayPage() {
     status: match.status,
     statusLabel: formatStatus(match.status),
     statusClasses: getStatusClasses(match.status),
+    canDelete: manageableTeamIds.includes(match.teamId) && match.status !== 'IN_PROGRESS' && match.status !== 'HALF_TIME',
   }))
 
   return (
@@ -177,6 +216,7 @@ export default async function MatchDayPage() {
           teams={teamOptions}
           matches={matchRows}
           createMatchDayAction={createMatchDay}
+          deleteMatchDayAction={deleteMatchDay}
         />
       )}
     </main>
