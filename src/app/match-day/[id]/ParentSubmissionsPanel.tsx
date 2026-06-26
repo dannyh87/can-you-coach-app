@@ -1,3 +1,9 @@
+import ParentSubmissionReviewActions from '@/app/match-day/[id]/ParentSubmissionReviewActions'
+
+type ReviewActionResult =
+  | { ok: true }
+  | { ok: false; reason: string }
+
 type ParentSubmissionRow = {
   id: string
   playerName: string
@@ -9,12 +15,19 @@ type ParentSubmissionRow = {
   statusLabel: string
   status: 'PENDING' | 'ACCEPTED' | 'IGNORED'
   createdAtLabel: string
+  reviewedAtLabel: string | null
+  reviewedByLabel: string | null
   note: string | null
 }
 
 type ParentSubmissionsPanelProps = {
+  matchDayId: string
+  matchStatus: 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
   submissions: ParentSubmissionRow[]
   pendingCount: number
+  canReview: boolean
+  acceptParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
+  ignoreParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
   defaultOpen?: boolean
 }
 
@@ -28,8 +41,13 @@ const getStatusClasses = (status: ParentSubmissionRow['status']) => {
 }
 
 export default function ParentSubmissionsPanel({
+  matchDayId,
+  matchStatus,
   submissions,
   pendingCount,
+  canReview,
+  acceptParentSubmissionAction,
+  ignoreParentSubmissionAction,
   defaultOpen = false,
 }: ParentSubmissionsPanelProps) {
   return (
@@ -40,6 +58,9 @@ export default function ParentSubmissionsPanel({
             <h2 className="text-lg font-bold text-slate-950">Parent submissions</h2>
             <p className="mt-1 text-sm text-slate-500">
               Read-only parent observations. Not included in official report or CSV yet.
+            </p>
+            <p className="mt-1 text-sm font-semibold text-slate-700">
+              Accepted submissions become official match events and will be included in reports.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-bold">
@@ -91,6 +112,23 @@ export default function ParentSubmissionsPanel({
               {submission.note && (
                 <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
                   {submission.note}
+                </p>
+              )}
+
+              {submission.status === 'PENDING' && canReview && (
+                <ParentSubmissionReviewActions
+                  matchDayId={matchDayId}
+                  submittedMatchEventId={submission.id}
+                  matchStatus={matchStatus}
+                  acceptParentSubmissionAction={acceptParentSubmissionAction}
+                  ignoreParentSubmissionAction={ignoreParentSubmissionAction}
+                />
+              )}
+
+              {submission.status !== 'PENDING' && submission.reviewedAtLabel && (
+                <p className="mt-3 text-sm text-slate-500">
+                  Reviewed {submission.reviewedAtLabel}
+                  {submission.reviewedByLabel ? ` by ${submission.reviewedByLabel}` : ''}.
                 </p>
               )}
             </article>

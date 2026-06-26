@@ -862,6 +862,168 @@ async function deleteMatchEvent(formData: FormData): Promise<MatchActionResult> 
   return { ok: true }
 }
 
+async function acceptParentSubmission(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const submittedMatchEventId = getTextValue(formData, 'submittedMatchEventId')
+
+  if (!matchDayId || !submittedMatchEventId) {
+    return { ok: false, reason: 'Match and parent submission are required.' }
+  }
+
+  if (!(await canRunMatchDay(user.id, matchDayId))) {
+    return { ok: false, reason: 'You cannot review parent submissions for this match.' }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const submission = await tx.submittedMatchEvent.findFirst({
+      where: {
+        id: submittedMatchEventId,
+        matchDayId,
+      },
+      include: {
+        matchDay: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    })
+
+    if (!submission) return { ok: false, reason: 'Parent submission was not found.' } satisfies MatchActionResult
+    if (submission.status !== 'PENDING') {
+      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
+    }
+    if (submission.matchDay.status === 'DRAFT') {
+      return { ok: false, reason: 'Draft matches cannot review parent submissions.' } satisfies MatchActionResult
+    }
+
+    const matchPlayer = await tx.matchDayPlayer.findFirst({
+      where: {
+        matchDayId,
+        playerId: submission.playerId,
+        squadStatus: { not: 'NOT_INVOLVED' },
+      },
+      select: { id: true },
+    })
+
+    if (!matchPlayer) {
+      return { ok: false, reason: 'This player is no longer available in the match squad.' } satisfies MatchActionResult
+    }
+
+    const selectedEventType = await tx.matchDayEventType.findFirst({
+      where: {
+        matchDayId,
+        eventType: submission.eventType,
+      },
+      select: { id: true },
+    })
+
+    if (!selectedEventType) {
+      return { ok: false, reason: 'This event type is no longer selected for this match.' } satisfies MatchActionResult
+    }
+
+    const reviewedAt = new Date()
+    const reviewedSubmission = await tx.submittedMatchEvent.updateMany({
+      where: {
+        id: submission.id,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'ACCEPTED',
+        acceptedAt: reviewedAt,
+        acceptedByUserId: user.id,
+      },
+    })
+
+    if (reviewedSubmission.count !== 1) {
+      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
+    }
+
+    await tx.matchEvent.create({
+      data: {
+        matchDayId: submission.matchDayId,
+        playerId: submission.playerId,
+        eventType: submission.eventType,
+        half: submission.half,
+        matchSecond: submission.matchSecond,
+        ownScoreAtTime: submission.ownScoreAtTime,
+        oppositionScoreAtTime: submission.oppositionScoreAtTime,
+      },
+    })
+
+    return { ok: true } satisfies MatchActionResult
+  })
+
+  revalidatePath(`/match-day/${matchDayId}`)
+  return result
+}
+
+async function ignoreParentSubmission(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const submittedMatchEventId = getTextValue(formData, 'submittedMatchEventId')
+
+  if (!matchDayId || !submittedMatchEventId) {
+    return { ok: false, reason: 'Match and parent submission are required.' }
+  }
+
+  if (!(await canRunMatchDay(user.id, matchDayId))) {
+    return { ok: false, reason: 'You cannot review parent submissions for this match.' }
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const submission = await tx.submittedMatchEvent.findFirst({
+      where: {
+        id: submittedMatchEventId,
+        matchDayId,
+      },
+      include: {
+        matchDay: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+      },
+    })
+
+    if (!submission) return { ok: false, reason: 'Parent submission was not found.' } satisfies MatchActionResult
+    if (submission.status !== 'PENDING') {
+      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
+    }
+    if (submission.matchDay.status === 'DRAFT') {
+      return { ok: false, reason: 'Draft matches cannot review parent submissions.' } satisfies MatchActionResult
+    }
+
+    const reviewedSubmission = await tx.submittedMatchEvent.updateMany({
+      where: {
+        id: submission.id,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'IGNORED',
+        acceptedAt: new Date(),
+        acceptedByUserId: user.id,
+      },
+    })
+
+    if (reviewedSubmission.count !== 1) {
+      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
+    }
+
+    return { ok: true } satisfies MatchActionResult
+  })
+
+  revalidatePath(`/match-day/${matchDayId}`)
+  return result
+}
+
 export default async function MatchDayDetailPage({
   params,
 }: {
@@ -870,6 +1032,7 @@ export default async function MatchDayDetailPage({
   const { id } = await params
   const user = await getCurrentUser()
   if (!(await canViewMatchDay(user.id, id))) notFound()
+  const canReviewParentSubmissions = await canRunMatchDay(user.id, id)
 
   const match = await prisma.matchDay.findFirst({
     where: {
@@ -911,6 +1074,12 @@ export default async function MatchDayDetailPage({
             },
           },
           submittedBy: {
+            select: {
+              id: true,
+              email: true,
+            },
+          },
+          acceptedBy: {
             select: {
               id: true,
               email: true,
@@ -1150,6 +1319,8 @@ export default async function MatchDayDetailPage({
     status: submission.status,
     statusLabel: formatStatus(submission.status),
     createdAtLabel: formatDateTime(submission.createdAt),
+    reviewedAtLabel: submission.acceptedAt ? formatDateTime(submission.acceptedAt) : null,
+    reviewedByLabel: submission.acceptedBy?.email ?? null,
     note: submission.note,
   }))
   const pendingParentSubmissionCount = match.submittedMatchEvents.filter(
@@ -1358,8 +1529,13 @@ export default async function MatchDayDetailPage({
           </div>
           <div className="mt-4">
             <ParentSubmissionsPanel
+              matchDayId={match.id}
+              matchStatus={match.status}
               submissions={parentSubmissionRows}
               pendingCount={pendingParentSubmissionCount}
+              canReview={canReviewParentSubmissions}
+              acceptParentSubmissionAction={acceptParentSubmission}
+              ignoreParentSubmissionAction={ignoreParentSubmission}
             />
           </div>
         </section>
@@ -1385,8 +1561,13 @@ export default async function MatchDayDetailPage({
           </section>
           <section className="mt-4">
             <ParentSubmissionsPanel
+              matchDayId={match.id}
+              matchStatus={match.status}
               submissions={parentSubmissionRows}
               pendingCount={pendingParentSubmissionCount}
+              canReview={canReviewParentSubmissions}
+              acceptParentSubmissionAction={acceptParentSubmission}
+              ignoreParentSubmissionAction={ignoreParentSubmission}
             />
           </section>
         </>
@@ -1395,8 +1576,13 @@ export default async function MatchDayDetailPage({
       {match.status === 'DRAFT' && parentSubmissionRows.length > 0 && (
         <section className="mt-6">
           <ParentSubmissionsPanel
+            matchDayId={match.id}
+            matchStatus={match.status}
             submissions={parentSubmissionRows}
             pendingCount={pendingParentSubmissionCount}
+            canReview={canReviewParentSubmissions}
+            acceptParentSubmissionAction={acceptParentSubmission}
+            ignoreParentSubmissionAction={ignoreParentSubmission}
           />
         </section>
       )}
