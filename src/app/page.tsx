@@ -2,11 +2,13 @@ import Link from 'next/link'
 
 import ActionLink from '@/components/ui/ActionLink'
 import EmptyState from '@/components/ui/EmptyState'
+import GettingStartedChecklist from '@/components/GettingStartedChecklist'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { accessibleMatchWhere, accessibleSessionWhere, accessibleTeamWhere } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
+import { getOnboardingState } from '@/lib/onboarding'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -92,6 +94,7 @@ export default async function Home() {
     activeMatches,
     recentFitnessSessions,
     recentMatches,
+    onboardingState,
   ] = await Promise.all([
     prisma.team.count({ where: teamWhere }),
     prisma.player.count({
@@ -142,6 +145,7 @@ export default async function Home() {
       orderBy: { updatedAt: 'desc' },
       take: 4,
     }),
+    getOnboardingState(user.id),
   ])
 
   const recentActivity = [
@@ -185,6 +189,8 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      <GettingStartedChecklist state={onboardingState} />
 
       <section className="mt-6">
         <div className="mb-3 flex items-end justify-between gap-3">
