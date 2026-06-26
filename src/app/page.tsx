@@ -1,11 +1,16 @@
 import Link from 'next/link'
 
 import ActionLink from '@/components/ui/ActionLink'
+import DashboardSnapshot from '@/components/DashboardSnapshot'
 import EmptyState from '@/components/ui/EmptyState'
 import GettingStartedChecklist from '@/components/GettingStartedChecklist'
+import NeedsAttentionPanel from '@/components/NeedsAttentionPanel'
+import ParentDashboardPanel from '@/components/ParentDashboardPanel'
+import RecentReportsPanel from '@/components/RecentReportsPanel'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { accessibleMatchWhere, accessibleSessionWhere, accessibleTeamWhere } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
+import { getDashboardData } from '@/lib/dashboard'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
 import { getOnboardingState } from '@/lib/onboarding'
@@ -95,6 +100,7 @@ export default async function Home() {
     recentFitnessSessions,
     recentMatches,
     onboardingState,
+    dashboardData,
   ] = await Promise.all([
     prisma.team.count({ where: teamWhere }),
     prisma.player.count({
@@ -146,6 +152,7 @@ export default async function Home() {
       take: 4,
     }),
     getOnboardingState(user.id),
+    getDashboardData(user.id),
   ])
 
   const recentActivity = [
@@ -191,6 +198,20 @@ export default async function Home() {
       </section>
 
       <GettingStartedChecklist state={onboardingState} />
+
+      {dashboardData.kind === 'coach' && (
+        <>
+          <DashboardSnapshot data={dashboardData} />
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <NeedsAttentionPanel data={dashboardData} />
+            <RecentReportsPanel data={dashboardData} />
+          </div>
+        </>
+      )}
+
+      {dashboardData.kind === 'parent' && (
+        <ParentDashboardPanel data={dashboardData} />
+      )}
 
       <section className="mt-6">
         <div className="mb-3 flex items-end justify-between gap-3">
