@@ -1488,19 +1488,19 @@ export default async function MatchDayDetailPage({
             </div>
           </div>
           <details className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
-            <summary className="cursor-pointer font-bold">Live recording tips</summary>
+            <summary className="cursor-pointer font-bold">Quick live tips</summary>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div>
               <p className="font-bold">1. Put players on</p>
-              <p className="mt-1 text-blue-900">Use substitutions to make players available for tracking.</p>
+              <p className="mt-1 text-blue-900">Sub players on before recording events.</p>
             </div>
             <div>
               <p className="font-bold">2. Record player events</p>
-              <p className="mt-1 text-blue-900">Event buttons appear for tracked players who are on the pitch.</p>
+              <p className="mt-1 text-blue-900">Only tracked, on-pitch players appear.</p>
             </div>
             <div>
               <p className="font-bold">3. Update score separately</p>
-              <p className="mt-1 text-blue-900">GOAL buttons do not create player event records.</p>
+              <p className="mt-1 text-blue-900">Goal buttons update score only.</p>
             </div>
             </div>
           </details>

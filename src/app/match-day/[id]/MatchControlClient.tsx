@@ -249,7 +249,7 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-4 shadow-sm sm:mt-6 sm:p-5">
+    <section className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-3 shadow-sm sm:mt-6 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Live match</p>
@@ -260,7 +260,7 @@ export default function MatchControlClient({
         </p>
       </div>
       <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-        <div className="rounded-xl bg-white p-4 text-center shadow-sm sm:p-5">
+        <div className="rounded-xl bg-white p-3 text-center shadow-sm sm:p-5">
           <p className="text-sm font-medium text-gray-500">Score</p>
           <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
             <p className="break-words text-xs font-bold sm:text-lg">{homeLabel}</p>
@@ -274,16 +274,19 @@ export default function MatchControlClient({
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-1">
           <TimerCard label="Current half" value={currentHalfLabel} highlight />
           <TimerCard label="Elapsed time" value={formatDuration(currentElapsed)} highlight />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <TimerCard label="First half duration" value={formatDuration(firstHalfDuration)} />
-        <TimerCard label="Second half duration" value={formatDuration(secondHalfDuration)} />
-      </div>
+      <details className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm">
+        <summary className="cursor-pointer font-bold text-gray-900">Half durations</summary>
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+          <TimerCard label="First half" value={formatDuration(firstHalfDuration)} />
+          <TimerCard label="Second half" value={formatDuration(secondHalfDuration)} />
+        </div>
+      </details>
 
       {completedAt && (
         <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">

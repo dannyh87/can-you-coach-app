@@ -248,7 +248,7 @@ export default function MatchEventsClient({
       )}
 
       {canRecord && players.length > 0 && (
-        <div className="mt-4 space-y-4">
+        <div className="mt-3 space-y-3">
           {eventOptions.length === 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
               No event types were selected before kick-off, so there are no event buttons available for this match. Goal buttons can still update the score, but player event recording is unavailable.
@@ -290,12 +290,13 @@ export default function MatchEventsClient({
                           }}
                           className={`rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:text-sm ${
                             isSelected
-                              ? 'border-blue-600 bg-blue-50 text-blue-900'
+                              ? 'border-blue-700 bg-blue-50 text-blue-950 ring-2 ring-blue-200'
                               : 'bg-white text-gray-900'
                           }`}
                           disabled={Boolean(pendingAction)}
                         >
-                          {category.label}
+                          <span className="block">{category.label}</span>
+                          {isSelected && <span className="mt-0.5 block text-[11px] uppercase tracking-wide">Selected</span>}
                         </button>
                       )
                     })}
@@ -343,6 +344,9 @@ export default function MatchEventsClient({
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   1. Players available for event tracking
                 </h3>
+                <p className="mt-1 text-xs font-medium text-gray-500 sm:text-sm">
+                  Only tracked players currently on pitch appear here.
+                </p>
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {players.map((player) => {
                     const isSelected = effectiveSelectedPlayerId === player.matchDayPlayerId
@@ -354,7 +358,7 @@ export default function MatchEventsClient({
                         onClick={() => setSelectedPlayerId(player.matchDayPlayerId)}
                         className={`rounded-lg border p-3 text-left font-medium sm:p-4 ${
                           isSelected
-                            ? 'border-blue-600 bg-blue-50 text-blue-900'
+                            ? 'border-blue-700 bg-blue-50 text-blue-950 ring-2 ring-blue-200'
                             : 'bg-white text-gray-900'
                         }`}
                       >
@@ -362,6 +366,7 @@ export default function MatchEventsClient({
                         <span className="mt-1 block text-xs text-gray-500 sm:text-sm">
                           {formatSquadNumber(player.squadNumber)}
                         </span>
+                        {isSelected && <span className="mt-2 inline-flex rounded-full bg-blue-700 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white">Selected</span>}
                       </button>
                     )
                   })}
@@ -423,11 +428,12 @@ export default function MatchEventsClient({
                         onClick={() => setSelectedEventType(eventOption.value)}
                         className={`rounded-lg border px-3 py-3 text-sm font-bold sm:py-4 ${
                           isSelected
-                            ? 'border-blue-600 bg-blue-50 text-blue-900'
+                            ? 'border-blue-700 bg-blue-50 text-blue-950 ring-2 ring-blue-200'
                             : 'bg-white text-gray-900'
                         }`}
                       >
-                        {eventOption.label}
+                        <span className="block">{eventOption.label}</span>
+                        {isSelected && <span className="mt-1 block text-[11px] uppercase tracking-wide">Selected</span>}
                       </button>
                     )
                   })}
@@ -438,6 +444,9 @@ export default function MatchEventsClient({
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   2. Players available for event tracking
                 </h3>
+                <p className="mt-1 text-xs font-medium text-gray-500 sm:text-sm">
+                  Only tracked players currently on pitch appear here.
+                </p>
                 {selectedEvent && (
                   <p className="mt-1 rounded-lg bg-blue-50 p-2 text-sm text-blue-900">
                     Selected event: <span className="font-bold">{selectedEvent.label}</span>. Now tap a player.

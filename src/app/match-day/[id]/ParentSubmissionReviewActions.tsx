@@ -66,12 +66,12 @@ export default function ParentSubmissionReviewActions({
       )}
 
       {confirmingAction === null && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <button
             type="button"
             onClick={() => setConfirmingAction('accept')}
             disabled={isBusy}
-            className="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="w-full rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
             Accept as official event
           </button>
@@ -79,7 +79,7 @@ export default function ParentSubmissionReviewActions({
             type="button"
             onClick={() => setConfirmingAction('ignore')}
             disabled={isBusy}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto"
           >
             Ignore
           </button>
@@ -96,12 +96,12 @@ export default function ParentSubmissionReviewActions({
               This match is completed, so accepting will update the completed match report totals.
             </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => setConfirmingAction(null)}
               disabled={isBusy}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto"
             >
               Cancel
             </button>
@@ -109,7 +109,7 @@ export default function ParentSubmissionReviewActions({
               type="button"
               onClick={() => runReviewAction('accept')}
               disabled={isBusy}
-              className="rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="w-full rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
             >
               {pendingAction === 'accept' ? 'Accepting...' : 'Confirm accept'}
             </button>
@@ -122,12 +122,12 @@ export default function ParentSubmissionReviewActions({
           <p className="text-sm font-semibold text-slate-950">
             Ignore this parent submission? It will not be included in official reports.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               onClick={() => setConfirmingAction(null)}
               disabled={isBusy}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:cursor-not-allowed disabled:text-slate-400 sm:w-auto"
             >
               Cancel
             </button>
@@ -135,7 +135,7 @@ export default function ParentSubmissionReviewActions({
               type="button"
               onClick={() => runReviewAction('ignore')}
               disabled={isBusy}
-              className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="w-full rounded-lg bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
             >
               {pendingAction === 'ignore' ? 'Ignoring...' : 'Confirm ignore'}
             </button>
