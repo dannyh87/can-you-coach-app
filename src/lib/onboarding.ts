@@ -92,7 +92,7 @@ export async function getOnboardingState(userId: string): Promise<OnboardingStat
   if (!hasAnyClubAccess) {
     return {
       kind: 'no_access',
-      primaryCta: { label: 'Go to Home', href: '/' },
+      primaryCta: { label: 'Create your first club', href: '/club-setup' },
     }
   }
 

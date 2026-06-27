@@ -251,6 +251,21 @@ export default async function ClubAccessPage() {
         title="Access Management"
         description="Manage club staff access and read-only parent links. Parent contributors do not get full club access."
       />
+      {clubs.length === 0 ? (
+        <section className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <p className="text-sm font-bold uppercase tracking-wide text-slate-500">No club admin access</p>
+          <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Create a club before managing access.</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Access management is available once you have a club where you are the Club Admin.
+          </p>
+          <Link
+            href="/club-setup"
+            className="mt-4 inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+          >
+            Back to Club Setup
+          </Link>
+        </section>
+      ) : (
       <ClubAccessClient
         clubs={clubs.map((club) => ({
           id: club.id,
@@ -285,6 +300,7 @@ export default async function ClubAccessPage() {
         addParentAccessAction={addParentAccess}
         removeParentAccessAction={removeParentAccess}
       />
+      )}
     </main>
   )
 }

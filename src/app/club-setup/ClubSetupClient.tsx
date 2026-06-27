@@ -50,6 +50,8 @@ type ModalMode = 'clubDetail' | 'editClub' | 'addTeam' | 'teamDetail' | 'editTea
 
 type ClubSetupClientProps = {
   clubs: ClubRow[]
+  canCreateFirstClub: boolean
+  createClubAction: SetupAction
   updateClubAction: SetupAction
   createTeamAction: SetupAction
   updateTeamAction: SetupAction
@@ -69,6 +71,8 @@ const footballPyramidStepOptions = [
 
 export default function ClubSetupClient({
   clubs,
+  canCreateFirstClub,
+  createClubAction,
   updateClubAction,
   createTeamAction,
   updateTeamAction,
@@ -151,11 +155,46 @@ export default function ClubSetupClient({
   }
 
   if (!selectedClub) {
+    if (canCreateFirstClub) {
+      return (
+        <section className="max-w-2xl rounded-2xl border border-blue-100 bg-white p-5 shadow-sm sm:p-6">
+          <p className="text-sm font-bold uppercase tracking-wide text-blue-700">First setup step</p>
+          <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Create your first club</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Add your club so you can create teams, import players, and start tracking sessions.
+          </p>
+
+          {error && <Alert variant="error" className="mt-4">{error}</Alert>}
+
+          <form
+            action={(formData) => submitAction(createClubAction, formData)}
+            className="mt-5 grid gap-4"
+          >
+            <FormField label="Club name">
+              <input
+                name="name"
+                required
+                className={fieldClassName}
+                placeholder="e.g. Can You Coach FC"
+                disabled={isSubmitting}
+              />
+            </FormField>
+            <div>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Creating...' : 'Create club'}
+              </Button>
+            </div>
+          </form>
+        </section>
+      )
+    }
+
     return (
-      <section className="rounded-lg border p-4">
-        <h2 className="text-xl font-bold">No club found</h2>
-        <p className="mt-2 text-sm text-gray-500">
-          A default club could not be loaded. Try refreshing the page.
+      <section className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Club setup unavailable</p>
+        <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Club setup is managed by club admins.</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          You already have club access, but not as a Club Admin. Ask a club admin to update your role if you need to manage club setup.
         </p>
       </section>
     )

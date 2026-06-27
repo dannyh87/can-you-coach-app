@@ -18,6 +18,44 @@ type SetupActionResult =
   | { ok: true }
   | { ok: false; reason: string }
 
+async function createClub(formData: FormData): Promise<SetupActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const name = getTextValue(formData, 'name')
+
+  if (!name) return { ok: false, reason: 'Club name is required.' }
+
+  const membershipCount = await prisma.clubMembership.count({ where: { userId: user.id } })
+  if (membershipCount > 0) {
+    return {
+      ok: false,
+      reason: 'Club creation is only available before you have club access. Ask a club admin to update your role if you need setup access.',
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const club = await tx.club.create({
+      data: {
+        userId: user.id,
+        name,
+      },
+    })
+
+    await tx.clubMembership.create({
+      data: {
+        userId: user.id,
+        clubId: club.id,
+        role: 'OWNER',
+      },
+    })
+  })
+
+  revalidatePath('/club-setup')
+  revalidatePath('/')
+  return { ok: true }
+}
+
 async function updateClub(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
@@ -184,13 +222,16 @@ export default async function ClubSetupPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
 
-  const ownerMemberships = await prisma.clubMembership.findMany({
-    where: {
-      userId: user.id,
-      role: 'OWNER',
-    },
-    select: { clubId: true },
-  })
+  const [ownerMemberships, totalMembershipCount] = await Promise.all([
+    prisma.clubMembership.findMany({
+      where: {
+        userId: user.id,
+        role: 'OWNER',
+      },
+      select: { clubId: true },
+    }),
+    prisma.clubMembership.count({ where: { userId: user.id } }),
+  ])
 
   const clubs = await prisma.club.findMany({
     where: {
@@ -241,15 +282,19 @@ export default async function ClubSetupPage() {
         title="Club Setup"
         description="Add your club and teams once so the rest of the app is ready to use."
       />
-      <Link
-        href="/club-setup/access"
-        className="mb-4 inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
-      >
-        Manage access
-      </Link>
+      {clubRows.length > 0 && (
+        <Link
+          href="/club-setup/access"
+          className="mb-4 inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+        >
+          Manage access
+        </Link>
+      )}
 
       <ClubSetupClient
         clubs={clubRows}
+        canCreateFirstClub={totalMembershipCount === 0}
+        createClubAction={createClub}
         updateClubAction={updateClub}
         createTeamAction={createTeam}
         updateTeamAction={updateTeam}

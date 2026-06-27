@@ -79,8 +79,11 @@ export default function GettingStartedChecklist({ state }: GettingStartedCheckli
         <p className="text-sm font-bold uppercase tracking-wide text-slate-500">Access needed</p>
         <h2 className="mt-2 text-2xl font-extrabold text-slate-950">You do not currently have access to a club, team or player.</h2>
         <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          Ask a club admin to invite you to a club/team or link you to a player before using Can You Coach.
+          Create your first club to start setup, or ask a club admin to invite you to an existing club/team or link you to a player.
         </p>
+        <div className="mt-4">
+          <PrimaryLink href={state.primaryCta.href}>{state.primaryCta.label}</PrimaryLink>
+        </div>
       </section>
     )
   }
