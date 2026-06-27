@@ -16,13 +16,13 @@ export default function EmptyState({
   eyebrow,
 }: EmptyStateProps) {
   return (
-    <div className={`rounded-2xl border border-dashed border-slate-300 bg-white p-5 shadow-sm sm:p-6 ${className}`}>
+    <div className={`rounded-3xl border border-dashed border-emerald-200 bg-gradient-to-br from-white to-emerald-50/50 p-5 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:p-6 ${className}`}>
       {eyebrow && (
-        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
           {eyebrow}
         </p>
       )}
-      <h2 className="text-lg font-bold text-slate-950">{title}</h2>
+      <h2 className="text-xl font-extrabold text-slate-950">{title}</h2>
       {description && <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>

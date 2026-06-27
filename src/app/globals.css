@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc;
+  --background: #f7f7f2;
   --foreground: #0f172a;
   color-scheme: light;
 }
@@ -14,7 +14,10 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top left, rgba(209, 250, 229, 0.45), transparent 34rem),
+    radial-gradient(circle at top right, rgba(219, 234, 254, 0.38), transparent 30rem),
+    var(--background);
   color: var(--foreground);
 }
 
@@ -23,7 +26,7 @@ main {
 }
 
 ::selection {
-  background: #bfdbfe;
+  background: #a7f3d0;
   color: #0f172a;
 }
 

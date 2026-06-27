@@ -7,18 +7,18 @@ type StatusBadgeProps = {
 }
 
 const variantClasses: Record<StatusVariant, string> = {
-  draft: 'bg-slate-100 text-slate-700',
-  inProgress: 'bg-blue-100 text-blue-800',
-  halfTime: 'bg-amber-100 text-amber-900',
-  completed: 'bg-green-100 text-green-800',
-  active: 'bg-green-100 text-green-800',
-  archived: 'bg-slate-100 text-slate-700',
-  neutral: 'bg-slate-100 text-slate-700',
+  draft: 'border-slate-200 bg-slate-100 text-slate-700',
+  inProgress: 'border-emerald-200 bg-emerald-100 text-emerald-800',
+  halfTime: 'border-amber-200 bg-amber-100 text-amber-900',
+  completed: 'border-green-200 bg-green-100 text-green-800',
+  active: 'border-green-200 bg-green-100 text-green-800',
+  archived: 'border-slate-200 bg-slate-100 text-slate-700',
+  neutral: 'border-slate-200 bg-slate-100 text-slate-700',
 }
 
 export default function StatusBadge({ label, variant = 'neutral', className = '' }: StatusBadgeProps) {
   return (
-    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${variantClasses[variant]} ${className}`}>
+    <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${variantClasses[variant]} ${className}`}>
       {label}
     </span>
   )

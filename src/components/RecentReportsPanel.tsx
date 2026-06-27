@@ -13,19 +13,19 @@ export default function RecentReportsPanel({ data }: RecentReportsPanelProps) {
   const hasReports = data.recentReports.matches.length > 0 || data.recentReports.fitnessSessions.length > 0
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-950">Recent reports</h2>
           <p className="mt-1 text-sm text-slate-600">Completed match and fitness records ready to review.</p>
         </div>
-        <Link href="/fitness/progress" className="text-sm font-bold text-blue-800 hover:underline">
+        <Link href="/fitness/progress" className="text-sm font-bold text-emerald-700 hover:underline">
           View fitness progress
         </Link>
       </div>
 
       {!hasReports ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <p className="rounded-2xl border border-slate-200 bg-stone-50/80 p-4 text-sm text-slate-600">
           No completed reports yet. Complete a match day or fitness session to fill this panel.
         </p>
       ) : (
@@ -70,7 +70,7 @@ function ReportGroup({
 
 function ReportItem({ item }: { item: DashboardWorkItem }) {
   return (
-    <Link href={item.href} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/70">
+    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/70">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-950">{item.title}</p>

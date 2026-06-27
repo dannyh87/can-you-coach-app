@@ -15,11 +15,11 @@ export function DataTable({
 }
 
 export function DataTableHead({ children }: { children: ReactNode }) {
-  return <thead className="bg-slate-50 text-slate-600">{children}</thead>
+  return <thead className="bg-stone-50 text-slate-600">{children}</thead>
 }
 
 export function DataTableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-slate-100">{children}</tbody>
+  return <tbody className="divide-y divide-slate-100 bg-white">{children}</tbody>
 }
 
 export function DataTableHeader({
@@ -47,5 +47,5 @@ export function DataTableCell({
 }
 
 export function dataTableRowClassName(clickable = false) {
-  return clickable ? 'cursor-pointer hover:bg-blue-50/70' : ''
+  return clickable ? 'cursor-pointer hover:bg-emerald-50/60' : ''
 }

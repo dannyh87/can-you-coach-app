@@ -22,14 +22,14 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
     data.attention.activeFitnessSessions.length > 0
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
       <div className="mb-4">
         <h2 className="text-xl font-bold text-slate-950">Needs attention</h2>
         <p className="mt-1 text-sm text-slate-600">Review parent observations and jump back into live work.</p>
       </div>
 
       {!hasAttention ? (
-        <p className="rounded-xl border border-green-100 bg-green-50 p-4 text-sm font-semibold text-green-800">
+        <p className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
           Nothing needs attention right now.
         </p>
       ) : (
@@ -96,7 +96,7 @@ function ParentSubmissionItem({ submission }: { submission: DashboardParentSubmi
 
 function WorkItem({ item }: { item: DashboardWorkItem }) {
   return (
-    <Link href={item.href} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-blue-200 hover:bg-blue-50/70">
+    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/70">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-950">{item.title}</p>

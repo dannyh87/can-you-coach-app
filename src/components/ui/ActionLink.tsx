@@ -14,10 +14,10 @@ type ActionLinkProps = {
 }
 
 const variantClasses: Record<ActionLinkVariant, string> = {
-  primary: 'bg-blue-800 text-white hover:bg-blue-900 focus-visible:ring-blue-700',
-  secondary: 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 focus-visible:ring-blue-700',
+  primary: 'bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 focus-visible:ring-emerald-700',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-emerald-700',
   danger: 'bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700',
-  ghost: 'text-blue-700 hover:bg-blue-50 focus-visible:ring-blue-700',
+  ghost: 'text-emerald-700 hover:bg-emerald-50 focus-visible:ring-emerald-700',
 }
 
 const sizeClasses: Record<ActionLinkSize, string> = {
@@ -37,7 +37,7 @@ export default function ActionLink({
   return (
     <Link
       href={href}
-      className={`inline-flex items-center justify-center rounded-lg font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
     >
       {children}
     </Link>

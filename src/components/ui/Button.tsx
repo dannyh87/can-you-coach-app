@@ -11,10 +11,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-blue-800 text-white hover:bg-blue-900 focus-visible:ring-blue-700',
-  secondary: 'border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 focus-visible:ring-blue-700',
+  primary: 'bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 focus-visible:ring-emerald-700',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-emerald-700',
   danger: 'bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700',
-  ghost: 'text-blue-700 hover:bg-blue-50 focus-visible:ring-blue-700',
+  ghost: 'text-emerald-700 hover:bg-emerald-50 focus-visible:ring-emerald-700',
   success: 'bg-green-700 text-white hover:bg-green-800 focus-visible:ring-green-700',
 }
 
@@ -36,7 +36,7 @@ export default function Button({
   return (
     <button
       type={type}
-      className={`inline-flex items-center justify-center rounded-lg font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
       {children}

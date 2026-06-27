@@ -16,7 +16,7 @@ const formatDateTime = (date: Date) =>
 
 export default function ParentDashboardPanel({ data }: ParentDashboardPanelProps) {
   return (
-    <section className="mt-6 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm sm:p-5">
+    <section className="mt-6 rounded-3xl border border-amber-100 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-bold uppercase tracking-wide text-amber-700">Parent dashboard</p>
@@ -26,10 +26,10 @@ export default function ParentDashboardPanel({ data }: ParentDashboardPanelProps
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/my-player" className="rounded-lg bg-blue-800 px-4 py-2 text-sm font-bold text-white hover:bg-blue-900">
+          <Link href="/my-player" className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
             View linked player
           </Link>
-          <Link href="/my-player/matches" className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-50">
+          <Link href="/my-player/matches" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">
             Match observations
           </Link>
         </div>
@@ -69,7 +69,7 @@ function ParentStat({ label, value }: { label: string; value: number }) {
 
 function SubmissionItem({ submission }: { submission: DashboardParentSubmission }) {
   return (
-    <Link href={submission.href} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:border-amber-200 hover:bg-amber-50/60">
+    <Link href={submission.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-amber-200 hover:bg-amber-50/60">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-950">{submission.title}</p>

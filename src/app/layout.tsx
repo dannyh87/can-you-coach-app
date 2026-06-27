@@ -50,9 +50,9 @@ export const viewport: Viewport = {
 }
 
 const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
-  slate: 'border-slate-200 bg-slate-50 text-slate-700',
+  slate: 'border-slate-200 bg-white text-slate-700',
   blue: 'border-blue-200 bg-blue-50 text-blue-800',
-  green: 'border-green-200 bg-green-50 text-green-800',
+  green: 'border-emerald-200 bg-emerald-50 text-emerald-800',
   amber: 'border-amber-200 bg-amber-50 text-amber-900',
   purple: 'border-purple-200 bg-purple-50 text-purple-800',
 }
@@ -69,11 +69,14 @@ export default async function RootLayout({
     : navigationLinks
   const body = (
     <html lang="en">
-      <body className={`${inter.className} min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 antialiased`}>
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+      <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
+        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <Link href="/" className="text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
-              Can You Coach
+            <Link href="/" className="inline-flex items-center gap-2 text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
+              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white shadow-sm">
+                CYC
+              </span>
+              <span>Can You Coach</span>
             </Link>
 
             <div className="flex items-center gap-3">
@@ -85,7 +88,7 @@ export default async function RootLayout({
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="shrink-0 rounded-full px-3 py-2 font-semibold text-slate-600 transition hover:bg-blue-50 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+                    className="shrink-0 rounded-full px-3 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
                   >
                     {link.label}
                   </Link>
@@ -113,7 +116,7 @@ export default async function RootLayout({
               {isClerkEnabled() && (
                 <Link
                   href="/sign-in"
-                  className="shrink-0 rounded-full bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                  className="shrink-0 rounded-full bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
                 >
                   Account
                 </Link>

@@ -24,14 +24,14 @@ const actionCards = [
     eyebrow: 'Fitness',
     title: 'Start Fitness Test',
     description: 'Create a test, continue a live session, or review recent results.',
-    tone: 'blue',
+    tone: 'emerald',
   },
   {
     href: '/match-day',
     eyebrow: 'Touchline',
     title: 'Start Match Day',
     description: 'Prepare the squad, start the clock, update score and record events.',
-    tone: 'green',
+    tone: 'teal',
   },
   {
     href: '/players',
@@ -178,18 +178,18 @@ export default async function Home() {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
-      <section className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-950 via-blue-900 to-slate-950 p-5 text-white shadow-sm sm:p-7">
-        <p className="text-sm font-bold uppercase tracking-wide text-blue-200">Can You Coach</p>
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-stone-50 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
+        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Can You Coach</p>
         <div className="mt-4 grid gap-6 lg:grid-cols-[1.4fr_0.8fr] lg:items-end">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-5xl">
+            <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">
               What would you like to do today?
             </h1>
-            <p className="mt-3 max-w-2xl text-base leading-7 text-blue-100">
+            <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">
               Pick the coaching job in front of you. Start a test, get ready for match day, manage the squad, or review what happened last time.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-2xl bg-white/10 p-3 text-center backdrop-blur">
+          <div className="grid grid-cols-3 gap-2 rounded-3xl border border-white bg-white/75 p-3 text-center shadow-sm backdrop-blur">
             <DashboardStat label="Teams" value={teamCount} />
             <DashboardStat label="Players" value={activePlayerCount} />
             <DashboardStat label="Live" value={activeFitnessSessions.length + activeMatches.length} />
@@ -283,7 +283,7 @@ export default async function Home() {
         </DashboardPanel>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className="mt-6 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold text-slate-950">Recent activity</h2>
@@ -300,12 +300,12 @@ export default async function Home() {
             action={<ActionLink href="/club-setup" variant="secondary" size="sm">Set up your club</ActionLink>}
           />
         ) : (
-          <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
+          <div className="mt-4 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
             {recentActivity.map((activity) => (
               <Link
                 key={activity.id}
                 href={activity.href}
-                className="flex flex-col gap-2 p-4 transition hover:bg-blue-50/60 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 p-4 transition hover:bg-emerald-50/60 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
                   <p className="font-bold text-slate-950">{activity.label}</p>
@@ -326,9 +326,9 @@ export default async function Home() {
 
 function DashboardStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl bg-white/10 px-3 py-3">
-      <p className="text-2xl font-extrabold tabular-nums">{value}</p>
-      <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-blue-100">{label}</p>
+    <div className="rounded-2xl bg-white px-3 py-3 shadow-sm">
+      <p className="text-2xl font-extrabold tabular-nums text-slate-950">{value}</p>
+      <p className="mt-1 text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
     </div>
   )
 }
@@ -347,8 +347,8 @@ function ActionCard({
   tone: string
 }) {
   const toneClasses: Record<string, string> = {
-    blue: 'border-blue-200 bg-blue-50 text-blue-900',
-    green: 'border-green-200 bg-green-50 text-green-900',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-950',
+    teal: 'border-teal-200 bg-teal-50 text-teal-950',
     amber: 'border-amber-200 bg-amber-50 text-amber-900',
     slate: 'border-slate-200 bg-white text-slate-900',
   }
@@ -356,7 +356,7 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className={`rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 ${toneClasses[tone]}`}
+      className={`rounded-3xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 ${toneClasses[tone]}`}
     >
       <p className="text-xs font-bold uppercase tracking-wide opacity-75">{eyebrow}</p>
       <h3 className="mt-2 text-lg font-extrabold">{title}</h3>
@@ -377,7 +377,7 @@ function DashboardPanel({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-950">{title}</h2>
@@ -406,7 +406,7 @@ function CompactWorkCard({
   return (
     <Link
       href={href}
-      className="block rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-blue-200 hover:bg-blue-50/70"
+      className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/70"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
