@@ -6,6 +6,7 @@ import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
+import MobileNav from '@/components/MobileNav'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import './globals.css'
 
@@ -71,7 +72,7 @@ export default async function RootLayout({
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
         <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <Link href="/" className="inline-flex items-center gap-2 text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
               <span className="grid h-9 w-9 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white shadow-sm">
                 CYC
@@ -79,9 +80,16 @@ export default async function RootLayout({
               <span>Can You Coach</span>
             </Link>
 
-            <div className="flex items-center gap-3">
+            <MobileNav
+              links={userNavigationLinks}
+              showDevTools={isRoleTesterEnabled()}
+              showAccount={isClerkEnabled()}
+              accessSummary={accessSummary}
+            />
+
+            <div className="hidden items-center gap-3 md:flex">
               <nav
-                className="-mx-1 flex gap-1 overflow-x-auto pb-1 text-sm sm:mx-0 sm:flex-wrap sm:overflow-visible sm:pb-0"
+                className="flex flex-wrap gap-1 text-sm"
                 aria-label="Main navigation"
               >
                 {userNavigationLinks.map((link) => (
