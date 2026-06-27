@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { ClerkProvider } from '@clerk/nextjs'
 import { Inter } from 'next/font/google'
 import Link from 'next/link'
@@ -6,6 +6,7 @@ import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
+import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -21,6 +22,31 @@ const navigationLinks = [
 export const metadata: Metadata = {
   title: 'Can You Coach',
   description: 'Track. Learn. Improve.',
+  applicationName: 'Can You Coach',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'Can You Coach',
+    statusBarStyle: 'black-translucent',
+  },
+  icons: {
+    icon: [
+      {
+        url: '/icons/icon.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+    apple: [
+      {
+        url: '/icons/icon.svg',
+        type: 'image/svg+xml',
+      },
+    ],
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#172554',
 }
 
 const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
@@ -97,6 +123,7 @@ export default async function RootLayout({
         </header>
 
         {children}
+        <ServiceWorkerRegistration />
       </body>
     </html>
   )
