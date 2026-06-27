@@ -18,6 +18,7 @@ import ModalShell from '@/components/ui/ModalShell'
 import SectionCard from '@/components/ui/SectionCard'
 import StatCard from '@/components/ui/StatCard'
 import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
+import { isTeamAgeGroup, teamAgeGroups } from '@/lib/teamAgeGroups'
 
 type SetupActionResult =
   | { ok: true }
@@ -596,6 +597,8 @@ function TeamForm({
   isSubmitting: boolean
   onSubmit: (action: SetupAction, formData: FormData) => Promise<void>
 }) {
+  const hasCustomAgeGroup = Boolean(team?.ageGroup && !isTeamAgeGroup(team.ageGroup))
+
   return (
     <form action={(formData) => onSubmit(action, formData)} className={formGridClassName}>
       {team && <input type="hidden" name="id" value={team.id} />}
@@ -621,13 +624,24 @@ function TeamForm({
       </FormField>
 
       <FormField label="Age group">
-        <input
+        <select
           name="ageGroup"
           required
           defaultValue={team?.ageGroup ?? ''}
           className={fieldClassName}
-          placeholder="e.g. Open Age"
-        />
+        >
+          <option value="" disabled>
+            Select age group
+          </option>
+          {hasCustomAgeGroup && team?.ageGroup && (
+            <option value={team.ageGroup}>Current: {team.ageGroup}</option>
+          )}
+          {teamAgeGroups.map((ageGroup) => (
+            <option key={ageGroup} value={ageGroup}>
+              {ageGroup}
+            </option>
+          ))}
+        </select>
       </FormField>
 
       <FormField label="Season">

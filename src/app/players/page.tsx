@@ -57,8 +57,8 @@ async function createPlayer(formData: FormData): Promise<PlayerActionResult> {
   const dateOfBirth = getOptionalDateValue(formData, 'dateOfBirth')
   const joinedClubDate = getOptionalDateValue(formData, 'joinedClubDate')
 
-  if (!teamId || !firstName || !surname || !preferredPosition) {
-    return { ok: false, reason: 'Team, name and position are required.' }
+  if (!teamId || !firstName || !surname) {
+    return { ok: false, reason: 'Team and name are required.' }
   }
 
   if (!(await canManageTeamData(user.id, teamId))) {
@@ -71,7 +71,7 @@ async function createPlayer(formData: FormData): Promise<PlayerActionResult> {
       firstName,
       surname,
       squadNumber,
-      preferredPosition,
+      preferredPosition: preferredPosition || null,
       dateOfBirth,
       joinedClubDate,
       isActive: true,
@@ -95,8 +95,8 @@ async function updatePlayer(formData: FormData): Promise<PlayerActionResult> {
   const dateOfBirth = getOptionalDateValue(formData, 'dateOfBirth')
   const joinedClubDate = getOptionalDateValue(formData, 'joinedClubDate')
 
-  if (!id || !teamId || !firstName || !surname || !preferredPosition) {
-    return { ok: false, reason: 'Team, name and position are required.' }
+  if (!id || !teamId || !firstName || !surname) {
+    return { ok: false, reason: 'Team and name are required.' }
   }
 
   if (!(await canManagePlayer(user.id, id))) {
@@ -114,7 +114,7 @@ async function updatePlayer(formData: FormData): Promise<PlayerActionResult> {
       firstName,
       surname,
       squadNumber,
-      preferredPosition,
+      preferredPosition: preferredPosition || null,
       dateOfBirth,
       joinedClubDate,
     },

@@ -75,6 +75,9 @@ const formatSquadNumber = (squadNumber: number | null) =>
 const getPlayerName = (player: PlayerRow) =>
   `${player.firstName} ${player.surname}`
 
+const formatPreferredPosition = (preferredPosition: string | null) =>
+  preferredPosition || 'No fixed position'
+
 export default function PlayersClient({
   players,
   teams,
@@ -368,7 +371,7 @@ export default function PlayersClient({
                   <div className="rounded-lg bg-slate-50 p-3">
                     <dt className="text-gray-500">Position</dt>
                     <dd className="mt-1 font-semibold text-gray-900">
-                      {player.preferredPosition ?? 'Not set'}
+                      {formatPreferredPosition(player.preferredPosition)}
                     </dd>
                   </div>
                   <div className="rounded-lg bg-slate-50 p-3">
@@ -404,7 +407,7 @@ export default function PlayersClient({
                       {player.clubName} / {player.teamName}
                     </DataTableCell>
                     <DataTableCell>
-                      {player.preferredPosition ?? 'Not set'}
+                      {formatPreferredPosition(player.preferredPosition)}
                     </DataTableCell>
                     <DataTableCell>
                       {formatSquadNumber(player.squadNumber)}
@@ -434,7 +437,7 @@ export default function PlayersClient({
                 : 'Player Details'}
           description={modalMode === 'detail'
             ? 'View player details and manage status.'
-            : 'Squad number, date of birth and joined date are optional.'}
+            : 'Position, squad number, date of birth and joined date are optional.'}
           onClose={closeModal}
           isSubmitting={isSubmitting}
           mode={modalMode === 'add' ? 'create' : modalMode === 'edit' ? 'edit' : 'detail'}
@@ -543,12 +546,11 @@ function PlayerForm({
       <FormField label="Preferred position">
         <select
           name="preferredPosition"
-          required
           defaultValue={player?.preferredPosition ?? ''}
           className={fieldClassName}
         >
-          <option value="" disabled>
-            Select position
+          <option value="">
+            No fixed position
           </option>
           {playerPositions.map((position) => (
             <option key={position} value={position}>
@@ -600,7 +602,7 @@ function PlayerDetail({
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <DetailItem label="Team" value={`${player.clubName} / ${player.teamName}`} />
-        <DetailItem label="Position" value={player.preferredPosition ?? 'Not set'} />
+        <DetailItem label="Position" value={formatPreferredPosition(player.preferredPosition)} />
         <DetailItem label="Squad number" value={formatSquadNumber(player.squadNumber)} />
         <DetailItem label="Status" value={player.isActive ? 'Active' : 'Archived'} />
         <DetailItem label="Date of birth" value={player.dateOfBirthDisplay} />
