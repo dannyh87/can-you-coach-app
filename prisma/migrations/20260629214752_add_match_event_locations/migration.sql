@@ -1,0 +1,6 @@
+-- AlterEnum
+ALTER TYPE "MatchEventType" ADD VALUE 'TOUCH';
+
+-- AlterTable
+ALTER TABLE "MatchEvent" ADD COLUMN     "x" DOUBLE PRECISION,
+ADD COLUMN     "y" DOUBLE PRECISION;

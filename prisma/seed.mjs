@@ -202,6 +202,16 @@ const matchEventDefinitions = [
     fourCorner: 'TECHNICAL',
     positionRelevance: ['ALL', 'FORWARD', 'WIDE_PLAYER'],
   },
+  {
+    legacyEventType: 'TOUCH',
+    name: 'Touch',
+    description: 'A recorded player touch on the pitch.',
+    matchPhase: 'IN_POSSESSION',
+    category: 'RECEIVING',
+    agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
+    fourCorner: 'TECHNICAL',
+    positionRelevance: ['ALL'],
+  },
 ]
 
 async function main() {

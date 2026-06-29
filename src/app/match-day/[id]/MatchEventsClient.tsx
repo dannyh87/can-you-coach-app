@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import PitchLocationPicker, { type PitchLocation } from '@/components/PitchLocationPicker'
 import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
 
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
@@ -16,6 +17,7 @@ type MatchEventType =
   | 'PASS_INCOMPLETE'
   | 'ONE_V_ONE_SUCCESS'
   | 'ONE_V_ONE_UNSUCCESSFUL'
+  | 'TOUCH'
 
 type MatchEventCategory =
   | 'ATTACKING'
@@ -109,6 +111,10 @@ export default function MatchEventsClient({
   const [selectedEventType, setSelectedEventType] = useState<MatchEventType | ''>(
     eventOptions[0]?.value ?? ''
   )
+  const [pendingTouchEvent, setPendingTouchEvent] = useState<{
+    eventType: 'TOUCH'
+    player: EventPlayer
+  } | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -147,7 +153,14 @@ export default function MatchEventsClient({
   )
 
   const recordEvent = async (eventType: MatchEventType | '', player: EventPlayer | undefined) => {
-    if (!canRecord || pendingAction || !player || !eventType) return
+    if (!canRecord || pendingAction || pendingTouchEvent || !player || !eventType) return
+
+    if (eventType === 'TOUCH') {
+      setMessage(null)
+      setError(null)
+      setPendingTouchEvent({ eventType, player })
+      return
+    }
 
     setPendingAction(getPendingEventKey(eventType, player.matchDayPlayerId))
     setMessage(null)
@@ -162,6 +175,36 @@ export default function MatchEventsClient({
 
     if (result.ok) {
       setMessage(`${formatMatchEventType(eventType)} recorded for ${formatPlayerName(player)}.`)
+      router.refresh()
+    } else {
+      setError(result.reason)
+    }
+
+    setPendingAction(null)
+  }
+
+  const recordTouchLocation = async (location: PitchLocation) => {
+    if (!pendingTouchEvent || pendingAction) return
+
+    const { eventType, player } = pendingTouchEvent
+    const pendingKey = getPendingEventKey(eventType, player.matchDayPlayerId)
+
+    setPendingAction(pendingKey)
+    setMessage(null)
+    setError(null)
+
+    const formData = new FormData()
+    formData.set('matchDayId', matchDayId)
+    formData.set('matchDayPlayerId', player.matchDayPlayerId)
+    formData.set('eventType', eventType)
+    formData.set('x', String(location.x))
+    formData.set('y', String(location.y))
+
+    const result = await recordMatchEventAction(formData)
+
+    if (result.ok) {
+      setMessage(`${formatMatchEventType(eventType)} recorded for ${formatPlayerName(player)}.`)
+      setPendingTouchEvent(null)
       router.refresh()
     } else {
       setError(result.reason)
@@ -522,6 +565,14 @@ export default function MatchEventsClient({
           </div>
         )}
       </details>
+
+      <PitchLocationPicker
+        isOpen={pendingTouchEvent !== null}
+        onSelect={recordTouchLocation}
+        onClose={() => {
+          if (!pendingAction) setPendingTouchEvent(null)
+        }}
+      />
 
     </section>
   )

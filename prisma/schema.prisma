@@ -165,6 +165,8 @@ model MatchEvent {
   matchSecond           Int
   ownScoreAtTime        Int
   oppositionScoreAtTime Int
+  x                     Float?
+  y                     Float?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
   matchDay              MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
@@ -262,6 +264,7 @@ enum MatchEventType {
   PASS_INCOMPLETE
   ONE_V_ONE_SUCCESS
   ONE_V_ONE_UNSUCCESSFUL
+  TOUCH
 }
 
 enum MatchEventCategory {

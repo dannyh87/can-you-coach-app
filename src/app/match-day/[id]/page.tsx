@@ -40,6 +40,22 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getOptionalPitchCoordinate = (formData: FormData, key: string) => {
+  const value = formData.get(key)
+  if (value === null) return { ok: true as const, value: undefined }
+  if (typeof value !== 'string') return { ok: false as const }
+
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return { ok: true as const, value: undefined }
+
+  const coordinate = Number(trimmedValue)
+  if (!Number.isFinite(coordinate) || coordinate < 0 || coordinate > 100) {
+    return { ok: false as const }
+  }
+
+  return { ok: true as const, value: coordinate }
+}
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
 const formatDateTime = (date: Date) =>
@@ -749,9 +765,15 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const matchDayId = getTextValue(formData, 'matchDayId')
   const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
   const eventType = getTextValue(formData, 'eventType')
+  const x = getOptionalPitchCoordinate(formData, 'x')
+  const y = getOptionalPitchCoordinate(formData, 'y')
 
   if (!matchDayId || !matchDayPlayerId || !eventType) {
     return { ok: false, reason: 'Match, player and event type are required.' }
+  }
+
+  if (!x.ok || !y.ok) {
+    return { ok: false, reason: 'Event location must be a number between 0 and 100.' }
   }
 
   if (!isMatchEventType(eventType)) {
@@ -823,6 +845,8 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
       matchSecond,
       ownScoreAtTime: match.ownScore,
       oppositionScoreAtTime: match.oppositionScore,
+      ...(x.value !== undefined ? { x: x.value } : {}),
+      ...(y.value !== undefined ? { y: y.value } : {}),
     },
   })
 

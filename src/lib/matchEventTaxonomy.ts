@@ -7,6 +7,7 @@ export type MatchEventTypeValue =
   | 'PASS_INCOMPLETE'
   | 'ONE_V_ONE_SUCCESS'
   | 'ONE_V_ONE_UNSUCCESSFUL'
+  | 'TOUCH'
 
 export type MatchEventCategoryValue =
   | 'ATTACKING'
@@ -158,6 +159,19 @@ export const matchEventTaxonomy: EventTaxonomyItem[] = [
     prismaCategory: 'IN_POSSESSION',
     fourCorner: 'TECHNICAL',
     positionRelevance: ['ALL', 'FORWARD', 'WIDE_PLAYER'],
+    enabledByDefault: true,
+  },
+  {
+    value: 'TOUCH',
+    label: 'Touch',
+    agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
+    matchPhase: 'IN_POSSESSION',
+    matchPhaseLabel: matchPhaseLabels.IN_POSSESSION,
+    category: 'RECEIVING',
+    categoryLabel: 'Receiving',
+    prismaCategory: 'IN_POSSESSION',
+    fourCorner: 'TECHNICAL',
+    positionRelevance: ['ALL'],
     enabledByDefault: true,
   },
 ]

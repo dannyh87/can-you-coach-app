@@ -12,6 +12,7 @@ type MatchEventType =
   | 'PASS_INCOMPLETE'
   | 'ONE_V_ONE_SUCCESS'
   | 'ONE_V_ONE_UNSUCCESSFUL'
+  | 'TOUCH'
 
 type MatchEventCategory =
   | 'ATTACKING'
