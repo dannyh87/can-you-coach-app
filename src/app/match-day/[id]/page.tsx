@@ -10,6 +10,7 @@ import ParentSubmissionsPanel from '@/app/match-day/[id]/ParentSubmissionsPanel'
 import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
 import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
+import TouchMap from '@/components/TouchMap'
 import { getCurrentUser } from '@/lib/auth'
 import {
   formatMatchEventType,
@@ -1332,6 +1333,18 @@ export default async function MatchDayDetailPage({
     event: formatMatchEventType(event.eventType),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
+  const touchMapEvents = match.matchEvents
+    .filter((event) => event.eventType === 'TOUCH')
+    .map((event) => ({
+      id: event.id,
+      x: event.x,
+      y: event.y,
+      playerName: event.player
+        ? `${event.player.firstName} ${event.player.surname}`
+        : 'Unknown player',
+      half: formatHalfLabel(event.half),
+      minute: Math.floor(event.matchSecond / 60),
+    }))
   const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
     id: submission.id,
     playerName: `${submission.player.firstName} ${submission.player.surname}`,
@@ -1551,6 +1564,13 @@ export default async function MatchDayDetailPage({
               />
             </div>
           </div>
+          <section className="mt-4">
+            <div className="mb-3">
+              <h2 className="text-xl font-bold sm:text-2xl">Touch Map</h2>
+              <p className="mt-1 text-sm text-gray-500">Recorded player touches for this match</p>
+            </div>
+            <TouchMap events={touchMapEvents} />
+          </section>
           <div className="mt-4">
             <ParentSubmissionsPanel
               matchDayId={match.id}
@@ -1582,6 +1602,13 @@ export default async function MatchDayDetailPage({
               summaryCsvRows={summaryCsvRows}
               eventCsvRows={eventCsvRows}
             />
+          </section>
+          <section className="mt-4">
+            <div className="mb-3">
+              <h2 className="text-xl font-bold sm:text-2xl">Touch Map</h2>
+              <p className="mt-1 text-sm text-gray-500">Recorded player touches for this match</p>
+            </div>
+            <TouchMap events={touchMapEvents} />
           </section>
           <section className="mt-4">
             <ParentSubmissionsPanel
