@@ -211,6 +211,7 @@ const matchEventDefinitions = [
     agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
     fourCorner: 'TECHNICAL',
     positionRelevance: ['ALL'],
+    requiresLocation: true,
   },
 ]
 
@@ -337,6 +338,7 @@ async function main() {
       normalizedName: normalizeEventDefinitionName(eventDefinition.name),
       enabledByDefault: true,
       benchmarkable: true,
+      requiresLocation: eventDefinition.requiresLocation ?? false,
       isActive: true,
       archivedAt: null,
     }

@@ -111,14 +111,17 @@ model MatchDay {
 }
 
 model MatchDayEventType {
-  id         String             @id @default(cuid())
-  matchDayId String
-  eventType  MatchEventType
-  category   MatchEventCategory
-  createdAt  DateTime           @default(now())
-  updatedAt  DateTime           @updatedAt
-  matchDay   MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  id                String             @id @default(cuid())
+  matchDayId        String
+  eventType         MatchEventType
+  category          MatchEventCategory
+  eventDefinitionId String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  matchDay          MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  eventDefinition   EventDefinition?   @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
 
+  @@index([eventDefinitionId])
   @@unique([matchDayId, eventType])
 }
 
@@ -167,10 +170,14 @@ model MatchEvent {
   oppositionScoreAtTime Int
   x                     Float?
   y                     Float?
+  eventDefinitionId     String?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
   matchDay              MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   player                Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  eventDefinition       EventDefinition? @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+
+  @@index([eventDefinitionId])
 }
 
 model SubmittedMatchEvent {
@@ -203,6 +210,7 @@ model EventDefinition {
   id                String                         @id @default(cuid())
   scope             EventDefinitionScope           @default(GLOBAL)
   clubId            String?
+  createdByUserId   String?
   legacyEventType   MatchEventType?                @unique
   name              String
   slug              String                         @unique
@@ -215,12 +223,19 @@ model EventDefinition {
   positionRelevance EventDefinitionPosition[]
   enabledByDefault  Boolean                        @default(false)
   benchmarkable     Boolean                        @default(false)
+  requiresLocation  Boolean                        @default(false)
   isActive          Boolean                        @default(true)
   archivedAt        DateTime?
   createdAt         DateTime                       @default(now())
   updatedAt         DateTime                       @updatedAt
+  matchEvents       MatchEvent[]
+  matchDayEventTypes MatchDayEventType[]
 
+  @@index([scope])
+  @@index([clubId])
+  @@index([isActive])
   @@index([scope, isActive])
+  @@index([createdByUserId])
   @@index([enabledByDefault])
   @@index([benchmarkable])
 }
