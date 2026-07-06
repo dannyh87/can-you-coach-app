@@ -8,6 +8,7 @@ export type TouchMapEvent = {
   id: string
   x: number | null | undefined
   y: number | null | undefined
+  label?: string | null
   playerName?: string | null
   half?: string | null
   minute?: number | null
@@ -36,7 +37,9 @@ const getTouchLabel = (event: TouchMapEvent) => {
     .filter(Boolean)
     .join(' · ')
 
-  return details ? `Touch: ${details}` : 'Touch event'
+  const eventLabel = event.label ?? 'Touch event'
+
+  return details ? `${eventLabel}: ${details}` : eventLabel
 }
 
 export default function TouchMap({ events }: TouchMapProps) {

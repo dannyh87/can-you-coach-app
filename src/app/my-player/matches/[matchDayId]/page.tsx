@@ -160,6 +160,10 @@ export default async function ParentMatchPage({
   if (!match) notFound()
 
   const canSubmit = match.status === 'IN_PROGRESS' && selectedPlayer.isOnPitch
+  const parentRecordableEventTypes = match.matchDayEventTypes.flatMap((eventType) => {
+    if (!eventType.eventType) return []
+    return [{ ...eventType, eventType: eventType.eventType }]
+  })
   const readOnlyMessage = match.status === 'HALF_TIME'
     ? 'The match is at half-time. Parent observations are paused until play resumes.'
     : match.status === 'COMPLETED'
@@ -231,14 +235,14 @@ export default async function ParentMatchPage({
           </p>
         )}
 
-        {match.matchDayEventTypes.length === 0 ? (
+        {parentRecordableEventTypes.length === 0 ? (
           <EmptyState
             title="No event buttons selected"
             description="The coach has not selected any recordable event types for this match."
           />
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {match.matchDayEventTypes.map((eventType) => (
+            {parentRecordableEventTypes.map((eventType) => (
               <form key={eventType.id} action={submitParentMatchEvent} className="rounded-xl border border-slate-200 p-3">
                 <input type="hidden" name="matchDayId" value={match.id} />
                 <input type="hidden" name="playerId" value={selectedPlayer.playerId} />

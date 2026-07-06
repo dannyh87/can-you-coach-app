@@ -3,43 +3,22 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-type MatchEventType =
-  | 'GOAL'
-  | 'ASSIST'
-  | 'SHOT_ON_TARGET'
-  | 'SHOT_OFF_TARGET'
-  | 'PASS_COMPLETE'
-  | 'PASS_INCOMPLETE'
-  | 'ONE_V_ONE_SUCCESS'
-  | 'ONE_V_ONE_UNSUCCESSFUL'
-  | 'TOUCH'
-
-type MatchEventCategory =
-  | 'ATTACKING'
-  | 'IN_POSSESSION'
-  | 'OUT_OF_POSSESSION'
-  | 'TRANSITION'
+import type { RecordableEventOption } from '@/lib/eventDefinitions'
 
 type MatchActionResult =
   | { ok: true }
   | { ok: false; reason: string }
 
 type EventOption = {
-  value: MatchEventType
   label: string
-  category: MatchEventCategory
-}
-
-type EventCategoryOption = {
-  value: MatchEventCategory
-  label: string
+  value: string
 }
 
 type MatchEventSetupClientProps = {
   matchDayId: string
-  eventOptions: readonly EventOption[]
-  categoryOptions: readonly EventCategoryOption[]
-  selectedEventTypes: MatchEventType[]
+  eventOptions: readonly RecordableEventOption[]
+  categoryOptions: readonly EventOption[]
+  selectedEventDefinitionIds: string[]
   updateMatchEventSetupAction: (formData: FormData) => Promise<MatchActionResult>
 }
 
@@ -47,26 +26,35 @@ export default function MatchEventSetupClient({
   matchDayId,
   eventOptions,
   categoryOptions,
-  selectedEventTypes,
+  selectedEventDefinitionIds,
   updateMatchEventSetupAction,
 }: MatchEventSetupClientProps) {
   const router = useRouter()
-  const [selectedValues, setSelectedValues] = useState<MatchEventType[]>(selectedEventTypes)
+  const [selectedValues, setSelectedValues] = useState<string[]>(selectedEventDefinitionIds)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const toggleEventType = (eventType: MatchEventType) => {
+  const toggleEventDefinition = (eventDefinitionId: string) => {
     setSelectedValues((currentValues) =>
-      currentValues.includes(eventType)
-        ? currentValues.filter((value) => value !== eventType)
-        : [...currentValues, eventType]
+      currentValues.includes(eventDefinitionId)
+        ? currentValues.filter((value) => value !== eventDefinitionId)
+        : [...currentValues, eventDefinitionId]
     )
   }
 
   const useDefaultSet = () => {
-    setSelectedValues(eventOptions.map((eventOption) => eventOption.value))
+    setSelectedValues(eventOptions.filter((eventOption) => eventOption.enabledByDefault).map((eventOption) => eventOption.id))
   }
+  const subcategoryOptions = Array.from(new Set(eventOptions.map((eventOption) => eventOption.subcategory).filter((subcategory): subcategory is string => Boolean(subcategory)))).sort()
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase()
+  const visibleEventOptions = eventOptions.filter((eventOption) => {
+    if (normalizedSearchTerm && !`${eventOption.label} ${eventOption.description ?? ''}`.toLowerCase().includes(normalizedSearchTerm)) return false
+    if (subcategoryFilter !== 'ALL' && eventOption.subcategory !== subcategoryFilter) return false
+    return true
+  })
 
   const saveEventSetup = async () => {
     setIsSaving(true)
@@ -75,7 +63,7 @@ export default function MatchEventSetupClient({
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    selectedValues.forEach((eventType) => formData.append('eventType', eventType))
+    selectedValues.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
 
     const result = await updateMatchEventSetupAction(formData)
 
@@ -124,8 +112,26 @@ export default function MatchEventSetupClient({
         <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
           Selected events appear in Event recording after kick-off, once tracked players are on the pitch.
         </p>
+        <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+          <label className="text-sm font-semibold text-slate-700">
+            Search events
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2"
+              placeholder="Search by name or description"
+            />
+          </label>
+          <label className="text-sm font-semibold text-slate-700">
+            Subcategory
+            <select value={subcategoryFilter} onChange={(event) => setSubcategoryFilter(event.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2">
+              <option value="ALL">All</option>
+              {subcategoryOptions.map((subcategory) => <option key={subcategory} value={subcategory}>{subcategory}</option>)}
+            </select>
+          </label>
+        </div>
         {categoryOptions.map((category) => {
-          const categoryEvents = eventOptions.filter(
+          const categoryEvents = visibleEventOptions.filter(
             (eventOption) => eventOption.category === category.value
           )
 
@@ -137,24 +143,43 @@ export default function MatchEventSetupClient({
               {categoryEvents.length === 0 ? (
                 <p className="mt-2 text-sm text-gray-400">No standard events yet.</p>
               ) : (
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {categoryEvents.map((eventOption) => {
-                    const isSelected = selectedValues.includes(eventOption.value)
+                    const isSelected = selectedValues.includes(eventOption.id)
 
                     return (
-                      <button
-                        key={eventOption.value}
-                        type="button"
-                        onClick={() => toggleEventType(eventOption.value)}
-                        className={`rounded-lg border px-3 py-4 text-sm font-bold ${
+                      <article
+                        key={eventOption.id}
+                        className={`rounded-lg border px-3 py-4 text-left text-sm ${
                           isSelected
-                            ? 'border-blue-600 bg-blue-600 text-white'
+                            ? 'border-blue-600 bg-blue-50 text-blue-950'
                             : 'bg-white text-gray-900'
                         }`}
-                        disabled={isSaving}
                       >
-                        {eventOption.label}
-                      </button>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="block font-bold">{eventOption.label}</span>
+                            {eventOption.subcategory && <span className="mt-1 block text-xs opacity-80">{eventOption.subcategory}</span>}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleEventDefinition(eventOption.id)}
+                            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${
+                              isSelected
+                                ? 'bg-blue-700 text-white'
+                                : 'border border-blue-200 bg-white text-blue-800'
+                            }`}
+                            disabled={isSaving}
+                          >
+                            {isSelected ? 'Selected' : 'Select'}
+                          </button>
+                        </div>
+                        <span className="mt-2 flex flex-wrap gap-1">
+                          {eventOption.enabledByDefault && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800">Default</span>}
+                          {eventOption.requiresLocation && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">Requires pitch location</span>}
+                        </span>
+                        <EventGuidanceDetails event={eventOption} />
+                      </article>
                     )
                   })}
                 </div>
@@ -173,5 +198,47 @@ export default function MatchEventSetupClient({
         {isSaving ? 'Saving...' : 'Save event setup'}
       </button>
     </section>
+  )
+}
+
+function EventGuidanceDetails({ event }: { event: RecordableEventOption }) {
+  const hasGuidance = event.description || event.videoUrl || event.requiresLocation || event.subcategory
+  if (!hasGuidance) return null
+
+  return (
+    <details className="mt-3 rounded-lg border border-slate-200 bg-white p-2 text-sm">
+      <summary className="cursor-pointer text-xs font-bold text-blue-800">
+        Recording guidance
+      </summary>
+      <div className="mt-2 space-y-2 text-slate-700">
+        <div>
+          <p className="font-bold text-slate-950">{event.label}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''}
+          </p>
+        </div>
+        {event.description && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">What to count</p>
+            <p className="mt-1 text-sm">{event.description}</p>
+          </div>
+        )}
+        {event.requiresLocation && (
+          <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+            Requires pitch location
+          </span>
+        )}
+        {event.videoUrl && (
+          <a
+            href={event.videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-sm font-bold text-blue-700 hover:underline"
+          >
+            Watch guidance
+          </a>
+        )}
+      </div>
+    </details>
   )
 }

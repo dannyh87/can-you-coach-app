@@ -1,7 +1,8 @@
-import type { EventDefinition } from '@prisma/client'
+import type { EventDefinition, MatchEventCategory, MatchEventType } from '@prisma/client'
 
 import {
   getMatchEventPrismaCategory,
+  formatMatchEventType,
   isMatchEventType,
   matchEventTaxonomy,
   matchPhaseLabels,
@@ -28,6 +29,119 @@ const eventDefinitionCategoryLabels: Record<string, string> = {
   DISCIPLINE: 'Discipline',
   INJURIES: 'Injuries',
   OTHER: 'Other',
+}
+
+export type RecordableEventOption = {
+  id: string
+  legacyEventType: MatchEventType | null
+  label: string
+  category: string
+  categoryLabel: string
+  subcategory: string | null
+  description: string | null
+  videoUrl: string | null
+  matchPhase: MatchPhase
+  matchPhaseLabel: string
+  agePhases: EventDefinition['agePhases']
+  fourCorner: EventDefinition['fourCorner']
+  positionRelevance: EventDefinition['positionRelevance']
+  requiresLocation: boolean
+  enabledByDefault: boolean
+  isActive: boolean
+}
+
+type EventDisplaySource = {
+  eventType?: MatchEventType | null
+  eventDefinition?: Pick<EventDefinition, 'name'> | null
+}
+
+export function mapEventDefinitionToRecordableOption(
+  eventDefinition: EventDefinition
+): RecordableEventOption {
+  const matchPhase = mapMatchPhase(eventDefinition.matchPhase)
+
+  return {
+    id: eventDefinition.id,
+    legacyEventType: getLegacyEventType(eventDefinition),
+    label: eventDefinition.name,
+    category: eventDefinition.category,
+    categoryLabel: eventDefinitionCategoryLabels[eventDefinition.category] ?? eventDefinition.category,
+    subcategory: eventDefinition.subcategory,
+    description: eventDefinition.description,
+    videoUrl: eventDefinition.videoUrl,
+    matchPhase,
+    matchPhaseLabel: eventDefinitionMatchPhaseLabels[matchPhase],
+    agePhases: eventDefinition.agePhases,
+    fourCorner: eventDefinition.fourCorner,
+    positionRelevance: eventDefinition.positionRelevance,
+    requiresLocation: getEventRequiresLocation(eventDefinition),
+    enabledByDefault: eventDefinition.enabledByDefault,
+    isActive: eventDefinition.isActive,
+  }
+}
+
+export function mapEventDefinitionsToRecordableOptions(
+  eventDefinitions: EventDefinition[]
+) {
+  return eventDefinitions.map(mapEventDefinitionToRecordableOption)
+}
+
+export function getEventDisplayName(event: EventDisplaySource) {
+  if (event.eventDefinition?.name) return event.eventDefinition.name
+  if (event.eventType) return formatMatchEventType(event.eventType)
+  return 'Unknown event'
+}
+
+export function getEventRequiresLocation(
+  eventDefinition: Pick<EventDefinition, 'requiresLocation'>
+) {
+  return eventDefinition.requiresLocation
+}
+
+export function getLegacyEventType(
+  eventDefinition: Pick<EventDefinition, 'legacyEventType'>
+) {
+  return eventDefinition.legacyEventType ?? null
+}
+
+export function getMatchDayEventCategoryFallback(
+  eventDefinition: Pick<EventDefinition, 'legacyEventType'> & { matchPhase: EventDefinition['matchPhase'] | MatchPhase }
+): MatchEventCategory {
+  if (eventDefinition.legacyEventType) return getMatchEventPrismaCategory(eventDefinition.legacyEventType)
+  if (eventDefinition.matchPhase === 'IN_POSSESSION') return 'IN_POSSESSION'
+  if (eventDefinition.matchPhase === 'OUT_OF_POSSESSION') return 'OUT_OF_POSSESSION'
+  if (eventDefinition.matchPhase === 'TRANSITION') return 'TRANSITION'
+  return 'ATTACKING'
+}
+
+export async function getActiveRecordableEventDefinitions({
+  legacyOnly = false,
+}: {
+  legacyOnly?: boolean
+} = {}) {
+  const eventDefinitions = await prisma.eventDefinition.findMany({
+    where: {
+      scope: 'GLOBAL',
+      isActive: true,
+      ...(legacyOnly ? { legacyEventType: { not: null } } : {}),
+    },
+    orderBy: [
+      { matchPhase: 'asc' },
+      { category: 'asc' },
+      { subcategory: 'asc' },
+      { name: 'asc' },
+    ],
+  })
+
+  return mapEventDefinitionsToRecordableOptions(eventDefinitions)
+}
+
+export function getRecordableEventPhaseGroups(events: RecordableEventOption[]) {
+  return Object.entries(matchPhaseLabels).map(([value, label]) => ({
+    value: value as MatchPhase,
+    label,
+    events: events.filter((event) => event.matchPhase === value),
+  }))
 }
 
 const mapMatchPhase = (matchPhase: EventDefinition['matchPhase']): MatchPhase => {

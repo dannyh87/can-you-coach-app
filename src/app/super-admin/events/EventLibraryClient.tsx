@@ -17,6 +17,8 @@ type EventDefinition = {
   legacyEventType: string | null
   name: string
   description: string | null
+  subcategory: string | null
+  videoUrl: string | null
   matchPhase: string
   category: string
   agePhases: string[]
@@ -24,6 +26,7 @@ type EventDefinition = {
   positionRelevance: string[]
   enabledByDefault: boolean
   benchmarkable: boolean
+  requiresLocation: boolean
   isActive: boolean
   archivedAt: string | null
 }
@@ -42,7 +45,7 @@ type EventLibraryClientProps = {
   restoreEventDefinitionAction: (formData: FormData) => Promise<ActionResult>
 }
 
-type SortKey = 'name' | 'matchPhase' | 'category' | 'recordability' | 'default' | 'benchmarkable'
+type SortKey = 'name' | 'matchPhase' | 'category' | 'location' | 'default' | 'benchmarkable'
 type SortDirection = 'asc' | 'desc'
 
 const getOptionLabel = (options: readonly Option[], value: string) =>
@@ -71,7 +74,9 @@ export default function EventLibraryClient({
   const [searchTerm, setSearchTerm] = useState('')
   const [matchPhaseFilter, setMatchPhaseFilter] = useState('ALL')
   const [categoryFilter, setCategoryFilter] = useState('ALL')
-  const [recordabilityFilter, setRecordabilityFilter] = useState('ALL')
+  const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
+  const [locationFilter, setLocationFilter] = useState('ALL')
+  const [legacyFilter, setLegacyFilter] = useState('ALL')
   const [defaultFilter, setDefaultFilter] = useState('ALL')
   const [benchmarkableFilter, setBenchmarkableFilter] = useState('ALL')
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -80,17 +85,35 @@ export default function EventLibraryClient({
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const activeEvents = eventDefinitions.filter((eventDefinition) => eventDefinition.isActive)
   const archivedEvents = eventDefinitions.filter((eventDefinition) => !eventDefinition.isActive)
-  const recordableCount = eventDefinitions.filter((eventDefinition) => eventDefinition.legacyEventType).length
+  const subcategoryOptions = useMemo(() => Array.from(new Set(
+    eventDefinitions
+      .map((eventDefinition) => eventDefinition.subcategory)
+      .filter((subcategory): subcategory is string => Boolean(subcategory))
+  )).sort((firstSubcategory, secondSubcategory) => firstSubcategory.localeCompare(secondSubcategory))
+    .map((subcategory) => ({ value: subcategory, label: subcategory })), [eventDefinitions])
   const visibleActiveEvents = useMemo(() => {
     const normalizedSearchTerm = searchTerm.trim().toLowerCase()
 
     return activeEvents
       .filter((eventDefinition) => {
-        if (normalizedSearchTerm && !eventDefinition.name.toLowerCase().includes(normalizedSearchTerm)) return false
+        const searchableText = [
+          eventDefinition.name,
+          eventDefinition.description,
+          eventDefinition.subcategory,
+          eventDefinition.legacyEventType,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+
+        if (normalizedSearchTerm && !searchableText.includes(normalizedSearchTerm)) return false
         if (matchPhaseFilter !== 'ALL' && eventDefinition.matchPhase !== matchPhaseFilter) return false
         if (categoryFilter !== 'ALL' && eventDefinition.category !== categoryFilter) return false
-        if (recordabilityFilter === 'RECORDABLE' && !eventDefinition.legacyEventType) return false
-        if (recordabilityFilter === 'LIBRARY_ONLY' && eventDefinition.legacyEventType) return false
+        if (subcategoryFilter !== 'ALL' && eventDefinition.subcategory !== subcategoryFilter) return false
+        if (locationFilter === 'REQUIRES_LOCATION' && !eventDefinition.requiresLocation) return false
+        if (locationFilter === 'NO_LOCATION' && eventDefinition.requiresLocation) return false
+        if (legacyFilter === 'LEGACY_BACKED' && !eventDefinition.legacyEventType) return false
+        if (legacyFilter === 'DB_ONLY' && eventDefinition.legacyEventType) return false
         if (defaultFilter === 'ON' && !eventDefinition.enabledByDefault) return false
         if (defaultFilter === 'OFF' && eventDefinition.enabledByDefault) return false
         if (benchmarkableFilter === 'YES' && !eventDefinition.benchmarkable) return false
@@ -108,11 +131,13 @@ export default function EventLibraryClient({
     benchmarkableFilter,
     categoryFilter,
     defaultFilter,
+    legacyFilter,
+    locationFilter,
     matchPhaseFilter,
-    recordabilityFilter,
     searchTerm,
     sortDirection,
     sortKey,
+    subcategoryFilter,
   ])
   const visibleActiveEventIds = visibleActiveEvents.map((eventDefinition) => eventDefinition.id)
   const selectedVisibleEventCount = visibleActiveEventIds.filter((eventDefinitionId) => selectedEventIds.includes(eventDefinitionId)).length
@@ -213,13 +238,13 @@ export default function EventLibraryClient({
         <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Super Admin</p>
         <h1 className="mt-1 text-3xl font-bold">Match Day Event Library</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Manage the official global event language. Existing enum-backed events remain the only events recordable in live Match Day for now.
+          Manage global event definitions used by match setup, live recording and reports.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <SummaryCard label="Official events" value={String(eventDefinitions.length)} />
-        <SummaryCard label="Recordable now" value={String(recordableCount)} />
+        <SummaryCard label="Active" value={String(activeEvents.length)} />
         <SummaryCard label="Archived" value={String(archivedEvents.length)} />
       </div>
 
@@ -272,7 +297,7 @@ export default function EventLibraryClient({
           <div>
             <h2 className="text-2xl font-bold">Active official events</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Library-only events are stored centrally but are not available in live recording yet.
+              Active global events can be selected in Match Day setup.
             </p>
           </div>
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
@@ -287,14 +312,19 @@ export default function EventLibraryClient({
           setMatchPhaseFilter={setMatchPhaseFilter}
           categoryFilter={categoryFilter}
           setCategoryFilter={setCategoryFilter}
-          recordabilityFilter={recordabilityFilter}
-          setRecordabilityFilter={setRecordabilityFilter}
+          subcategoryFilter={subcategoryFilter}
+          setSubcategoryFilter={setSubcategoryFilter}
+          locationFilter={locationFilter}
+          setLocationFilter={setLocationFilter}
+          legacyFilter={legacyFilter}
+          setLegacyFilter={setLegacyFilter}
           defaultFilter={defaultFilter}
           setDefaultFilter={setDefaultFilter}
           benchmarkableFilter={benchmarkableFilter}
           setBenchmarkableFilter={setBenchmarkableFilter}
           matchPhaseOptions={matchPhaseOptions}
           categoryOptions={categoryOptions}
+          subcategoryOptions={subcategoryOptions}
         />
 
         {selectedEventIds.length > 0 && (
@@ -375,7 +405,7 @@ export default function EventLibraryClient({
 }
 
 function getSortValue(eventDefinition: EventDefinition, sortKey: SortKey) {
-  if (sortKey === 'recordability') return eventDefinition.legacyEventType ? '0' : '1'
+  if (sortKey === 'location') return eventDefinition.requiresLocation ? '0' : '1'
   if (sortKey === 'default') return eventDefinition.enabledByDefault ? '0' : '1'
   if (sortKey === 'benchmarkable') return eventDefinition.benchmarkable ? '0' : '1'
   return eventDefinition[sortKey].toLowerCase()
@@ -397,14 +427,19 @@ function EventFilters({
   setMatchPhaseFilter,
   categoryFilter,
   setCategoryFilter,
-  recordabilityFilter,
-  setRecordabilityFilter,
+  subcategoryFilter,
+  setSubcategoryFilter,
+  locationFilter,
+  setLocationFilter,
+  legacyFilter,
+  setLegacyFilter,
   defaultFilter,
   setDefaultFilter,
   benchmarkableFilter,
   setBenchmarkableFilter,
   matchPhaseOptions,
   categoryOptions,
+  subcategoryOptions,
 }: {
   searchTerm: string
   setSearchTerm: (value: string) => void
@@ -412,14 +447,19 @@ function EventFilters({
   setMatchPhaseFilter: (value: string) => void
   categoryFilter: string
   setCategoryFilter: (value: string) => void
-  recordabilityFilter: string
-  setRecordabilityFilter: (value: string) => void
+  subcategoryFilter: string
+  setSubcategoryFilter: (value: string) => void
+  locationFilter: string
+  setLocationFilter: (value: string) => void
+  legacyFilter: string
+  setLegacyFilter: (value: string) => void
   defaultFilter: string
   setDefaultFilter: (value: string) => void
   benchmarkableFilter: string
   setBenchmarkableFilter: (value: string) => void
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
+  subcategoryOptions: readonly Option[]
 }) {
   return (
     <div className="mt-4 grid gap-3 rounded-xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -434,13 +474,23 @@ function EventFilters({
       </label>
       <FilterSelect label="Match phase" value={matchPhaseFilter} onChange={setMatchPhaseFilter} options={matchPhaseOptions} />
       <FilterSelect label="Category" value={categoryFilter} onChange={setCategoryFilter} options={categoryOptions} />
+      <FilterSelect label="Subcategory" value={subcategoryFilter} onChange={setSubcategoryFilter} options={subcategoryOptions} />
       <FilterSelect
-        label="Recordability"
-        value={recordabilityFilter}
-        onChange={setRecordabilityFilter}
+        label="Location"
+        value={locationFilter}
+        onChange={setLocationFilter}
         options={[
-          { value: 'RECORDABLE', label: 'Recordable now' },
-          { value: 'LIBRARY_ONLY', label: 'Library only' },
+          { value: 'REQUIRES_LOCATION', label: 'Requires location' },
+          { value: 'NO_LOCATION', label: 'No location required' },
+        ]}
+      />
+      <FilterSelect
+        label="Legacy"
+        value={legacyFilter}
+        onChange={setLegacyFilter}
+        options={[
+          { value: 'LEGACY_BACKED', label: 'Legacy-backed' },
+          { value: 'DB_ONLY', label: 'DB-only' },
         ]}
       />
       <div className="grid grid-cols-2 gap-2 sm:col-span-2 lg:col-span-1 lg:grid-cols-1">
@@ -562,12 +612,14 @@ function EventDefinitionsTable({
               )}
             </th>
             <SortableHeader label="Event name" sortKey="name" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
-            <SortableHeader label="Recordability" sortKey="recordability" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <th className="px-3 py-3">Status</th>
             <SortableHeader label="Match phase" sortKey="matchPhase" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
             <SortableHeader label="Category" sortKey="category" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
+            <th className="px-3 py-3">Subcategory</th>
             <th className="px-3 py-3">Age phases</th>
             <th className="px-3 py-3">Positions</th>
             <th className="px-3 py-3">4 Corner</th>
+            <SortableHeader label="Attributes" sortKey="location" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
             <SortableHeader label="Default" sortKey="default" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
             <SortableHeader label="Benchmarkable" sortKey="benchmarkable" activeSortKey={sortKey} sortDirection={sortDirection} onSort={onSort} />
             <th className="px-3 py-3">Actions</th>
@@ -576,7 +628,7 @@ function EventDefinitionsTable({
         <tbody className="divide-y divide-gray-100">
           {events.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-3 py-6 text-center text-gray-500">No events match the current view.</td>
+              <td colSpan={13} className="px-3 py-6 text-center text-gray-500">No events match the current view.</td>
             </tr>
           ) : events.map((eventDefinition) => {
             const selected = selectedEventIds.includes(eventDefinition.id)
@@ -710,28 +762,46 @@ function FragmentRow({
           {eventDefinition.description && (
             <p className="mt-1 line-clamp-2 max-w-64 text-xs text-gray-500">{eventDefinition.description}</p>
           )}
+          {eventDefinition.videoUrl && (
+            <a
+              href={eventDefinition.videoUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex text-xs font-bold text-blue-700 hover:underline"
+            >
+              Video link
+            </a>
+          )}
           {eventDefinition.legacyEventType && (
             <p className="mt-1 text-xs text-gray-400">{eventDefinition.legacyEventType}</p>
           )}
         </td>
         <td className="px-3 py-3 align-top">
-          <Badge tone={eventDefinition.legacyEventType ? 'green' : 'blue'}>
-            {eventDefinition.legacyEventType ? 'Recordable now' : 'Library only'}
+          <Badge tone={eventDefinition.isActive ? 'green' : 'gray'}>
+            {eventDefinition.isActive ? 'Active' : 'Inactive'}
           </Badge>
         </td>
         <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(matchPhaseOptions, eventDefinition.matchPhase)}</td>
         <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(categoryOptions, eventDefinition.category)}</td>
+        <td className="px-3 py-3 align-top text-gray-700">{eventDefinition.subcategory ?? '-'}</td>
         <td className="px-3 py-3 align-top text-gray-700">{formatList(agePhaseOptions, eventDefinition.agePhases)}</td>
         <td className="px-3 py-3 align-top text-gray-700">{formatList(positionOptions, eventDefinition.positionRelevance)}</td>
         <td className="px-3 py-3 align-top text-gray-700">{getOptionLabel(fourCornerOptions, eventDefinition.fourCorner)}</td>
         <td className="px-3 py-3 align-top">
+          <div className="flex max-w-40 flex-wrap gap-1.5">
+            <Badge tone="blue">Global event</Badge>
+            {eventDefinition.requiresLocation && <Badge tone="amber">Requires location</Badge>}
+            {eventDefinition.legacyEventType && <Badge tone="gray">Legacy-backed</Badge>}
+          </div>
+        </td>
+        <td className="px-3 py-3 align-top">
           <Badge tone={eventDefinition.enabledByDefault ? 'green' : 'gray'}>
-            {eventDefinition.enabledByDefault ? 'Default on' : 'Default off'}
+            {eventDefinition.enabledByDefault ? 'Default' : 'Not default'}
           </Badge>
         </td>
         <td className="px-3 py-3 align-top">
           <Badge tone={eventDefinition.benchmarkable ? 'blue' : 'gray'}>
-            {eventDefinition.benchmarkable ? 'Benchmarkable' : 'No'}
+            {eventDefinition.benchmarkable ? 'Benchmarkable' : 'Not benchmarkable'}
           </Badge>
         </td>
         <td className="px-3 py-3 align-top">
@@ -768,7 +838,7 @@ function FragmentRow({
       </tr>
       {isEditing && (
         <tr className="bg-gray-50">
-          <td colSpan={11} className="px-4 py-4">
+          <td colSpan={13} className="px-4 py-4">
             <form
               onSubmit={(event) => {
                 event.preventDefault()
@@ -804,11 +874,12 @@ function FragmentRow({
   )
 }
 
-function Badge({ children, tone }: { children: React.ReactNode; tone: 'green' | 'blue' | 'gray' }) {
+function Badge({ children, tone }: { children: React.ReactNode; tone: 'green' | 'blue' | 'gray' | 'amber' }) {
   const toneClasses = {
     green: 'bg-green-100 text-green-800',
     blue: 'bg-blue-100 text-blue-800',
     gray: 'bg-gray-100 text-gray-700',
+    amber: 'bg-amber-100 text-amber-900',
   }
 
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${toneClasses[tone]}`}>{children}</span>
@@ -868,6 +939,15 @@ function EventDefinitionFields({
           </select>
         </label>
         <label className="text-sm font-medium">
+          Subcategory
+          <input
+            name="subcategory"
+            defaultValue={eventDefinition?.subcategory ?? ''}
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            placeholder="Optional"
+          />
+        </label>
+        <label className="text-sm font-medium">
           4 Corner
           <select
             name="fourCorner"
@@ -891,6 +971,17 @@ function EventDefinitionFields({
         />
       </label>
 
+      <label className="text-sm font-medium">
+        Video URL
+        <input
+          type="url"
+          name="videoUrl"
+          defaultValue={eventDefinition?.videoUrl ?? ''}
+          className="mt-1 w-full rounded-lg border px-3 py-2"
+          placeholder="https://..."
+        />
+      </label>
+
       <CheckboxGroup
         label="Age phases"
         name="agePhase"
@@ -905,7 +996,7 @@ function EventDefinitionFields({
         selectedValues={eventDefinition?.positionRelevance ?? ['ALL']}
       />
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-3">
         <label className="flex items-center gap-2 rounded-lg border bg-white p-3 text-sm font-medium">
           <input
             type="checkbox"
@@ -914,6 +1005,19 @@ function EventDefinitionFields({
             disabled={eventDefinition ? !eventDefinition.isActive : false}
           />
           Enabled by default
+        </label>
+        <label className="rounded-lg border bg-white p-3 text-sm font-medium">
+          <span className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              name="requiresLocation"
+              defaultChecked={eventDefinition?.requiresLocation ?? false}
+            />
+            Requires location
+          </span>
+          <span className="mt-1 block text-xs font-normal text-gray-500">
+            Requires the coach to tap a pitch location when recording this event.
+          </span>
         </label>
         <label className="flex items-center gap-2 rounded-lg border bg-white p-3 text-sm font-medium">
           <input

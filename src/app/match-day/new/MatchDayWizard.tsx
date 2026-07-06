@@ -24,15 +24,19 @@ type TeamOption = {
 }
 
 type TaxonomyEvent = {
-  value: string
+  id: string
   label: string
   category: string
   categoryLabel: string
+  subcategory: string | null
+  description: string | null
+  videoUrl: string | null
   matchPhase: MatchPhase
   matchPhaseLabel: string
   agePhases: AgePhase[]
   fourCorner: string
   positionRelevance: string[]
+  requiresLocation: boolean
   enabledByDefault: boolean
 }
 
@@ -46,13 +50,13 @@ type WizardResult = { ok: false; reason: string } | void
 
 const today = () => new Date().toISOString().split('T')[0]
 
-const getRecommendedEventTypes = (events: TaxonomyEvent[], agePhase: AgePhase) => {
+const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[], agePhase: AgePhase) => {
   const defaultEvents = events.filter((event) => event.enabledByDefault)
   const matchingEvents = defaultEvents.filter((event) =>
     agePhase === 'ALL' || event.agePhases.includes(agePhase)
   )
 
-  return (matchingEvents.length > 0 ? matchingEvents : defaultEvents).map((event) => event.value)
+  return (matchingEvents.length > 0 ? matchingEvents : defaultEvents).map((event) => event.id)
 }
 
 export default function MatchDayWizard({
@@ -75,6 +79,7 @@ export default function MatchDayWizard({
   const [eventSearchTerm, setEventSearchTerm] = useState('')
   const [eventMatchPhaseFilter, setEventMatchPhaseFilter] = useState('ALL')
   const [eventCategoryFilter, setEventCategoryFilter] = useState('ALL')
+  const [eventSubcategoryFilter, setEventSubcategoryFilter] = useState('ALL')
   const [eventPositionFilter, setEventPositionFilter] = useState('ALL')
   const [eventFourCornerFilter, setEventFourCornerFilter] = useState('ALL')
   const [error, setError] = useState<string | null>(null)
@@ -84,13 +89,13 @@ export default function MatchDayWizard({
     () => matchPhaseGroups.flatMap((group) => group.events),
     [matchPhaseGroups]
   )
-  const recommendedEventTypes = useMemo(
-    () => getRecommendedEventTypes(allEvents, selectedTeam?.inferredAgePhase ?? 'ALL'),
+  const recommendedEventDefinitionIds = useMemo(
+    () => getRecommendedEventDefinitionIds(allEvents, selectedTeam?.inferredAgePhase ?? 'ALL'),
     [allEvents, selectedTeam?.inferredAgePhase]
   )
-  const [selectedEventTypes, setSelectedEventTypes] = useState<string[]>(recommendedEventTypes)
+  const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>(recommendedEventDefinitionIds)
   const totalSteps = 6
-  const selectedEventTypeSet = useMemo(() => new Set(selectedEventTypes), [selectedEventTypes])
+  const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
   const substituteCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'SUBSTITUTE').length ?? 0
   const involvedCount = starterCount + substituteCount
@@ -110,12 +115,12 @@ export default function MatchDayWizard({
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
   }
-  const applyDefaultEvents = () => setSelectedEventTypes(recommendedEventTypes)
-  const toggleEventType = (eventType: string) => {
-    setSelectedEventTypes((currentEventTypes) =>
-      currentEventTypes.includes(eventType)
-        ? currentEventTypes.filter((value) => value !== eventType)
-        : [...currentEventTypes, eventType]
+  const applyDefaultEvents = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const toggleEventDefinition = (eventDefinitionId: string) => {
+    setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
+      currentEventDefinitionIds.includes(eventDefinitionId)
+        ? currentEventDefinitionIds.filter((value) => value !== eventDefinitionId)
+        : [...currentEventDefinitionIds, eventDefinitionId]
     )
   }
 
@@ -128,7 +133,7 @@ export default function MatchDayWizard({
     formData.set('opposition', opposition)
     formData.set('matchType', matchType)
     formData.set('venue', venue)
-    selectedEventTypes.forEach((eventType) => formData.append('eventType', eventType))
+    selectedEventDefinitionIds.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
     selectedTeam?.players.forEach((player) => {
       formData.append('playerStatus', `${player.id}:${playerStatuses[player.id] ?? 'NOT_INVOLVED'}`)
     })
@@ -196,7 +201,7 @@ export default function MatchDayWizard({
               selected={team.id === teamId}
               onClick={() => {
                 setTeamId(team.id)
-                setSelectedEventTypes(getRecommendedEventTypes(allEvents, team.inferredAgePhase))
+                setSelectedEventDefinitionIds(getRecommendedEventDefinitionIds(allEvents, team.inferredAgePhase))
               }}
             />
           ))}
@@ -260,13 +265,15 @@ export default function MatchDayWizard({
           setEventMatchPhaseFilter={setEventMatchPhaseFilter}
           eventCategoryFilter={eventCategoryFilter}
           setEventCategoryFilter={setEventCategoryFilter}
+          eventSubcategoryFilter={eventSubcategoryFilter}
+          setEventSubcategoryFilter={setEventSubcategoryFilter}
           eventPositionFilter={eventPositionFilter}
           setEventPositionFilter={setEventPositionFilter}
           eventFourCornerFilter={eventFourCornerFilter}
           setEventFourCornerFilter={setEventFourCornerFilter}
-          selectedEventTypeSet={selectedEventTypeSet}
-          selectedEventCount={selectedEventTypes.length}
-          onToggleEvent={toggleEventType}
+          selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
+          selectedEventCount={selectedEventDefinitionIds.length}
+          onToggleEvent={toggleEventDefinition}
           onUseDefaults={applyDefaultEvents}
         />
       )}
@@ -283,7 +290,7 @@ export default function MatchDayWizard({
           <ReviewRow label="Team" value={`${selectedTeam.clubName} / ${selectedTeam.name}`} />
           <ReviewRow label="Squad" value={`${starterCount} starters, ${substituteCount} substitutes`} />
           <ReviewRow label="Age suggestion" value={agePhaseLabels[selectedTeam.inferredAgePhase]} />
-          <ReviewRow label="Events" value={`${selectedEventTypes.length} selected`} />
+          <ReviewRow label="Events" value={`${selectedEventDefinitionIds.length} selected`} />
         </div>
       )}
 
@@ -320,11 +327,13 @@ function EventPicker({
   setEventMatchPhaseFilter,
   eventCategoryFilter,
   setEventCategoryFilter,
+  eventSubcategoryFilter,
+  setEventSubcategoryFilter,
   eventPositionFilter,
   setEventPositionFilter,
   eventFourCornerFilter,
   setEventFourCornerFilter,
-  selectedEventTypeSet,
+  selectedEventDefinitionIdSet,
   selectedEventCount,
   onToggleEvent,
   onUseDefaults,
@@ -337,11 +346,13 @@ function EventPicker({
   setEventMatchPhaseFilter: (value: string) => void
   eventCategoryFilter: string
   setEventCategoryFilter: (value: string) => void
+  eventSubcategoryFilter: string
+  setEventSubcategoryFilter: (value: string) => void
   eventPositionFilter: string
   setEventPositionFilter: (value: string) => void
   eventFourCornerFilter: string
   setEventFourCornerFilter: (value: string) => void
-  selectedEventTypeSet: Set<string>
+  selectedEventDefinitionIdSet: Set<string>
   selectedEventCount: number
   onToggleEvent: (eventType: string) => void
   onUseDefaults: () => void
@@ -349,17 +360,21 @@ function EventPicker({
   const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
   const matchPhaseOptions = getUniqueOptions(events, 'matchPhase', 'matchPhaseLabel')
   const categoryOptions = getUniqueOptions(events, 'category', 'categoryLabel')
+  const subcategoryOptions = Array.from(new Set(events.map((event) => event.subcategory).filter((subcategory): subcategory is string => Boolean(subcategory))))
+    .sort()
+    .map((subcategory) => ({ value: subcategory, label: subcategory }))
   const positionOptions = Array.from(new Set(events.flatMap((event) => event.positionRelevance))).sort()
   const fourCornerOptions = Array.from(new Set(events.map((event) => event.fourCorner))).sort()
   const visibleEvents = events.filter((event) => {
-    if (normalizedSearchTerm && !event.label.toLowerCase().includes(normalizedSearchTerm)) return false
+    if (normalizedSearchTerm && !`${event.label} ${event.description ?? ''}`.toLowerCase().includes(normalizedSearchTerm)) return false
     if (eventMatchPhaseFilter !== 'ALL' && event.matchPhase !== eventMatchPhaseFilter) return false
     if (eventCategoryFilter !== 'ALL' && event.category !== eventCategoryFilter) return false
+    if (eventSubcategoryFilter !== 'ALL' && event.subcategory !== eventSubcategoryFilter) return false
     if (eventPositionFilter !== 'ALL' && !event.positionRelevance.includes(eventPositionFilter)) return false
     if (eventFourCornerFilter !== 'ALL' && event.fourCorner !== eventFourCornerFilter) return false
     return true
   })
-  const selectedEvents = events.filter((event) => selectedEventTypeSet.has(event.value))
+  const selectedEvents = events.filter((event) => selectedEventDefinitionIdSet.has(event.id))
 
   return (
     <div className="space-y-4">
@@ -371,9 +386,9 @@ function EventPicker({
           <div className="mt-2 flex flex-wrap gap-2">
             {selectedEvents.map((event) => (
               <button
-                key={event.value}
+                key={event.id}
                 type="button"
-                onClick={() => onToggleEvent(event.value)}
+                onClick={() => onToggleEvent(event.id)}
                 className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-900 hover:bg-blue-200"
               >
                 {event.label} ×
@@ -395,6 +410,7 @@ function EventPicker({
         </label>
         <EventFilterSelect label="Match phase" value={eventMatchPhaseFilter} onChange={setEventMatchPhaseFilter} options={matchPhaseOptions} />
         <EventFilterSelect label="Category" value={eventCategoryFilter} onChange={setEventCategoryFilter} options={categoryOptions} />
+        <EventFilterSelect label="Subcategory" value={eventSubcategoryFilter} onChange={setEventSubcategoryFilter} options={subcategoryOptions} />
         <EventFilterSelect
           label="Position relevance"
           value={eventPositionFilter}
@@ -416,11 +432,11 @@ function EventPicker({
             No events match the current filters.
           </p>
         ) : visibleEvents.map((event) => {
-          const selected = selectedEventTypeSet.has(event.value)
+          const selected = selectedEventDefinitionIdSet.has(event.id)
 
           return (
             <label
-              key={event.value}
+              key={event.id}
               className={`rounded-xl border p-3 text-left transition ${
                 selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
               }`}
@@ -429,7 +445,7 @@ function EventPicker({
                 <input
                   type="checkbox"
                   checked={selected}
-                  onChange={() => onToggleEvent(event.value)}
+                  onChange={() => onToggleEvent(event.id)}
                   className="mt-1"
                 />
                 <div className="min-w-0 flex-1">
@@ -440,6 +456,11 @@ function EventPicker({
                         Default
                       </span>
                     )}
+                    {event.requiresLocation && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                        Requires pitch location
+                      </span>
+                    )}
                     {selected && (
                       <span className="rounded-full bg-blue-800 px-2 py-0.5 text-[11px] font-bold text-white">
                         Selected
@@ -447,11 +468,12 @@ function EventPicker({
                     )}
                   </div>
                   <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {event.matchPhaseLabel} · {event.categoryLabel} · {formatEventMeta(event.fourCorner)}
+                    {event.matchPhaseLabel} · {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''} · {formatEventMeta(event.fourCorner)}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     Relevant: {event.positionRelevance.map(formatEventMeta).join(', ')}
                   </p>
+                  <EventGuidanceDetails event={event} />
                 </div>
               </div>
             </label>
@@ -460,7 +482,7 @@ function EventPicker({
       </div>
 
       <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        Showing {visibleEvents.length} of {events.length} available observation events. Library-only events are not shown here yet.
+        Showing {visibleEvents.length} of {events.length} live-recordable observation events.
       </p>
     </div>
   )
@@ -501,6 +523,54 @@ function EventSetupHeader({
         These are coaching observation buttons, not match admin fields. Choose only what you can realistically record live.
       </p>
     </div>
+  )
+}
+
+function EventGuidanceDetails({ event }: { event: TaxonomyEvent }) {
+  const hasGuidance = event.description || event.videoUrl || event.requiresLocation || event.subcategory
+  if (!hasGuidance) return null
+
+  return (
+    <details
+      className="mt-2 rounded-lg border border-slate-200 bg-white/80 p-2 text-sm"
+      onClick={(clickEvent) => clickEvent.stopPropagation()}
+      onToggle={(toggleEvent) => toggleEvent.stopPropagation()}
+    >
+      <summary className="cursor-pointer text-xs font-bold text-blue-800">
+        Recording guidance
+      </summary>
+      <div className="mt-2 space-y-2 text-slate-700">
+        <div>
+          <p className="font-bold text-slate-950">{event.label}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''}
+          </p>
+        </div>
+        {event.description && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">What to count</p>
+            <p className="mt-1 text-sm">{event.description}</p>
+          </div>
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          {event.requiresLocation && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+              Requires pitch location
+            </span>
+          )}
+        </div>
+        {event.videoUrl && (
+          <a
+            href={event.videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-sm font-bold text-blue-700 hover:underline"
+          >
+            Watch guidance
+          </a>
+        )}
+      </div>
+    </details>
   )
 }
 

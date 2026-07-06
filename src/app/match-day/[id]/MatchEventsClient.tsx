@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import PitchLocationPicker, { type PitchLocation } from '@/components/PitchLocationPicker'
-import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
 
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
@@ -18,12 +17,6 @@ type MatchEventType =
   | 'ONE_V_ONE_SUCCESS'
   | 'ONE_V_ONE_UNSUCCESSFUL'
   | 'TOUCH'
-
-type MatchEventCategory =
-  | 'ATTACKING'
-  | 'IN_POSSESSION'
-  | 'OUT_OF_POSSESSION'
-  | 'TRANSITION'
 
 type RecordingMode = 'PLAYER_FIRST' | 'EVENT_FIRST'
 
@@ -41,7 +34,7 @@ type EventPlayer = {
 
 type RecentEvent = {
   id: string
-  eventType: MatchEventType
+  label: string
   half: MatchHalf
   matchSecond: number
   ownScoreAtTime: number
@@ -50,13 +43,20 @@ type RecentEvent = {
 }
 
 type EventOption = {
-  value: MatchEventType
+  matchDayEventTypeId: string
+  eventDefinitionId: string | null
+  legacyEventType: MatchEventType | null
   label: string
-  category: MatchEventCategory
+  category: string
+  categoryLabel?: string
+  subcategory: string | null
+  description: string | null
+  videoUrl: string | null
+  requiresLocation: boolean
 }
 
 type EventCategoryOption = {
-  value: MatchEventCategory
+  value: string
   label: string
 }
 
@@ -86,8 +86,11 @@ const formatMatchTime = (matchSecond: number) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
-const getPendingEventKey = (eventType: MatchEventType, matchDayPlayerId: string) =>
-  `${eventType}:${matchDayPlayerId}`
+const getEventOptionKey = (eventOption: EventOption) =>
+  eventOption.eventDefinitionId ?? eventOption.legacyEventType ?? eventOption.matchDayEventTypeId
+
+const getPendingEventKey = (eventOption: EventOption, matchDayPlayerId: string) =>
+  `${getEventOptionKey(eventOption)}:${matchDayPlayerId}`
 
 export default function MatchEventsClient({
   matchDayId,
@@ -105,14 +108,14 @@ export default function MatchEventsClient({
   )
   const [recordingMode, setRecordingMode] = useState<RecordingMode>('PLAYER_FIRST')
   const [selectedPlayerId, setSelectedPlayerId] = useState(players[0]?.matchDayPlayerId ?? '')
-  const [selectedCategory, setSelectedCategory] = useState<MatchEventCategory>(
+  const [selectedCategory, setSelectedCategory] = useState(
     availableCategories[0]?.value ?? 'ATTACKING'
   )
-  const [selectedEventType, setSelectedEventType] = useState<MatchEventType | ''>(
-    eventOptions[0]?.value ?? ''
+  const [selectedEventKey, setSelectedEventKey] = useState(
+    eventOptions[0] ? getEventOptionKey(eventOptions[0]) : ''
   )
-  const [pendingTouchEvent, setPendingTouchEvent] = useState<{
-    eventType: 'TOUCH'
+  const [pendingLocationEvent, setPendingLocationEvent] = useState<{
+    eventOption: EventOption
     player: EventPlayer
   } | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
@@ -137,44 +140,52 @@ export default function MatchEventsClient({
   const firstCategoryEvent = eventOptions.find(
     (eventOption) => eventOption.category === effectiveSelectedCategory
   )
-  const effectiveSelectedEventType = eventOptions.some(
-    (eventOption) => eventOption.value === selectedEventType
+  const effectiveSelectedEventKey = eventOptions.some(
+    (eventOption) => getEventOptionKey(eventOption) === selectedEventKey
   )
-    ? selectedEventType
-    : firstCategoryEvent?.value ?? eventOptions[0]?.value ?? ''
+    ? selectedEventKey
+    : firstCategoryEvent ? getEventOptionKey(firstCategoryEvent) : eventOptions[0] ? getEventOptionKey(eventOptions[0]) : ''
   const selectedPlayer = players.find(
     (player) => player.matchDayPlayerId === effectiveSelectedPlayerId
   )
   const selectedEvent = eventOptions.find(
-    (eventOption) => eventOption.value === effectiveSelectedEventType
+    (eventOption) => getEventOptionKey(eventOption) === effectiveSelectedEventKey
   )
   const categoryEvents = eventOptions.filter(
     (eventOption) => eventOption.category === effectiveSelectedCategory
   )
 
-  const recordEvent = async (eventType: MatchEventType | '', player: EventPlayer | undefined) => {
-    if (!canRecord || pendingAction || pendingTouchEvent || !player || !eventType) return
+  const appendEventFields = (formData: FormData, eventOption: EventOption) => {
+    if (eventOption.eventDefinitionId) {
+      formData.set('eventDefinitionId', eventOption.eventDefinitionId)
+    } else if (eventOption.legacyEventType) {
+      formData.set('eventType', eventOption.legacyEventType)
+    }
+  }
 
-    if (eventType === 'TOUCH') {
+  const recordEvent = async (eventOption: EventOption | undefined, player: EventPlayer | undefined) => {
+    if (!canRecord || pendingAction || pendingLocationEvent || !player || !eventOption) return
+
+    if (eventOption.requiresLocation) {
       setMessage(null)
       setError(null)
-      setPendingTouchEvent({ eventType, player })
+      setPendingLocationEvent({ eventOption, player })
       return
     }
 
-    setPendingAction(getPendingEventKey(eventType, player.matchDayPlayerId))
+    setPendingAction(getPendingEventKey(eventOption, player.matchDayPlayerId))
     setMessage(null)
     setError(null)
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
     formData.set('matchDayPlayerId', player.matchDayPlayerId)
-    formData.set('eventType', eventType)
+    appendEventFields(formData, eventOption)
 
     const result = await recordMatchEventAction(formData)
 
     if (result.ok) {
-      setMessage(`${formatMatchEventType(eventType)} recorded for ${formatPlayerName(player)}.`)
+      setMessage(`${eventOption.label} recorded for ${formatPlayerName(player)}.`)
       router.refresh()
     } else {
       setError(result.reason)
@@ -184,10 +195,10 @@ export default function MatchEventsClient({
   }
 
   const recordTouchLocation = async (location: PitchLocation) => {
-    if (!pendingTouchEvent || pendingAction) return
+    if (!pendingLocationEvent || pendingAction) return
 
-    const { eventType, player } = pendingTouchEvent
-    const pendingKey = getPendingEventKey(eventType, player.matchDayPlayerId)
+    const { eventOption, player } = pendingLocationEvent
+    const pendingKey = getPendingEventKey(eventOption, player.matchDayPlayerId)
 
     setPendingAction(pendingKey)
     setMessage(null)
@@ -196,15 +207,15 @@ export default function MatchEventsClient({
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
     formData.set('matchDayPlayerId', player.matchDayPlayerId)
-    formData.set('eventType', eventType)
+    appendEventFields(formData, eventOption)
     formData.set('x', String(location.x))
     formData.set('y', String(location.y))
 
     const result = await recordMatchEventAction(formData)
 
     if (result.ok) {
-      setMessage(`${formatMatchEventType(eventType)} recorded for ${formatPlayerName(player)}.`)
-      setPendingTouchEvent(null)
+      setMessage(`${eventOption.label} recorded for ${formatPlayerName(player)}.`)
+      setPendingLocationEvent(null)
       router.refresh()
     } else {
       setError(result.reason)
@@ -329,7 +340,7 @@ export default function MatchEventsClient({
                             const firstCategoryEvent = eventOptions.find(
                               (eventOption) => eventOption.category === category.value
                             )
-                            if (firstCategoryEvent) setSelectedEventType(firstCategoryEvent.value)
+                            if (firstCategoryEvent) setSelectedEventKey(getEventOptionKey(firstCategoryEvent))
                           }}
                           className={`rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40 sm:text-sm ${
                             isSelected
@@ -425,26 +436,42 @@ export default function MatchEventsClient({
                     Selected player: <span className="font-bold">{formatPlayerName(selectedPlayer)}</span>. Now tap an event.
                   </p>
                 )}
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
                     </p>
                   ) : categoryEvents.map((eventOption) => {
-                    const pendingKey = selectedPlayer
-                      ? getPendingEventKey(eventOption.value, selectedPlayer.matchDayPlayerId)
-                      : eventOption.value
+                      const eventOptionKey = getEventOptionKey(eventOption)
+                      const pendingKey = selectedPlayer
+                        ? getPendingEventKey(eventOption, selectedPlayer.matchDayPlayerId)
+                        : eventOptionKey
 
                     return (
-                      <button
-                        key={eventOption.value}
-                        type="button"
-                        onClick={() => recordEvent(eventOption.value, selectedPlayer)}
-                        className="rounded-lg border bg-white px-3 py-3 text-sm font-bold disabled:opacity-50 sm:py-4"
-                        disabled={!selectedPlayer || Boolean(pendingAction)}
+                      <article
+                        key={eventOptionKey}
+                        className="rounded-lg border bg-white p-3 text-sm"
                       >
-                        {pendingAction === pendingKey ? 'Saving...' : eventOption.label}
-                      </button>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold text-gray-950">{eventOption.label}</p>
+                            {eventOption.requiresLocation && (
+                              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                                Requires pitch location
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => recordEvent(eventOption, selectedPlayer)}
+                            className="shrink-0 rounded-lg bg-blue-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                            disabled={!selectedPlayer || Boolean(pendingAction)}
+                          >
+                            {pendingAction === pendingKey ? 'Saving...' : 'Record'}
+                          </button>
+                        </div>
+                        <EventGuidanceDetails event={eventOption} />
+                      </article>
                     )
                   })}
                 </div>
@@ -456,28 +483,47 @@ export default function MatchEventsClient({
                 <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:text-sm">
                   1. Select event
                 </h3>
-                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
                     </p>
                   ) : categoryEvents.map((eventOption) => {
-                    const isSelected = effectiveSelectedEventType === eventOption.value
+                    const eventOptionKey = getEventOptionKey(eventOption)
+                    const isSelected = effectiveSelectedEventKey === eventOptionKey
 
                     return (
-                      <button
-                        key={eventOption.value}
-                        type="button"
-                        onClick={() => setSelectedEventType(eventOption.value)}
-                        className={`rounded-lg border px-3 py-3 text-sm font-bold sm:py-4 ${
+                      <article
+                        key={eventOptionKey}
+                        className={`rounded-lg border p-3 text-sm ${
                           isSelected
                             ? 'border-blue-700 bg-blue-50 text-blue-950 ring-2 ring-blue-200'
                             : 'bg-white text-gray-900'
                         }`}
                       >
-                        <span className="block">{eventOption.label}</span>
-                        {isSelected && <span className="mt-1 block text-[11px] uppercase tracking-wide">Selected</span>}
-                      </button>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-bold">{eventOption.label}</p>
+                            {eventOption.requiresLocation && (
+                              <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                                Requires pitch location
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedEventKey(eventOptionKey)}
+                            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold ${
+                              isSelected
+                                ? 'bg-blue-700 text-white'
+                                : 'border border-blue-200 bg-white text-blue-800'
+                            }`}
+                          >
+                            {isSelected ? 'Selected' : 'Select'}
+                          </button>
+                        </div>
+                        <EventGuidanceDetails event={eventOption} />
+                      </article>
                     )
                   })}
                 </div>
@@ -497,17 +543,17 @@ export default function MatchEventsClient({
                 )}
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {players.map((player) => {
-                    const pendingKey = effectiveSelectedEventType
-                      ? getPendingEventKey(effectiveSelectedEventType, player.matchDayPlayerId)
+                    const pendingKey = selectedEvent
+                      ? getPendingEventKey(selectedEvent, player.matchDayPlayerId)
                       : ''
 
                     return (
                       <button
                         key={player.matchDayPlayerId}
                         type="button"
-                        onClick={() => recordEvent(effectiveSelectedEventType, player)}
+                        onClick={() => recordEvent(selectedEvent, player)}
                         className="rounded-lg border bg-white p-3 text-left font-medium text-gray-900 disabled:opacity-50 sm:p-4"
-                        disabled={!effectiveSelectedEventType || Boolean(pendingAction)}
+                        disabled={!selectedEvent || Boolean(pendingAction)}
                       >
                         <span className="block truncate text-sm font-bold sm:text-base">
                           {pendingAction === pendingKey ? 'Saving...' : formatPlayerName(player)}
@@ -543,7 +589,7 @@ export default function MatchEventsClient({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-bold">
-                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {formatMatchEventType(event.eventType)}
+                      {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {event.label}
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
                       {event.playerName} · {event.ownScoreAtTime}-{event.oppositionScoreAtTime}
@@ -567,13 +613,55 @@ export default function MatchEventsClient({
       </details>
 
       <PitchLocationPicker
-        isOpen={pendingTouchEvent !== null}
+        isOpen={pendingLocationEvent !== null}
         onSelect={recordTouchLocation}
         onClose={() => {
-          if (!pendingAction) setPendingTouchEvent(null)
+          if (!pendingAction) setPendingLocationEvent(null)
         }}
       />
 
     </section>
+  )
+}
+
+function EventGuidanceDetails({ event }: { event: EventOption }) {
+  const hasGuidance = event.description || event.videoUrl || event.requiresLocation || event.subcategory
+  if (!hasGuidance) return null
+
+  return (
+    <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2 text-sm">
+      <summary className="cursor-pointer text-xs font-bold text-blue-800">
+        Recording guidance
+      </summary>
+      <div className="mt-2 space-y-2 text-slate-700">
+        <div>
+          <p className="font-bold text-slate-950">{event.label}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {event.categoryLabel ?? event.category}{event.subcategory ? ` · ${event.subcategory}` : ''}
+          </p>
+        </div>
+        {event.description && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">What to count</p>
+            <p className="mt-1 text-sm">{event.description}</p>
+          </div>
+        )}
+        {event.requiresLocation && (
+          <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+            Requires pitch location
+          </span>
+        )}
+        {event.videoUrl && (
+          <a
+            href={event.videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-sm font-bold text-blue-700 hover:underline"
+          >
+            Watch guidance
+          </a>
+        )}
+      </div>
+    </details>
   )
 }

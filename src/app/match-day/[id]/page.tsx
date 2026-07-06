@@ -13,11 +13,13 @@ import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusCli
 import TouchMap from '@/components/TouchMap'
 import { getCurrentUser } from '@/lib/auth'
 import {
+  getActiveRecordableEventDefinitions,
+  getEventDisplayName,
+  getMatchDayEventCategoryFallback,
+} from '@/lib/eventDefinitions'
+import {
   formatMatchEventType,
-  getMatchEventPrismaCategory,
   isMatchEventType,
-  matchEventCategories,
-  matchEventDefinitions,
   matchEventTypes,
 } from '@/lib/matchEventTaxonomy'
 import { canManageMatchDay, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
@@ -141,6 +143,15 @@ const getActiveHalf = (match: {
   return null
 }
 
+const getMatchEventIdentity = (event: {
+  id: string
+  eventDefinitionId: string | null
+  eventType: string | null
+}) => event.eventDefinitionId ?? event.eventType ?? `unknown-event:${event.id}`
+
+const getMatchEventLabel = (event: Parameters<typeof getEventDisplayName>[0]) =>
+  getEventDisplayName(event)
+
 const getStintDuration = (stint: { startedAt: Date; endedAt: Date | null }) => {
   const endedAt = stint.endedAt ?? new Date()
   return Math.max(0, endedAt.getTime() - stint.startedAt.getTime())
@@ -194,12 +205,27 @@ async function createDefaultMatchEventSetup(matchDayId: string) {
 
   if (existingCount > 0) return []
 
-  return matchEventDefinitions.map((eventDefinition) =>
+  const defaultEventDefinitions = await prisma.eventDefinition.findMany({
+    where: {
+      scope: 'GLOBAL',
+      isActive: true,
+      legacyEventType: { not: null },
+      enabledByDefault: true,
+    },
+    orderBy: [
+      { matchPhase: 'asc' },
+      { category: 'asc' },
+      { name: 'asc' },
+    ],
+  })
+
+  return defaultEventDefinitions.map((eventDefinition) =>
     prisma.matchDayEventType.create({
       data: {
         matchDayId,
-        eventType: eventDefinition.value,
-        category: eventDefinition.category,
+        eventDefinitionId: eventDefinition.id,
+        eventType: eventDefinition.legacyEventType,
+        category: getMatchDayEventCategoryFallback(eventDefinition),
       },
     })
   )
@@ -382,21 +408,16 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
   'use server'
 
   const matchDayId = getTextValue(formData, 'matchDayId')
-  const eventTypes = Array.from(new Set(
+  const eventDefinitionIds = Array.from(new Set(
     formData
-      .getAll('eventType')
+      .getAll('eventDefinitionId')
       .filter((value): value is string => typeof value === 'string')
       .map((value) => value.trim())
       .filter(Boolean)
   ))
 
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
-  if (eventTypes.length === 0) {
-    return { ok: false, reason: 'Select at least one event type.' }
-  }
-
-  const invalidEventType = eventTypes.find((eventType) => !isMatchEventType(eventType))
-  if (invalidEventType) return { ok: false, reason: 'Event type is invalid.' }
+  if (eventDefinitionIds.length === 0) return { ok: false, reason: 'Select at least one event.' }
 
   const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
@@ -404,16 +425,30 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
     return { ok: false, reason: 'Event setup can only be changed before the match starts.' }
   }
 
+  const eventDefinitions = await prisma.eventDefinition.findMany({
+    where: {
+      id: { in: eventDefinitionIds },
+      isActive: true,
+    },
+  })
+  if (eventDefinitions.length !== eventDefinitionIds.length) {
+    return { ok: false, reason: 'One or more selected events are no longer available.' }
+  }
+
+  const eventDefinitionsById = new Map(eventDefinitions.map((eventDefinition) => [eventDefinition.id, eventDefinition]))
+  const selectedEventDefinitions = eventDefinitionIds.map((eventDefinitionId) => eventDefinitionsById.get(eventDefinitionId))
+
   await prisma.$transaction([
     prisma.matchDayEventType.deleteMany({ where: { matchDayId: match.id } }),
-    ...eventTypes.map((eventType) => {
-      if (!isMatchEventType(eventType)) throw new Error('Event type is invalid.')
+    ...selectedEventDefinitions.map((eventDefinition) => {
+      if (!eventDefinition) throw new Error('Event definition is invalid.')
 
       return prisma.matchDayEventType.create({
         data: {
           matchDayId: match.id,
-          eventType,
-          category: getMatchEventPrismaCategory(eventType),
+          eventDefinitionId: eventDefinition.id,
+          eventType: eventDefinition.legacyEventType ?? null,
+          category: getMatchDayEventCategoryFallback(eventDefinition),
         },
       })
     }),
@@ -765,21 +800,23 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
 
   const matchDayId = getTextValue(formData, 'matchDayId')
   const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
+  const eventDefinitionId = getTextValue(formData, 'eventDefinitionId')
   const eventType = getTextValue(formData, 'eventType')
   const x = getOptionalPitchCoordinate(formData, 'x')
   const y = getOptionalPitchCoordinate(formData, 'y')
 
-  if (!matchDayId || !matchDayPlayerId || !eventType) {
-    return { ok: false, reason: 'Match, player and event type are required.' }
+  if (!matchDayId || !matchDayPlayerId || (!eventDefinitionId && !eventType)) {
+    return { ok: false, reason: 'Match, player and event are required.' }
   }
 
   if (!x.ok || !y.ok) {
     return { ok: false, reason: 'Event location must be a number between 0 and 100.' }
   }
 
-  if (!isMatchEventType(eventType)) {
+  if (eventType && !isMatchEventType(eventType)) {
     return { ok: false, reason: 'Event type is invalid.' }
   }
+  const legacyEventType = eventType && isMatchEventType(eventType) ? eventType : null
 
   const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
@@ -787,16 +824,33 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Events can only be recorded during live match play.' }
   }
 
-  const selectedEvent = await prisma.matchDayEventType.findFirst({
-    where: {
-      matchDayId: match.id,
-      eventType,
-    },
-    select: { id: true },
-  })
+  const selectedEvent = eventDefinitionId
+    ? await prisma.matchDayEventType.findFirst({
+        where: {
+          matchDayId: match.id,
+          eventDefinitionId,
+        },
+        include: { eventDefinition: true },
+      })
+    : await prisma.matchDayEventType.findFirst({
+        where: {
+          matchDayId: match.id,
+          eventType: legacyEventType,
+        },
+        include: { eventDefinition: true },
+      })
 
   if (!selectedEvent) {
-    return { ok: false, reason: 'This event type was not selected for this match.' }
+    return { ok: false, reason: 'This event was not selected for this match.' }
+  }
+
+  if (!selectedEvent.eventDefinitionId && !selectedEvent.eventType) {
+    return { ok: false, reason: 'Selected event is not recordable.' }
+  }
+
+  const requiresLocation = selectedEvent.eventDefinition?.requiresLocation ?? false
+  if (requiresLocation && (x.value === undefined || y.value === undefined)) {
+    return { ok: false, reason: 'Event location is required.' }
   }
 
   const activeHalf = getActiveHalf(match)
@@ -841,13 +895,14 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     data: {
       matchDayId: match.id,
       playerId: squadPlayer.playerId,
-        eventType,
+      eventDefinitionId: selectedEvent.eventDefinitionId,
+      // Temporary fallback for older UI paths until all clients submit eventDefinitionId.
+      eventType: selectedEvent.eventDefinition?.legacyEventType ?? selectedEvent.eventType ?? null,
       half: activeHalf.half,
       matchSecond,
       ownScoreAtTime: match.ownScore,
       oppositionScoreAtTime: match.oppositionScore,
-      ...(x.value !== undefined ? { x: x.value } : {}),
-      ...(y.value !== undefined ? { y: y.value } : {}),
+      ...(requiresLocation ? { x: x.value, y: y.value } : {}),
     },
   })
 
@@ -1082,10 +1137,14 @@ export default async function MatchDayDetailPage({
       matchEvents: {
         include: {
           player: true,
+          eventDefinition: true,
         },
         orderBy: { createdAt: 'asc' },
       },
       matchDayEventTypes: {
+        include: {
+          eventDefinition: true,
+        },
         orderBy: { createdAt: 'asc' },
       },
       submittedMatchEvents: {
@@ -1117,6 +1176,22 @@ export default async function MatchDayDetailPage({
   })
 
   if (!match) notFound()
+
+  const setupEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: false })
+  const setupEventOptionsById = new Map(
+    setupEventOptions.map((eventOption) => [eventOption.id, eventOption])
+  )
+  const setupEventDefinitionIdsByLegacyType = new Map(
+    setupEventOptions.flatMap((eventOption) =>
+      eventOption.legacyEventType ? [[eventOption.legacyEventType, eventOption.id] as const] : []
+    )
+  )
+  const setupEventCategoryOptions = Array.from(
+    setupEventOptions.reduce((categoryMap, eventOption) => {
+      categoryMap.set(eventOption.category, eventOption.categoryLabel)
+      return categoryMap
+    }, new Map<string, string>())
+  ).map(([value, label]) => ({ value, label }))
 
   const matchTypeLabel = formatMatchType(match.matchType)
   const venueLabel = formatVenue(match.venue)
@@ -1188,41 +1263,81 @@ export default async function MatchDayDetailPage({
       squadNumber: player.squadNumber,
     }))
   const recentEvents = match.matchEvents.map((event) => ({
-    id: event.id,
-    eventType: event.eventType,
-    half: event.half,
-    matchSecond: event.matchSecond,
-    ownScoreAtTime: event.ownScoreAtTime,
-    oppositionScoreAtTime: event.oppositionScoreAtTime,
-    playerName: event.player
-      ? `${event.player.firstName} ${event.player.surname}`
-      : 'Unknown player',
-  }))
+      id: event.id,
+      label: getMatchEventLabel(event),
+      half: event.half,
+      matchSecond: event.matchSecond,
+      ownScoreAtTime: event.ownScoreAtTime,
+      oppositionScoreAtTime: event.oppositionScoreAtTime,
+      playerName: event.player
+        ? `${event.player.firstName} ${event.player.surname}`
+        : 'Unknown player',
+    }))
   const recentEventsForRecording = [...recentEvents]
     .sort((firstEvent, secondEvent) => secondEvent.matchSecond - firstEvent.matchSecond)
     .slice(0, 20)
-  const selectedEventOptions = (match.matchDayEventTypes.length > 0
-    ? match.matchDayEventTypes.map((selectedEventType) => {
-        const eventDefinition = matchEventDefinitions.find(
-          (definition) => definition.value === selectedEventType.eventType
-        )
-
-        return eventDefinition
-          ? {
-              value: eventDefinition.value,
-              label: eventDefinition.label,
-              category: eventDefinition.category,
-            }
+  const selectedEventOptions = match.matchDayEventTypes.length > 0
+    ? match.matchDayEventTypes.flatMap((selectedEventType) => {
+        if (!selectedEventType.eventDefinitionId && !selectedEventType.eventType) return []
+        const eventDefinition = selectedEventType.eventDefinition
+        const setupEventOption = selectedEventType.eventDefinitionId
+          ? setupEventOptionsById.get(selectedEventType.eventDefinitionId)
           : null
-      }).filter((eventOption) => eventOption !== null)
-    : matchEventDefinitions.map((eventDefinition) => ({
-        value: eventDefinition.value,
+
+        return [{
+          matchDayEventTypeId: selectedEventType.id,
+          eventDefinitionId: selectedEventType.eventDefinitionId,
+          legacyEventType: eventDefinition?.legacyEventType ?? selectedEventType.eventType,
+          label: getEventDisplayName(selectedEventType),
+          category: eventDefinition?.category ?? selectedEventType.category,
+          categoryLabel: setupEventOption?.categoryLabel ?? formatStatus(eventDefinition?.category ?? selectedEventType.category),
+          subcategory: eventDefinition?.subcategory ?? null,
+          description: eventDefinition?.description ?? null,
+          videoUrl: eventDefinition?.videoUrl ?? null,
+          requiresLocation: eventDefinition?.requiresLocation ?? false,
+          isActive: eventDefinition?.isActive ?? true,
+        }]
+      })
+    : setupEventOptions.map((eventDefinition) => ({
+        matchDayEventTypeId: eventDefinition.id,
+        eventDefinitionId: eventDefinition.id,
+        legacyEventType: eventDefinition.legacyEventType,
         label: eventDefinition.label,
-        category: eventDefinition.category,
-      })))
-  const selectedEventTypesForSetup = selectedEventOptions.map(
-    (eventOption) => eventOption.value
-  )
+        category: getMatchDayEventCategoryFallback({
+          legacyEventType: eventDefinition.legacyEventType,
+          matchPhase: eventDefinition.matchPhase,
+        }),
+        categoryLabel: eventDefinition.categoryLabel,
+        subcategory: eventDefinition.subcategory,
+        description: eventDefinition.description,
+        videoUrl: eventDefinition.videoUrl,
+        requiresLocation: eventDefinition.requiresLocation,
+        isActive: eventDefinition.isActive,
+      }))
+  const selectedEventCategoryOptions = Array.from(
+    selectedEventOptions.reduce((categoryMap, eventOption) => {
+      categoryMap.set(eventOption.category, eventOption.categoryLabel)
+      return categoryMap
+    }, new Map<string, string>())
+  ).map(([value, label]) => ({ value, label }))
+  const eventLabelsByKey = new Map<string, string>()
+  for (const event of match.matchEvents) {
+    eventLabelsByKey.set(getMatchEventIdentity(event), getMatchEventLabel(event))
+  }
+
+  for (const eventOption of selectedEventOptions) {
+    const eventOptionKey = eventOption.eventDefinitionId
+      ?? eventOption.legacyEventType
+      ?? eventOption.matchDayEventTypeId
+      ?? 'unknown-event'
+    if (!eventLabelsByKey.has(eventOptionKey)) eventLabelsByKey.set(eventOptionKey, eventOption.label)
+  }
+
+  const selectedEventDefinitionIdsForSetup = Array.from(new Set(match.matchDayEventTypes.flatMap((selectedEventType) => {
+    if (selectedEventType.eventDefinitionId) return [selectedEventType.eventDefinitionId]
+    if (selectedEventType.eventType) return setupEventDefinitionIdsByLegacyType.get(selectedEventType.eventType) ? [setupEventDefinitionIdsByLegacyType.get(selectedEventType.eventType)!] : []
+    return []
+  })))
   const minutesRows = pitchPlayers
     .map((player) => ({
       playerId: player.playerId,
@@ -1231,13 +1346,16 @@ export default async function MatchDayDetailPage({
       minutesPlayed: Math.round(player.totalMilliseconds / 60000),
     }))
     .sort((firstPlayer, secondPlayer) => secondPlayer.minutesPlayed - firstPlayer.minutesPlayed)
-  const teamEventTotals = selectedEventOptions
-    .map((eventOption) => ({
-      key: eventOption.value,
-      label: eventOption.label,
-      count: match.matchEvents.filter((event) => event.eventType === eventOption.value).length,
-    }))
-    .filter((eventTotal) => eventTotal.count > 0)
+  const teamEventTotalMap = new Map<string, number>()
+  for (const event of match.matchEvents) {
+    const eventKey = getMatchEventIdentity(event)
+    teamEventTotalMap.set(eventKey, (teamEventTotalMap.get(eventKey) ?? 0) + 1)
+  }
+  const teamEventTotals = Array.from(teamEventTotalMap.entries()).map(([eventKey, count]) => ({
+    key: eventKey,
+    label: eventLabelsByKey.get(eventKey) ?? 'Unknown event',
+    count,
+  }))
   const playerEventCountMap = new Map<
     string,
     { playerId: string; playerName: string; eventCounts: Map<string, number> }
@@ -1248,6 +1366,7 @@ export default async function MatchDayDetailPage({
     const playerName = event.player
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player'
+    const eventCountKey = getMatchEventIdentity(event)
     const currentRow = playerEventCountMap.get(playerId) ?? {
       playerId,
       playerName,
@@ -1255,17 +1374,17 @@ export default async function MatchDayDetailPage({
     }
 
     currentRow.eventCounts.set(
-      event.eventType,
-      (currentRow.eventCounts.get(event.eventType) ?? 0) + 1
+      eventCountKey,
+      (currentRow.eventCounts.get(eventCountKey) ?? 0) + 1
     )
     playerEventCountMap.set(playerId, currentRow)
   }
 
   const playerEventCounts = Array.from(playerEventCountMap.values())
     .map((row) => {
-      const eventCounts = Array.from(row.eventCounts.entries()).map(([eventType, count]) => ({
-        key: eventType,
-        label: formatMatchEventType(eventType),
+      const eventCounts = Array.from(row.eventCounts.entries()).map(([eventKey, count]) => ({
+        key: eventKey,
+        label: eventLabelsByKey.get(eventKey) ?? (isMatchEventType(eventKey) ? formatMatchEventType(eventKey) : 'Unknown event'),
         count,
       }))
 
@@ -1277,13 +1396,16 @@ export default async function MatchDayDetailPage({
       }
     })
     .sort((firstPlayer, secondPlayer) => secondPlayer.total - firstPlayer.total)
-  const getPlayerEventCount = (playerId: string, eventType: string) =>
-    playerEventCountMap.get(playerId)?.eventCounts.get(eventType) ?? 0
+  const getPlayerEventCount = (playerId: string, eventType: (typeof matchEventTypes)[number]) => {
+    const eventCounts = playerEventCountMap.get(playerId)?.eventCounts
+    if (!eventCounts) return 0
+    return eventCounts.get(setupEventDefinitionIdsByLegacyType.get(eventType) ?? eventType) ?? eventCounts.get(eventType) ?? 0
+  }
   const summaryCsvRows = pitchPlayers.map((player) => {
-    const totalEvents = matchEventTypes.reduce(
-      (total, eventType) => total + getPlayerEventCount(player.playerId, eventType),
-      0
-    )
+    const playerEventCounts = playerEventCountMap.get(player.playerId)?.eventCounts
+    const totalEvents = playerEventCounts
+      ? Array.from(playerEventCounts.values()).reduce((total, count) => total + count, 0)
+      : 0
 
     return {
       playerName: `${player.firstName} ${player.surname}`,
@@ -1305,7 +1427,7 @@ export default async function MatchDayDetailPage({
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = match.matchEvents.map((event) => ({
     id: event.id,
-    label: formatMatchEventType(event.eventType),
+    label: getMatchEventLabel(event),
     half: event.half,
     matchSecond: event.matchSecond,
     playerName: event.player
@@ -1330,11 +1452,11 @@ export default async function MatchDayDetailPage({
     playerName: event.player
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player',
-    event: formatMatchEventType(event.eventType),
+    event: getMatchEventLabel(event),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
   const touchMapEvents = match.matchEvents
-    .filter((event) => event.eventType === 'TOUCH')
+    .filter((event) => (event.eventDefinition?.requiresLocation ?? false) || event.eventType === 'TOUCH')
     .map((event) => ({
       id: event.id,
       x: event.x,
@@ -1344,6 +1466,7 @@ export default async function MatchDayDetailPage({
         : 'Unknown player',
       half: formatHalfLabel(event.half),
       minute: Math.floor(event.matchSecond / 60),
+      label: getMatchEventLabel(event),
     }))
   const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
     id: submission.id,
@@ -1420,9 +1543,9 @@ export default async function MatchDayDetailPage({
             />
             <MatchEventSetupClient
               matchDayId={match.id}
-              eventOptions={matchEventDefinitions}
-              categoryOptions={matchEventCategories}
-              selectedEventTypes={selectedEventTypesForSetup}
+              eventOptions={setupEventOptions}
+              categoryOptions={setupEventCategoryOptions}
+              selectedEventDefinitionIds={selectedEventDefinitionIdsForSetup}
               updateMatchEventSetupAction={updateMatchEventSetup}
             />
           </section>
@@ -1558,7 +1681,7 @@ export default async function MatchDayDetailPage({
                 players={eventPlayers}
                 events={recentEventsForRecording}
                 eventOptions={selectedEventOptions}
-                categoryOptions={matchEventCategories}
+                categoryOptions={selectedEventCategoryOptions}
                 recordMatchEventAction={recordMatchEvent}
                 deleteMatchEventAction={deleteMatchEvent}
               />

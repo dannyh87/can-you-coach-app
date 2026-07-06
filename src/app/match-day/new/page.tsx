@@ -6,12 +6,12 @@ import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
 import {
-  getRecordableMatchEventTaxonomy,
-  getRecordableMatchPhaseGroups,
+  getActiveRecordableEventDefinitions,
+  getMatchDayEventCategoryFallback,
+  getRecordableEventPhaseGroups,
 } from '@/lib/eventDefinitions'
 import {
   inferAgePhase,
-  isMatchEventType,
 } from '@/lib/matchEventTaxonomy'
 import { canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -37,9 +37,11 @@ async function createMatchFromWizard(formData: FormData) {
   const opposition = getTextValue(formData, 'opposition')
   const matchType = getTextValue(formData, 'matchType')
   const venue = getTextValue(formData, 'venue')
-  const selectedEventTypes = formData
-    .getAll('eventType')
+  const selectedEventDefinitionIds = Array.from(new Set(formData
+    .getAll('eventDefinitionId')
     .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean)))
   const playerStatuses = formData
     .getAll('playerStatus')
     .filter((value): value is string => typeof value === 'string')
@@ -68,13 +70,17 @@ async function createMatchFromWizard(formData: FormData) {
       .filter(({ playerId, squadStatus }) => activePlayerIds.has(playerId) && squadStatuses.includes(squadStatus as (typeof squadStatuses)[number]))
       .map(({ playerId, squadStatus }) => [playerId, squadStatus as (typeof squadStatuses)[number]])
   )
-  const recordableEventTaxonomy = await getRecordableMatchEventTaxonomy()
-  const selectedEvents = (selectedEventTypes.length > 0
-    ? selectedEventTypes.filter(isMatchEventType)
-    : recordableEventTaxonomy.map((eventDefinition) => eventDefinition.value)
-  )
-    .map((eventType) => recordableEventTaxonomy.find((eventDefinition) => eventDefinition.value === eventType))
-    .filter((eventDefinition) => eventDefinition !== undefined)
+  if (selectedEventDefinitionIds.length === 0) return { ok: false as const, reason: 'Select at least one event to track.' }
+
+  const selectedEvents = await prisma.eventDefinition.findMany({
+    where: {
+      id: { in: selectedEventDefinitionIds },
+      isActive: true,
+    },
+  })
+  if (selectedEvents.length !== selectedEventDefinitionIds.length) {
+    return { ok: false as const, reason: 'One or more selected events are no longer available.' }
+  }
 
   const match = await prisma.matchDay.create({
     data: {
@@ -96,8 +102,9 @@ async function createMatchFromWizard(formData: FormData) {
       },
       matchDayEventTypes: {
         create: selectedEvents.map((eventDefinition) => ({
-          eventType: eventDefinition.value,
-          category: eventDefinition.prismaCategory,
+          eventDefinitionId: eventDefinition.id,
+          eventType: eventDefinition.legacyEventType ?? null,
+          category: getMatchDayEventCategoryFallback(eventDefinition),
         })),
       },
     },
@@ -120,8 +127,8 @@ export default async function NewMatchDayPage() {
     },
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
-  const recordableEventTaxonomy = await getRecordableMatchEventTaxonomy()
-  const matchPhaseGroups = getRecordableMatchPhaseGroups(recordableEventTaxonomy)
+  const recordableEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: true })
+  const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -147,15 +154,19 @@ export default async function NewMatchDayPage() {
           value: group.value,
           label: group.label,
           events: group.events.map((event) => ({
-            value: event.value,
+            id: event.id,
             label: event.label,
             category: event.category,
             categoryLabel: event.categoryLabel,
+            subcategory: event.subcategory,
+            description: event.description,
+            videoUrl: event.videoUrl,
             matchPhase: event.matchPhase,
             matchPhaseLabel: event.matchPhaseLabel,
             agePhases: event.agePhases,
             fourCorner: event.fourCorner,
             positionRelevance: event.positionRelevance,
+            requiresLocation: event.requiresLocation,
             enabledByDefault: event.enabledByDefault,
           })),
         }))}

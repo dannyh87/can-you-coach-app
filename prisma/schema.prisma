@@ -8,17 +8,17 @@ datasource db {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  clerkUserId       String?            @unique
-  email             String             @unique
-  passwordHash      String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  clubs             Club[]
-  fitnessTestTypes  FitnessTestType[]
-  memberships       ClubMembership[]
-  spectatorAccess   SpectatorAccess[]
-  submittedMatchEvents SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
+  id                           String                @id @default(cuid())
+  clerkUserId                  String?               @unique
+  email                        String                @unique
+  passwordHash                 String?
+  createdAt                    DateTime              @default(now())
+  updatedAt                    DateTime              @updatedAt
+  clubs                        Club[]
+  fitnessTestTypes             FitnessTestType[]
+  memberships                  ClubMembership[]
+  spectatorAccess              SpectatorAccess[]
+  submittedMatchEvents         SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
   acceptedSubmittedMatchEvents SubmittedMatchEvent[] @relation("AcceptedSubmittedMatchEvents")
 }
 
@@ -30,14 +30,14 @@ enum ClubRole {
 }
 
 model Club {
-  id          String             @id @default(cuid())
+  id          String            @id @default(cuid())
   userId      String
   name        String
   location    String?
   notes       String?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   teams       Team[]
   memberships ClubMembership[]
   spectators  SpectatorAccess[]
@@ -86,34 +86,34 @@ model Team {
 }
 
 model MatchDay {
-  id              String      @id @default(cuid())
-  teamId          String
-  kickoffAt       DateTime
-  opposition      String
-  matchType       MatchType
-  venue           MatchVenue
-  ownScore        Int         @default(0)
-  oppositionScore Int         @default(0)
-  status          MatchStatus @default(DRAFT)
-  firstHalfStartedAt  DateTime?
-  firstHalfEndedAt    DateTime?
-  secondHalfStartedAt DateTime?
-  secondHalfEndedAt   DateTime?
-  completedAt         DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  team            Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  matchDayPlayers MatchDayPlayer[]
-  matchPlayerStints MatchPlayerStint[]
-  matchEvents     MatchEvent[]
-  matchDayEventTypes MatchDayEventType[]
+  id                   String                @id @default(cuid())
+  teamId               String
+  kickoffAt            DateTime
+  opposition           String
+  matchType            MatchType
+  venue                MatchVenue
+  ownScore             Int                   @default(0)
+  oppositionScore      Int                   @default(0)
+  status               MatchStatus           @default(DRAFT)
+  firstHalfStartedAt   DateTime?
+  firstHalfEndedAt     DateTime?
+  secondHalfStartedAt  DateTime?
+  secondHalfEndedAt    DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  team                 Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  matchDayPlayers      MatchDayPlayer[]
+  matchPlayerStints    MatchPlayerStint[]
+  matchEvents          MatchEvent[]
+  matchDayEventTypes   MatchDayEventType[]
   submittedMatchEvents SubmittedMatchEvent[]
 }
 
 model MatchDayEventType {
   id                String             @id @default(cuid())
   matchDayId        String
-  eventType         MatchEventType
+  eventType         MatchEventType?
   category          MatchEventCategory
   eventDefinitionId String?
   createdAt         DateTime           @default(now())
@@ -121,22 +121,23 @@ model MatchDayEventType {
   matchDay          MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   eventDefinition   EventDefinition?   @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
 
-  @@index([eventDefinitionId])
   @@unique([matchDayId, eventType])
+  @@unique([matchDayId, eventDefinitionId])
+  @@index([eventDefinitionId])
 }
 
 model MatchDayPlayer {
-  id                  String           @id @default(cuid())
+  id                  String             @id @default(cuid())
   matchDayId          String
   playerId            String
-  squadStatus         MatchSquadStatus @default(NOT_INVOLVED)
+  squadStatus         MatchSquadStatus   @default(NOT_INVOLVED)
   startingPosition    String?
   shirtNumberSnapshot Int?
-  isTracked           Boolean          @default(true)
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  matchDay            MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player              Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  isTracked           Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  matchDay            MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player              Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
   stints              MatchPlayerStint[]
 
   @@unique([matchDayId, playerId])
@@ -160,10 +161,10 @@ model MatchPlayerStint {
 }
 
 model MatchEvent {
-  id                    String         @id @default(cuid())
+  id                    String           @id @default(cuid())
   matchDayId            String
   playerId              String?
-  eventType             MatchEventType
+  eventType             MatchEventType?
   half                  MatchHalf
   matchSecond           Int
   ownScoreAtTime        Int
@@ -171,10 +172,10 @@ model MatchEvent {
   x                     Float?
   y                     Float?
   eventDefinitionId     String?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  matchDay              MatchDay       @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player                Player?        @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  matchDay              MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
   eventDefinition       EventDefinition? @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
 
   @@index([eventDefinitionId])
@@ -207,34 +208,39 @@ model SubmittedMatchEvent {
 }
 
 model EventDefinition {
-  id                String                         @id @default(cuid())
-  scope             EventDefinitionScope           @default(GLOBAL)
-  clubId            String?
-  createdByUserId   String?
-  legacyEventType   MatchEventType?                @unique
-  name              String
-  slug              String                         @unique
-  normalizedName    String                         @unique
-  description       String?
-  matchPhase        EventDefinitionMatchPhase
-  category          EventDefinitionCategory
-  agePhases         EventDefinitionAgePhase[]
-  fourCorner        EventDefinitionFourCorner
-  positionRelevance EventDefinitionPosition[]
-  enabledByDefault  Boolean                        @default(false)
-  benchmarkable     Boolean                        @default(false)
-  requiresLocation  Boolean                        @default(false)
-  isActive          Boolean                        @default(true)
-  archivedAt        DateTime?
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-  matchEvents       MatchEvent[]
+  id                 String                    @id @default(cuid())
+  scope              EventDefinitionScope      @default(GLOBAL)
+  clubId             String?
+  createdByUserId    String?
+  legacyEventType    MatchEventType?           @unique
+  name               String
+  slug               String                    @unique
+  normalizedName     String                    @unique
+  description        String?
+  videoUrl           String?
+  matchPhase         EventDefinitionMatchPhase
+  category           EventDefinitionCategory
+  subcategory        String?
+  agePhases          EventDefinitionAgePhase[]
+  fourCorner         EventDefinitionFourCorner
+  positionRelevance  EventDefinitionPosition[]
+  enabledByDefault   Boolean                   @default(false)
+  benchmarkable      Boolean                   @default(false)
+  requiresLocation   Boolean                   @default(false)
+  isActive           Boolean                   @default(true)
+  archivedAt         DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  matchEvents        MatchEvent[]
   matchDayEventTypes MatchDayEventType[]
 
   @@index([scope])
   @@index([clubId])
   @@index([isActive])
   @@index([scope, isActive])
+  @@index([category])
+  @@index([subcategory])
+  @@index([requiresLocation])
   @@index([createdByUserId])
   @@index([enabledByDefault])
   @@index([benchmarkable])
@@ -344,23 +350,23 @@ enum EventDefinitionPosition {
 }
 
 model Player {
-  id                 String              @id @default(cuid())
-  teamId             String
-  firstName          String
-  surname            String
-  squadNumber        Int?
-  preferredPosition  String?
-  dateOfBirth        DateTime?
-  joinedClubDate     DateTime?
-  isActive           Boolean             @default(true)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  team               Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  fitnessTestResults FitnessTestResult[]
-  matchDayPlayers    MatchDayPlayer[]
-  matchPlayerStints  MatchPlayerStint[]
-  matchEvents         MatchEvent[]
-  spectatorAccess     SpectatorAccess[]
+  id                   String                @id @default(cuid())
+  teamId               String
+  firstName            String
+  surname              String
+  squadNumber          Int?
+  preferredPosition    String?
+  dateOfBirth          DateTime?
+  joinedClubDate       DateTime?
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  team                 Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fitnessTestResults   FitnessTestResult[]
+  matchDayPlayers      MatchDayPlayer[]
+  matchPlayerStints    MatchPlayerStint[]
+  matchEvents          MatchEvent[]
+  spectatorAccess      SpectatorAccess[]
   submittedMatchEvents SubmittedMatchEvent[]
 }
 
@@ -380,25 +386,25 @@ model SpectatorAccess {
 }
 
 model FitnessTestType {
-  id                  String               @id @default(cuid())
-  userId              String?
-  name                String
-  description         String?
-  resultUnit          String
-  higherIsBetter      Boolean
-  allowedRecordingModes String           @default("MANUAL")
-  preferredRecordingMode String          @default("MANUAL")
-  isDefault           Boolean              @default(false)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  user                User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fitnessTestSessions FitnessTestSession[]
+  id                     String               @id @default(cuid())
+  userId                 String?
+  name                   String
+  description            String?
+  resultUnit             String
+  higherIsBetter         Boolean
+  allowedRecordingModes  String               @default("MANUAL")
+  preferredRecordingMode String               @default("MANUAL")
+  isDefault              Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  user                   User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fitnessTestSessions    FitnessTestSession[]
 
   @@unique([userId, name])
 }
 
 model FitnessTestSession {
-  id                String              @id @default(cuid())
+  id                String                   @id @default(cuid())
   teamId            String
   fitnessTestTypeId String
   date              DateTime
@@ -406,10 +412,10 @@ model FitnessTestSession {
   status            FitnessTestSessionStatus @default(DRAFT)
   startedAt         DateTime?
   completedAt       DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  team              Team                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  fitnessTestType   FitnessTestType     @relation(fields: [fitnessTestTypeId], references: [id], onDelete: Restrict)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  team              Team                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fitnessTestType   FitnessTestType          @relation(fields: [fitnessTestTypeId], references: [id], onDelete: Restrict)
   results           FitnessTestResult[]
 }
 
@@ -420,17 +426,17 @@ enum FitnessTestSessionStatus {
 }
 
 model FitnessTestResult {
-  id                   String             @id @default(cuid())
+  id                   String              @id @default(cuid())
   fitnessTestSessionId String
   playerId             String
   resultValue          Float?
   resultText           String?
   status               FitnessResultStatus @default(COMPLETED)
   notes                String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  fitnessTestSession   FitnessTestSession @relation(fields: [fitnessTestSessionId], references: [id], onDelete: Cascade)
-  player               Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  fitnessTestSession   FitnessTestSession  @relation(fields: [fitnessTestSessionId], references: [id], onDelete: Cascade)
+  player               Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([fitnessTestSessionId, playerId])
 }

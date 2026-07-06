@@ -61,6 +61,21 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getOptionalUrlValue = (value: string) => {
+  if (!value) return { ok: true as const, value: null }
+
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return { ok: false as const, reason: 'Video URL must start with http:// or https://.' }
+    }
+
+    return { ok: true as const, value }
+  } catch {
+    return { ok: false as const, reason: 'Video URL is invalid.' }
+  }
+}
+
 const getCheckedValues = <T extends string>(formData: FormData, key: string, allowedValues: readonly T[]) => {
   const allowed = new Set<string>(allowedValues)
 
@@ -115,13 +130,17 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
 
   const name = getTextValue(formData, 'name')
   const description = getTextValue(formData, 'description')
+  const subcategory = getTextValue(formData, 'subcategory')
+  const videoUrlInput = getTextValue(formData, 'videoUrl')
   const matchPhase = getTextValue(formData, 'matchPhase')
   const category = getTextValue(formData, 'category')
   const fourCorner = getTextValue(formData, 'fourCorner')
   const agePhases = getCheckedValues(formData, 'agePhase', agePhaseValues)
   const positionRelevance = getCheckedValues(formData, 'positionRelevance', positionValues)
+  const videoUrl = getOptionalUrlValue(videoUrlInput)
 
   if (!name) return { ok: false, reason: 'Event name is required.' }
+  if (!videoUrl.ok) return { ok: false, reason: videoUrl.reason }
   if (!matchPhaseValues.includes(matchPhase as (typeof matchPhaseValues)[number])) {
     return { ok: false, reason: 'Match phase is invalid.' }
   }
@@ -151,6 +170,8 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
       slug: await createUniqueSlug(name),
       normalizedName,
       description: description || null,
+      subcategory: subcategory || null,
+      videoUrl: videoUrl.value,
       matchPhase: matchPhase as (typeof matchPhaseValues)[number],
       category: category as (typeof categoryValues)[number],
       agePhases,
@@ -158,6 +179,7 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
       positionRelevance,
       enabledByDefault: formData.get('enabledByDefault') === 'on',
       benchmarkable: formData.get('benchmarkable') === 'on',
+      requiresLocation: formData.get('requiresLocation') === 'on',
       isActive: true,
     },
   })
@@ -175,14 +197,18 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
   const id = getTextValue(formData, 'eventDefinitionId')
   const name = getTextValue(formData, 'name')
   const description = getTextValue(formData, 'description')
+  const subcategory = getTextValue(formData, 'subcategory')
+  const videoUrlInput = getTextValue(formData, 'videoUrl')
   const matchPhase = getTextValue(formData, 'matchPhase')
   const category = getTextValue(formData, 'category')
   const fourCorner = getTextValue(formData, 'fourCorner')
   const agePhases = getCheckedValues(formData, 'agePhase', agePhaseValues)
   const positionRelevance = getCheckedValues(formData, 'positionRelevance', positionValues)
+  const videoUrl = getOptionalUrlValue(videoUrlInput)
 
   if (!id) return { ok: false, reason: 'Missing event definition.' }
   if (!name) return { ok: false, reason: 'Event name is required.' }
+  if (!videoUrl.ok) return { ok: false, reason: videoUrl.reason }
   if (!matchPhaseValues.includes(matchPhase as (typeof matchPhaseValues)[number])) {
     return { ok: false, reason: 'Match phase is invalid.' }
   }
@@ -218,6 +244,8 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
       slug: await createUniqueSlug(name, id),
       normalizedName,
       description: description || null,
+      subcategory: subcategory || null,
+      videoUrl: videoUrl.value,
       matchPhase: matchPhase as (typeof matchPhaseValues)[number],
       category: category as (typeof categoryValues)[number],
       agePhases,
@@ -225,6 +253,7 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
       positionRelevance,
       enabledByDefault: existing.isActive && formData.get('enabledByDefault') === 'on',
       benchmarkable: formData.get('benchmarkable') === 'on',
+      requiresLocation: formData.get('requiresLocation') === 'on',
     },
   })
 
@@ -332,6 +361,8 @@ export default async function SuperAdminEventsPage() {
         legacyEventType: eventDefinition.legacyEventType,
         name: eventDefinition.name,
         description: eventDefinition.description,
+        subcategory: eventDefinition.subcategory,
+        videoUrl: eventDefinition.videoUrl,
         matchPhase: eventDefinition.matchPhase,
         category: eventDefinition.category,
         agePhases: eventDefinition.agePhases,
@@ -339,6 +370,7 @@ export default async function SuperAdminEventsPage() {
         positionRelevance: eventDefinition.positionRelevance,
         enabledByDefault: eventDefinition.enabledByDefault,
         benchmarkable: eventDefinition.benchmarkable,
+        requiresLocation: eventDefinition.requiresLocation,
         isActive: eventDefinition.isActive,
         archivedAt: eventDefinition.archivedAt?.toISOString() ?? null,
       }))}
