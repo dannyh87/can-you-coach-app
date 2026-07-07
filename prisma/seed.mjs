@@ -212,6 +212,53 @@ const matchEventDefinitions = [
     fourCorner: 'TECHNICAL',
     positionRelevance: ['ALL'],
     requiresLocation: true,
+    enabledByDefault: false,
+  },
+  {
+    name: 'Possession gained',
+    description: 'A regain where the team wins possession back.',
+    matchPhase: 'TRANSITION',
+    category: 'DEFENDING',
+    subcategory: 'Regains',
+    agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
+    fourCorner: 'TACTICAL',
+    positionRelevance: ['ALL'],
+    requiresLocation: true,
+    enabledByDefault: false,
+  },
+  {
+    name: 'Possession lost',
+    description: 'A turnover where the team loses possession.',
+    matchPhase: 'TRANSITION',
+    category: 'PASSING',
+    subcategory: 'Turnovers',
+    agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
+    fourCorner: 'TACTICAL',
+    positionRelevance: ['ALL'],
+    requiresLocation: true,
+    enabledByDefault: false,
+  },
+  {
+    name: 'Shot position',
+    description: 'The pitch location a shot is taken from.',
+    matchPhase: 'IN_POSSESSION',
+    category: 'SHOOTING',
+    agePhases: ['YOUTH', 'ADULT'],
+    fourCorner: 'TECHNICAL',
+    positionRelevance: ['ALL', 'FORWARD', 'MIDFIELDER'],
+    requiresLocation: true,
+    enabledByDefault: false,
+  },
+  {
+    name: 'Cross position',
+    description: 'The pitch location a cross is delivered from.',
+    matchPhase: 'IN_POSSESSION',
+    category: 'PASSING',
+    agePhases: ['YOUTH', 'ADULT'],
+    fourCorner: 'TECHNICAL',
+    positionRelevance: ['ALL', 'WIDE_PLAYER', 'FORWARD'],
+    requiresLocation: true,
+    enabledByDefault: false,
   },
 ]
 
@@ -336,18 +383,26 @@ async function main() {
       scope: 'GLOBAL',
       slug: createEventDefinitionSlug(eventDefinition.name),
       normalizedName: normalizeEventDefinitionName(eventDefinition.name),
-      enabledByDefault: true,
+      enabledByDefault: eventDefinition.enabledByDefault ?? true,
       benchmarkable: true,
       requiresLocation: eventDefinition.requiresLocation ?? false,
       isActive: true,
       archivedAt: null,
     }
 
-    await prisma.eventDefinition.upsert({
-      where: { legacyEventType: eventDefinition.legacyEventType },
-      update: data,
-      create: data,
-    })
+    if (eventDefinition.legacyEventType) {
+      await prisma.eventDefinition.upsert({
+        where: { legacyEventType: eventDefinition.legacyEventType },
+        update: data,
+        create: data,
+      })
+    } else {
+      await prisma.eventDefinition.upsert({
+        where: { normalizedName: data.normalizedName },
+        update: data,
+        create: data,
+      })
+    }
   }
 }
 

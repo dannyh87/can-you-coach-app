@@ -37,7 +37,7 @@ const getTouchLabel = (event: TouchMapEvent) => {
     .filter(Boolean)
     .join(' · ')
 
-  const eventLabel = event.label ?? 'Touch event'
+  const eventLabel = event.label ?? 'Location event'
 
   return details ? `${eventLabel}: ${details}` : eventLabel
 }
@@ -47,7 +47,11 @@ export default function TouchMap({ events }: TouchMapProps) {
   const playerNames = Array.from(
     new Set(locatedTouches.map((event) => event.playerName).filter((playerName): playerName is string => Boolean(playerName)))
   ).sort((firstPlayer, secondPlayer) => firstPlayer.localeCompare(secondPlayer))
+  const eventLabels = Array.from(
+    new Set(locatedTouches.map((event) => event.label).filter((label): label is string => Boolean(label)))
+  ).sort((firstEvent, secondEvent) => firstEvent.localeCompare(secondEvent))
   const [selectedPlayerName, setSelectedPlayerName] = useState('')
+  const [selectedEventLabel, setSelectedEventLabel] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState('')
   const availablePeriods = periodOptions.filter((period) =>
     locatedTouches.some((event) => event.half === period)
@@ -55,9 +59,12 @@ export default function TouchMap({ events }: TouchMapProps) {
   const playerFilteredTouches = selectedPlayerName
     ? locatedTouches.filter((event) => event.playerName === selectedPlayerName)
     : locatedTouches
-  const visibleTouches = selectedPeriod
-    ? playerFilteredTouches.filter((event) => event.half === selectedPeriod)
+  const eventFilteredTouches = selectedEventLabel
+    ? playerFilteredTouches.filter((event) => event.label === selectedEventLabel)
     : playerFilteredTouches
+  const visibleTouches = selectedPeriod
+    ? eventFilteredTouches.filter((event) => event.half === selectedPeriod)
+    : eventFilteredTouches
   const selectedPlayerTouchCount = selectedPlayerName
     ? locatedTouches.filter((event) => event.playerName === selectedPlayerName).length
     : null
@@ -65,9 +72,9 @@ export default function TouchMap({ events }: TouchMapProps) {
   if (locatedTouches.length === 0) {
     return (
       <EmptyState
-        eyebrow="Touch map"
-        title="No touch locations recorded yet."
-        description="Record TOUCH events during live match play and tap the pitch to plot them here."
+        eyebrow="Location maps"
+        title="No location events recorded yet."
+        description="Record events that require pitch location during live match play and tap the pitch to plot them here."
       />
     )
   }
@@ -78,12 +85,12 @@ export default function TouchMap({ events }: TouchMapProps) {
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Shown</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-950">{visibleTouches.length}</p>
-          <p className="text-xs text-slate-600">located touch{visibleTouches.length === 1 ? '' : 'es'}</p>
+          <p className="text-xs text-slate-600">located event{visibleTouches.length === 1 ? '' : 's'}</p>
         </div>
         <div className="rounded-xl bg-slate-50 p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Players</p>
           <p className="mt-1 text-2xl font-extrabold text-slate-950">{playerNames.length}</p>
-          <p className="text-xs text-slate-600">with located touches</p>
+          <p className="text-xs text-slate-600">with located events</p>
         </div>
         {selectedPlayerName && selectedPlayerTouchCount !== null && (
           <div className="rounded-xl bg-blue-50 p-3">
@@ -95,6 +102,36 @@ export default function TouchMap({ events }: TouchMapProps) {
       </div>
 
       <div className="mb-3 space-y-2">
+        {eventLabels.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedEventLabel('')}
+              className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
+                selectedEventLabel === ''
+                  ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              All events
+            </button>
+            {eventLabels.map((eventLabel) => (
+              <button
+                key={eventLabel}
+                type="button"
+                onClick={() => setSelectedEventLabel(eventLabel)}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
+                  selectedEventLabel === eventLabel
+                    ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {eventLabel}
+              </button>
+            ))}
+          </div>
+        )}
+
         {playerNames.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
@@ -173,7 +210,7 @@ export default function TouchMap({ events }: TouchMapProps) {
         {visibleTouches.length === 0 && (
           <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
             <div className="rounded-2xl bg-white/95 p-4 text-center shadow-lg">
-              <p className="text-base font-extrabold text-slate-950">No touches match this filter.</p>
+              <p className="text-base font-extrabold text-slate-950">No location events match this filter.</p>
               <p className="mt-1 text-sm text-slate-600">Try All players or All periods.</p>
             </div>
           </div>
@@ -191,7 +228,7 @@ export default function TouchMap({ events }: TouchMapProps) {
       </div>
 
       <p className="mt-3 text-sm text-slate-600">
-        Showing {visibleTouches.length} located touch{visibleTouches.length === 1 ? '' : 'es'}.
+        Showing {visibleTouches.length} located event{visibleTouches.length === 1 ? '' : 's'}.
       </p>
     </div>
   )

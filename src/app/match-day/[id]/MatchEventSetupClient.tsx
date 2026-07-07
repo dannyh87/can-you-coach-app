@@ -33,6 +33,10 @@ export default function MatchEventSetupClient({
   const [selectedValues, setSelectedValues] = useState<string[]>(selectedEventDefinitionIds)
   const [searchTerm, setSearchTerm] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(
+    eventOptions.some((eventOption) => eventOption.requiresLocation && selectedEventDefinitionIds.includes(eventOption.id))
+  )
+  const [locationTrackingWarning, setLocationTrackingWarning] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -46,11 +50,32 @@ export default function MatchEventSetupClient({
   }
 
   const useDefaultSet = () => {
-    setSelectedValues(eventOptions.filter((eventOption) => eventOption.enabledByDefault).map((eventOption) => eventOption.id))
+    setSelectedValues(eventOptions
+      .filter((eventOption) => eventOption.enabledByDefault)
+      .filter((eventOption) => locationTrackingEnabled || !eventOption.requiresLocation)
+      .map((eventOption) => eventOption.id))
+  }
+  const setLocationTracking = (enabled: boolean) => {
+    setLocationTrackingEnabled(enabled)
+    setLocationTrackingWarning(null)
+
+    if (!enabled) {
+      const locationEventIds = new Set(eventOptions.filter((eventOption) => eventOption.requiresLocation).map((eventOption) => eventOption.id))
+      setSelectedValues((currentValues) => {
+        const nextValues = currentValues.filter((eventDefinitionId) => !locationEventIds.has(eventDefinitionId))
+
+        if (nextValues.length !== currentValues.length) {
+          setLocationTrackingWarning('Turning location tracking off will remove selected location-based events from this match setup.')
+        }
+
+        return nextValues
+      })
+    }
   }
   const subcategoryOptions = Array.from(new Set(eventOptions.map((eventOption) => eventOption.subcategory).filter((subcategory): subcategory is string => Boolean(subcategory)))).sort()
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
   const visibleEventOptions = eventOptions.filter((eventOption) => {
+    if (!locationTrackingEnabled && eventOption.requiresLocation) return false
     if (normalizedSearchTerm && !`${eventOption.label} ${eventOption.description ?? ''}`.toLowerCase().includes(normalizedSearchTerm)) return false
     if (subcategoryFilter !== 'ALL' && eventOption.subcategory !== subcategoryFilter) return false
     return true
@@ -112,6 +137,29 @@ export default function MatchEventSetupClient({
         <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
           Selected events appear in Event recording after kick-off, once tracked players are on the pitch.
         </p>
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Optional tracking extras</p>
+          <label className="mt-3 flex items-start gap-3 font-bold">
+            <input
+              type="checkbox"
+              checked={locationTrackingEnabled}
+              onChange={(event) => setLocationTracking(event.target.checked)}
+              className="mt-1"
+              disabled={isSaving}
+            />
+            <span>
+              Location tracking
+              <span className="mt-1 block font-normal leading-6 text-amber-900">
+                Location tracking adds extra taps during the match. Choose a small number of events if you are recording live on your own.
+              </span>
+            </span>
+          </label>
+          {locationTrackingWarning && (
+            <p className="mt-3 rounded-lg border border-amber-300 bg-white/80 p-3 font-semibold text-amber-950">
+              {locationTrackingWarning}
+            </p>
+          )}
+        </section>
         <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
           <label className="text-sm font-semibold text-slate-700">
             Search events

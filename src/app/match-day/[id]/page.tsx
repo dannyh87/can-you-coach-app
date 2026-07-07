@@ -1809,8 +1809,8 @@ export default async function MatchDayDetailPage({
           </div>
           <section className="mt-4">
             <div className="mb-3">
-              <h2 className="text-xl font-bold sm:text-2xl">Touch Map</h2>
-              <p className="mt-1 text-sm text-gray-500">Recorded player touches for this match</p>
+              <h2 className="text-xl font-bold sm:text-2xl">Location Maps</h2>
+              <p className="mt-1 text-sm text-gray-500">Recorded location events for this match</p>
             </div>
             <TouchMap events={touchMapEvents} />
           </section>
@@ -1848,8 +1848,8 @@ export default async function MatchDayDetailPage({
           </section>
           <section className="mt-4">
             <div className="mb-3">
-              <h2 className="text-xl font-bold sm:text-2xl">Touch Map</h2>
-              <p className="mt-1 text-sm text-gray-500">Recorded player touches for this match</p>
+              <h2 className="text-xl font-bold sm:text-2xl">Location Maps</h2>
+              <p className="mt-1 text-sm text-gray-500">Recorded location events for this match</p>
             </div>
             <TouchMap events={touchMapEvents} />
           </section>

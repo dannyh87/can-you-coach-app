@@ -50,8 +50,11 @@ type WizardResult = { ok: false; reason: string } | void
 
 const today = () => new Date().toISOString().split('T')[0]
 
-const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[]) =>
-  events.filter((event) => event.enabledByDefault).map((event) => event.id)
+const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[], locationTrackingEnabled: boolean) =>
+  events
+    .filter((event) => event.enabledByDefault)
+    .filter((event) => locationTrackingEnabled || !event.requiresLocation)
+    .map((event) => event.id)
 
 const zeroEventValidationMessage = 'Select at least one event to track for this match.'
 
@@ -78,6 +81,8 @@ export default function MatchDayWizard({
   const [eventSubcategoryFilter, setEventSubcategoryFilter] = useState('ALL')
   const [eventPositionFilter, setEventPositionFilter] = useState('ALL')
   const [eventFourCornerFilter, setEventFourCornerFilter] = useState('ALL')
+  const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false)
+  const [locationTrackingWarning, setLocationTrackingWarning] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const selectedTeam = teams.find((team) => team.id === teamId) ?? teams[0]
@@ -86,8 +91,8 @@ export default function MatchDayWizard({
     [matchPhaseGroups]
   )
   const recommendedEventDefinitionIds = useMemo(
-    () => getRecommendedEventDefinitionIds(allEvents),
-    [allEvents]
+    () => getRecommendedEventDefinitionIds(allEvents, locationTrackingEnabled),
+    [allEvents, locationTrackingEnabled]
   )
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const totalSteps = 6
@@ -116,6 +121,25 @@ export default function MatchDayWizard({
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
   }
   const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const setLocationTracking = (enabled: boolean) => {
+    setLocationTrackingEnabled(enabled)
+    setLocationTrackingWarning(null)
+
+    if (!enabled) {
+      const locationEventIds = new Set(
+        allEvents.filter((event) => event.requiresLocation).map((event) => event.id)
+      )
+      setSelectedEventDefinitionIds((currentEventDefinitionIds) => {
+        const nextEventDefinitionIds = currentEventDefinitionIds.filter((eventDefinitionId) => !locationEventIds.has(eventDefinitionId))
+
+        if (nextEventDefinitionIds.length !== currentEventDefinitionIds.length) {
+          setLocationTrackingWarning('Turning location tracking off will remove selected location-based events from this match setup.')
+        }
+
+        return nextEventDefinitionIds
+      })
+    }
+  }
   const selectVisibleEvents = (visibleEventDefinitionIds: string[]) => {
     setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
       Array.from(new Set([...currentEventDefinitionIds, ...visibleEventDefinitionIds]))
@@ -281,6 +305,9 @@ export default function MatchDayWizard({
           setEventPositionFilter={setEventPositionFilter}
           eventFourCornerFilter={eventFourCornerFilter}
           setEventFourCornerFilter={setEventFourCornerFilter}
+          locationTrackingEnabled={locationTrackingEnabled}
+          setLocationTrackingEnabled={setLocationTracking}
+          locationTrackingWarning={locationTrackingWarning}
           selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
           selectedEventCount={selectedEventDefinitionIds.length}
           onToggleEvent={toggleEventDefinition}
@@ -344,6 +371,9 @@ function EventPicker({
   setEventPositionFilter,
   eventFourCornerFilter,
   setEventFourCornerFilter,
+  locationTrackingEnabled,
+  setLocationTrackingEnabled,
+  locationTrackingWarning,
   selectedEventDefinitionIdSet,
   selectedEventCount,
   onToggleEvent,
@@ -365,6 +395,9 @@ function EventPicker({
   setEventPositionFilter: (value: string) => void
   eventFourCornerFilter: string
   setEventFourCornerFilter: (value: string) => void
+  locationTrackingEnabled: boolean
+  setLocationTrackingEnabled: (enabled: boolean) => void
+  locationTrackingWarning: string | null
   selectedEventDefinitionIdSet: Set<string>
   selectedEventCount: number
   onToggleEvent: (eventType: string) => void
@@ -381,6 +414,7 @@ function EventPicker({
   const positionOptions = Array.from(new Set(events.flatMap((event) => event.positionRelevance))).sort()
   const fourCornerOptions = Array.from(new Set(events.map((event) => event.fourCorner))).sort()
   const visibleEvents = events.filter((event) => {
+    if (!locationTrackingEnabled && event.requiresLocation) return false
     if (normalizedSearchTerm && !`${event.label} ${event.description ?? ''}`.toLowerCase().includes(normalizedSearchTerm)) return false
     if (eventMatchPhaseFilter !== 'ALL' && event.matchPhase !== eventMatchPhaseFilter) return false
     if (eventCategoryFilter !== 'ALL' && event.category !== eventCategoryFilter) return false
@@ -394,6 +428,12 @@ function EventPicker({
 
   return (
     <div className="space-y-4">
+      <OptionalTrackingExtras
+        locationTrackingEnabled={locationTrackingEnabled}
+        setLocationTrackingEnabled={setLocationTrackingEnabled}
+        locationTrackingWarning={locationTrackingWarning}
+      />
+
       <EventSetupHeader
         agePhase={agePhase}
         selectedEventCount={selectedEventCount}
@@ -508,6 +548,41 @@ function EventPicker({
         Showing {visibleEvents.length} of {events.length} live-recordable observation events.
       </p>
     </div>
+  )
+}
+
+function OptionalTrackingExtras({
+  locationTrackingEnabled,
+  setLocationTrackingEnabled,
+  locationTrackingWarning,
+}: {
+  locationTrackingEnabled: boolean
+  setLocationTrackingEnabled: (enabled: boolean) => void
+  locationTrackingWarning: string | null
+}) {
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Optional tracking extras</p>
+      <label className="mt-3 flex items-start gap-3 font-bold">
+        <input
+          type="checkbox"
+          checked={locationTrackingEnabled}
+          onChange={(event) => setLocationTrackingEnabled(event.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          Location tracking
+          <span className="mt-1 block font-normal leading-6 text-amber-900">
+            Location tracking adds extra taps during the match. Choose a small number of events if you are recording live on your own.
+          </span>
+        </span>
+      </label>
+      {locationTrackingWarning && (
+        <p className="mt-3 rounded-lg border border-amber-300 bg-white/80 p-3 font-semibold text-amber-950">
+          {locationTrackingWarning}
+        </p>
+      )}
+    </section>
   )
 }
 

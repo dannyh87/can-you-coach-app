@@ -194,7 +194,7 @@ export default function MatchEventsClient({
     setPendingAction(null)
   }
 
-  const recordTouchLocation = async (location: PitchLocation) => {
+  const recordEventLocation = async (location: PitchLocation) => {
     if (!pendingLocationEvent || pendingAction) return
 
     const { eventOption, player } = pendingLocationEvent
@@ -614,7 +614,7 @@ export default function MatchEventsClient({
 
       <PitchLocationPicker
         isOpen={pendingLocationEvent !== null}
-        onSelect={recordTouchLocation}
+        onSelect={recordEventLocation}
         onClose={() => {
           if (!pendingAction) setPendingLocationEvent(null)
         }}
