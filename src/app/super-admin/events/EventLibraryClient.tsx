@@ -85,6 +85,7 @@ export default function EventLibraryClient({
   const [editingEventId, setEditingEventId] = useState<string | null>(null)
   const activeEvents = eventDefinitions.filter((eventDefinition) => eventDefinition.isActive)
   const archivedEvents = eventDefinitions.filter((eventDefinition) => !eventDefinition.isActive)
+  const requiresLocationCount = activeEvents.filter((eventDefinition) => eventDefinition.requiresLocation).length
   const subcategoryOptions = useMemo(() => Array.from(new Set(
     eventDefinitions
       .map((eventDefinition) => eventDefinition.subcategory)
@@ -238,13 +239,13 @@ export default function EventLibraryClient({
         <p className="text-sm font-bold uppercase tracking-wide text-blue-700">Super Admin</p>
         <h1 className="mt-1 text-3xl font-bold">Match Day Event Library</h1>
         <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Manage global event definitions used by match setup, live recording and reports.
+          Manage the global event definitions used in Match Day setup, live recording and reports. Active events are available for coaches to select when setting up a match.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="Official events" value={String(eventDefinitions.length)} />
-        <SummaryCard label="Active" value={String(activeEvents.length)} />
+        <SummaryCard label="Live events" value={String(activeEvents.length)} />
+        <SummaryCard label="Requires location" value={String(requiresLocationCount)} />
         <SummaryCard label="Archived" value={String(archivedEvents.length)} />
       </div>
 
@@ -295,9 +296,9 @@ export default function EventLibraryClient({
       <section className="mt-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold">Active official events</h2>
+            <h2 className="text-2xl font-bold">Live events</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Active global events can be selected in Match Day setup.
+              Live events are available in Match Day setup, live recording and reports.
             </p>
           </div>
           <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-800">
@@ -370,6 +371,9 @@ export default function EventLibraryClient({
         <summary className="cursor-pointer text-lg font-bold">
           Archived events ({archivedEvents.length})
         </summary>
+        <p className="mt-2 text-sm text-gray-500">
+          Archived events are hidden from new match setup but retained for historical matches and reports.
+        </p>
         <div className="mt-4">
           {archivedEvents.length === 0 ? (
             <p className="rounded-lg border p-4 text-sm text-gray-500">No archived events.</p>
@@ -489,7 +493,7 @@ function EventFilters({
         value={legacyFilter}
         onChange={setLegacyFilter}
         options={[
-          { value: 'LEGACY_BACKED', label: 'Legacy-backed' },
+          { value: 'LEGACY_BACKED', label: 'Has legacy mapping' },
           { value: 'DB_ONLY', label: 'DB-only' },
         ]}
       />
