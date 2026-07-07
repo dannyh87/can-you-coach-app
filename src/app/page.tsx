@@ -197,6 +197,19 @@ export default async function Home() {
         </div>
       </section>
 
+      <Link
+        href="/how-to-use"
+        className="mt-4 block rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100/70 sm:p-5"
+      >
+        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Quick guide</p>
+        <h2 className="mt-1 text-xl font-extrabold text-slate-950">
+          New to Can You Coach? Read the quick guide.
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Learn how to start with a coaching question, track a small number of events and use match data for reflection.
+        </p>
+      </Link>
+
       <GettingStartedChecklist state={onboardingState} />
 
       {dashboardData.kind === 'coach' && (
