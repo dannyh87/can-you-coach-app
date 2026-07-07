@@ -46,9 +46,6 @@ npm run build
 - Confirm `ENABLE_ROLE_TESTER` is absent or false in production.
 - Check Vercel Environment Variables separately for Preview and Production.
 
-## Current Non-Blocking Warnings
+## Final Checks
 
-- Next.js may warn that the `middleware` file convention is deprecated in favour of `proxy`.
-- Prisma may warn that `package.json#prisma` seed configuration is deprecated for Prisma 7.
-
-These warnings should be addressed later, but they do not block deployment if lint, build, auth configuration, and migrations are correct.
+- Confirm `npx prisma generate`, `npm run db:seed`, `npx prisma migrate status`, `npm run lint`, and `npm run build` complete successfully before deployment.

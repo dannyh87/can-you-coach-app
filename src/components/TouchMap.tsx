@@ -211,7 +211,7 @@ export default function TouchMap({ events }: TouchMapProps) {
           <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
             <div className="rounded-2xl bg-white/95 p-4 text-center shadow-lg">
               <p className="text-base font-extrabold text-slate-950">No location events match this filter.</p>
-              <p className="mt-1 text-sm text-slate-600">Try All players or All periods.</p>
+              <p className="mt-1 text-sm text-slate-600">Try All events, All players or All periods.</p>
             </div>
           </div>
         )}

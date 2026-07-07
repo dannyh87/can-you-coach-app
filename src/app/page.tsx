@@ -203,11 +203,14 @@ export default async function Home() {
       >
         <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Quick guide</p>
         <h2 className="mt-1 text-xl font-extrabold text-slate-950">
-          New to Can You Coach? Read the quick guide.
+          New to Can You Coach?
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          Learn how to start with a coaching question, track a small number of events and use match data for reflection.
+          Read the quick guide to choosing what to track, using match data well, and focusing on player development rather than just the score.
         </p>
+        <span className="mt-3 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
+          Read the quick guide
+        </span>
       </Link>
 
       <GettingStartedChecklist state={onboardingState} />

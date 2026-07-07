@@ -129,7 +129,7 @@ export default async function NewMatchDayPage() {
     },
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
-  const recordableEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: true })
+  const recordableEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: false })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
 
   return (

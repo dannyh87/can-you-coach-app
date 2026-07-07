@@ -7,7 +7,7 @@ const clerkEnabled = Boolean(
   process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
 )
 
-const disabledMiddleware = () => {
+const disabledProxy = () => {
   if (process.env.NODE_ENV === 'production') {
     return new NextResponse(
       'Clerk authentication is not configured. Production requires NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY.',
@@ -18,13 +18,15 @@ const disabledMiddleware = () => {
   return NextResponse.next()
 }
 
-const enabledMiddleware = clerkMiddleware(async (auth, request) => {
+const enabledProxy = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect()
   }
 })
 
-export default clerkEnabled ? enabledMiddleware : disabledMiddleware
+export const proxy = clerkEnabled ? enabledProxy : disabledProxy
+
+export default proxy
 
 export const config = {
   matcher: [

@@ -18,6 +18,7 @@ const navigationLinks = [
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
+  { href: '/how-to-use', label: 'How to use' },
 ]
 
 export const metadata: Metadata = {

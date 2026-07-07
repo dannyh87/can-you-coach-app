@@ -498,19 +498,20 @@ function EventPicker({
           const selected = selectedEventDefinitionIdSet.has(event.id)
 
           return (
-            <label
+            <article
               key={event.id}
               className={`rounded-xl border p-3 text-left transition ${
                 selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
               }`}
             >
               <div className="flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => onToggleEvent(event.id)}
-                  className="mt-1"
-                />
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => onToggleEvent(event.id)}
+                    className="mt-1"
+                    aria-label={`Select ${event.label}`}
+                  />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-bold text-slate-950">{event.label}</p>
@@ -539,7 +540,7 @@ function EventPicker({
                   <EventGuidanceDetails event={event} />
                 </div>
               </div>
-            </label>
+            </article>
           )
         })}
       </div>
