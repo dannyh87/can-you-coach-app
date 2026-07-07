@@ -41,10 +41,10 @@ const actionCards = [
     tone: 'slate',
   },
   {
-    href: '/fitness/progress',
+    href: '/reports/team-trends',
     eyebrow: 'Review',
-    title: 'View Reports',
-    description: 'Check fitness progress and use completed match reports.',
+    title: 'Team Event Trends',
+    description: 'Spot how selected match events change across completed games.',
     tone: 'amber',
   },
   {
@@ -305,7 +305,7 @@ export default async function Home() {
             <h2 className="text-xl font-bold text-slate-950">Recent activity</h2>
             <p className="mt-1 text-sm text-slate-600">Latest tests and matches touched by your coaching workflow.</p>
           </div>
-          <ActionLink href="/fitness/progress" variant="ghost" size="sm">View Reports</ActionLink>
+          <ActionLink href="/reports/team-trends" variant="ghost" size="sm">View Reports</ActionLink>
         </div>
 
         {recentActivity.length === 0 ? (

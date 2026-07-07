@@ -21,6 +21,7 @@ const primaryNavigationLinks = [
 ]
 
 const secondaryNavigationLinks = [
+  { href: '/reports', label: 'Reports' },
   { href: '/club-setup', label: 'Club Setup' },
 ]
 
