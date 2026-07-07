@@ -70,7 +70,9 @@ async function createMatchFromWizard(formData: FormData) {
       .filter(({ playerId, squadStatus }) => activePlayerIds.has(playerId) && squadStatuses.includes(squadStatus as (typeof squadStatuses)[number]))
       .map(({ playerId, squadStatus }) => [playerId, squadStatus as (typeof squadStatuses)[number]])
   )
-  if (selectedEventDefinitionIds.length === 0) return { ok: false as const, reason: 'Select at least one event to track.' }
+  if (selectedEventDefinitionIds.length === 0) {
+    return { ok: false as const, reason: 'Select at least one event to track for this match.' }
+  }
 
   const selectedEvents = await prisma.eventDefinition.findMany({
     where: {

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
 import MatchEventSetupClient from '@/app/match-day/[id]/MatchEventSetupClient'
@@ -22,13 +22,15 @@ import {
   isMatchEventType,
   matchEventTypes,
 } from '@/lib/matchEventTaxonomy'
-import { canManageMatchDay, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
+import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const pitchTargetStates = ['ON', 'OFF'] as const
+const matchTypes = ['LEAGUE', 'CUP', 'FRIENDLY'] as const
+const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 
 type SquadActionResult =
   | { ok: true }
@@ -60,6 +62,8 @@ const getOptionalPitchCoordinate = (formData: FormData, key: string) => {
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
+const formatDateInput = (date: Date) => date.toISOString().slice(0, 10)
+const formatTimeInput = (date: Date) => date.toTimeString().slice(0, 5)
 const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
 const formatDateTime = (date: Date) =>
   new Intl.DateTimeFormat('en-GB', {
@@ -198,37 +202,115 @@ async function getActionableMatch(matchDayId: string, permission: 'manage' | 'ru
   })
 }
 
-async function createDefaultMatchEventSetup(matchDayId: string) {
-  const existingCount = await prisma.matchDayEventType.count({
-    where: { matchDayId },
-  })
+async function updateDraftMatchDetails(formData: FormData): Promise<void> {
+  'use server'
 
-  if (existingCount > 0) return []
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const date = getTextValue(formData, 'date')
+  const kickoffTime = getTextValue(formData, 'kickoffTime')
+  const opposition = getTextValue(formData, 'opposition')
+  const matchType = getTextValue(formData, 'matchType')
+  const venue = getTextValue(formData, 'venue')
 
-  const defaultEventDefinitions = await prisma.eventDefinition.findMany({
-    where: {
-      scope: 'GLOBAL',
-      isActive: true,
-      legacyEventType: { not: null },
-      enabledByDefault: true,
+  if (!matchDayId || !date || !kickoffTime || !opposition || !matchType || !venue) {
+    return
+  }
+  if (!matchTypes.includes(matchType as (typeof matchTypes)[number])) {
+    return
+  }
+  if (!matchVenues.includes(venue as (typeof matchVenues)[number])) {
+    return
+  }
+
+  const match = await getActionableMatch(matchDayId, 'manage')
+  if (!match) return
+  if (match.status !== 'DRAFT') {
+    return
+  }
+
+  const kickoffAt = new Date(`${date}T${kickoffTime}:00`)
+  if (Number.isNaN(kickoffAt.getTime())) {
+    return
+  }
+
+  await prisma.matchDay.update({
+    where: { id: match.id },
+    data: {
+      kickoffAt,
+      opposition,
+      matchType: matchType as (typeof matchTypes)[number],
+      venue: venue as (typeof matchVenues)[number],
     },
-    orderBy: [
-      { matchPhase: 'asc' },
-      { category: 'asc' },
-      { name: 'asc' },
-    ],
   })
 
-  return defaultEventDefinitions.map((eventDefinition) =>
-    prisma.matchDayEventType.create({
-      data: {
-        matchDayId,
-        eventDefinitionId: eventDefinition.id,
-        eventType: eventDefinition.legacyEventType,
-        category: getMatchDayEventCategoryFallback(eventDefinition),
+  revalidatePath(`/match-day/${match.id}`)
+  revalidatePath('/match-day')
+}
+
+async function duplicateMatchDaySetup(formData: FormData) {
+  'use server'
+
+  const user = await getCurrentUser()
+  const sourceMatchDayId = getTextValue(formData, 'matchDayId')
+  if (!sourceMatchDayId) redirect('/match-day')
+
+  const sourceMatch = await prisma.matchDay.findUnique({
+    where: { id: sourceMatchDayId },
+    include: {
+      team: {
+        include: {
+          club: true,
+        },
       },
-    })
-  )
+      matchDayEventTypes: {
+        orderBy: { createdAt: 'asc' },
+      },
+      matchDayPlayers: {
+        orderBy: { createdAt: 'asc' },
+      },
+    },
+  })
+
+  if (!sourceMatch) redirect('/match-day')
+  if (!(await canManageMatchDay(user.id, sourceMatch.id))) redirect(`/match-day/${sourceMatch.id}`)
+  if (!(await canManageTeamData(user.id, sourceMatch.teamId))) redirect(`/match-day/${sourceMatch.id}`)
+
+  const copiedEventTypes = sourceMatch.matchDayEventTypes
+    .filter((eventType) => eventType.eventDefinitionId || eventType.eventType)
+    .map((eventType) => ({
+      eventDefinitionId: eventType.eventDefinitionId,
+      eventType: eventType.eventType,
+      category: eventType.category,
+    }))
+
+  const copiedPlayers = sourceMatch.matchDayPlayers.map((player) => ({
+    playerId: player.playerId,
+    squadStatus: player.squadStatus,
+    startingPosition: player.startingPosition,
+    shirtNumberSnapshot: player.shirtNumberSnapshot,
+    isTracked: player.isTracked,
+  }))
+
+  const newMatch = await prisma.matchDay.create({
+    data: {
+      teamId: sourceMatch.teamId,
+      kickoffAt: sourceMatch.kickoffAt,
+      opposition: sourceMatch.opposition,
+      matchType: sourceMatch.matchType,
+      venue: sourceMatch.venue,
+      status: 'DRAFT',
+      matchDayEventTypes: {
+        create: copiedEventTypes,
+      },
+      matchDayPlayers: {
+        create: copiedPlayers,
+      },
+    },
+    select: { id: true },
+  })
+
+  revalidatePath('/match-day')
+  redirect(`/match-day/${newMatch.id}?setupCopied=1`)
 }
 
 async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
@@ -417,7 +499,9 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
   ))
 
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
-  if (eventDefinitionIds.length === 0) return { ok: false, reason: 'Select at least one event.' }
+  if (eventDefinitionIds.length === 0) {
+    return { ok: false, reason: 'Select at least one event to track for this match.' }
+  }
 
   const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
@@ -480,10 +564,14 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
       squadStatus: 'STARTER',
     },
   })
-  const defaultEventSetupCreates = await createDefaultMatchEventSetup(match.id)
+  const selectedEventCount = await prisma.matchDayEventType.count({
+    where: { matchDayId: match.id },
+  })
+  if (selectedEventCount === 0) {
+    return { ok: false, reason: 'Select at least one event to track for this match.' }
+  }
 
   await prisma.$transaction([
-    ...defaultEventSetupCreates,
     prisma.matchDay.update({
       where: { id: match.id },
       data: {
@@ -1106,12 +1194,16 @@ async function ignoreParentSubmission(formData: FormData): Promise<MatchActionRe
 
 export default async function MatchDayDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ setupCopied?: string }>
 }) {
   const { id } = await params
+  const { setupCopied } = await searchParams
   const user = await getCurrentUser()
   if (!(await canViewMatchDay(user.id, id))) notFound()
+  const canManageThisMatch = await canManageMatchDay(user.id, id)
   const canReviewParentSubmissions = await canRunMatchDay(user.id, id)
 
   const match = await prisma.matchDay.findFirst({
@@ -1487,6 +1579,7 @@ export default async function MatchDayDetailPage({
     (submission) => submission.status === 'PENDING'
   ).length
   const showHeaderScore = match.status !== 'DRAFT'
+  const copiedSetupNotice = setupCopied === '1'
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -1518,12 +1611,39 @@ export default async function MatchDayDetailPage({
             <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(match.status)}`}>
               {statusLabel}
             </span>
+            {canManageThisMatch && (
+              <form action={duplicateMatchDaySetup}>
+                <input type="hidden" name="matchDayId" value={match.id} />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-50"
+                >
+                  Copy setup
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </section>
 
+      {copiedSetupNotice && (
+        <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
+          Setup copied. Update the date, opposition and squad before starting.
+        </p>
+      )}
+
       {match.status === 'DRAFT' && (
         <>
+          {canManageThisMatch && (
+            <DraftMatchDetailsForm
+              matchDayId={match.id}
+              kickoffAt={match.kickoffAt}
+              opposition={match.opposition}
+              matchType={match.matchType}
+              venue={match.venue}
+              updateDraftMatchDetailsAction={updateDraftMatchDetails}
+            />
+          )}
           <section className="mt-6 grid gap-4 lg:grid-cols-2">
             <MatchSquadClient
               matchDayId={match.id}
@@ -1761,5 +1881,88 @@ export default async function MatchDayDetailPage({
         </section>
       )}
     </main>
+  )
+}
+
+function DraftMatchDetailsForm({
+  matchDayId,
+  kickoffAt,
+  opposition,
+  matchType,
+  venue,
+  updateDraftMatchDetailsAction,
+}: {
+  matchDayId: string
+  kickoffAt: Date
+  opposition: string
+  matchType: string
+  venue: string
+  updateDraftMatchDetailsAction: (formData: FormData) => Promise<void>
+}) {
+  return (
+    <section className="mt-6 rounded-2xl bg-gray-50 p-5">
+      <div>
+        <h2 className="text-xl font-bold">Match details</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Update the fixture details before the match starts.
+        </p>
+      </div>
+      <form action={updateDraftMatchDetailsAction} className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <input type="hidden" name="matchDayId" value={matchDayId} />
+        <label className="text-sm font-semibold text-slate-700">
+          Date
+          <input
+            type="date"
+            name="date"
+            defaultValue={formatDateInput(kickoffAt)}
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            required
+          />
+        </label>
+        <label className="text-sm font-semibold text-slate-700">
+          Kick-off
+          <input
+            type="time"
+            name="kickoffTime"
+            defaultValue={formatTimeInput(kickoffAt)}
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            required
+          />
+        </label>
+        <label className="text-sm font-semibold text-slate-700 md:col-span-2 lg:col-span-1">
+          Opposition
+          <input
+            name="opposition"
+            defaultValue={opposition}
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            required
+          />
+        </label>
+        <label className="text-sm font-semibold text-slate-700">
+          Match type
+          <select name="matchType" defaultValue={matchType} className="mt-1 w-full rounded-lg border px-3 py-2" required>
+            <option value="LEAGUE">League</option>
+            <option value="CUP">Cup</option>
+            <option value="FRIENDLY">Friendly</option>
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-slate-700">
+          Venue
+          <select name="venue" defaultValue={venue} className="mt-1 w-full rounded-lg border px-3 py-2" required>
+            <option value="HOME">Home</option>
+            <option value="AWAY">Away</option>
+            <option value="NEUTRAL">Neutral</option>
+          </select>
+        </label>
+        <div className="md:col-span-2 lg:col-span-5">
+          <button
+            type="submit"
+            className="rounded-lg bg-blue-700 px-4 py-3 text-sm font-bold text-white hover:bg-blue-800"
+          >
+            Save match details
+          </button>
+        </div>
+      </form>
+    </section>
   )
 }

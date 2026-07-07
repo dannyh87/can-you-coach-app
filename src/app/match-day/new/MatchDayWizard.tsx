@@ -50,14 +50,10 @@ type WizardResult = { ok: false; reason: string } | void
 
 const today = () => new Date().toISOString().split('T')[0]
 
-const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[], agePhase: AgePhase) => {
-  const defaultEvents = events.filter((event) => event.enabledByDefault)
-  const matchingEvents = defaultEvents.filter((event) =>
-    agePhase === 'ALL' || event.agePhases.includes(agePhase)
-  )
+const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[]) =>
+  events.filter((event) => event.enabledByDefault).map((event) => event.id)
 
-  return (matchingEvents.length > 0 ? matchingEvents : defaultEvents).map((event) => event.id)
-}
+const zeroEventValidationMessage = 'Select at least one event to track for this match.'
 
 export default function MatchDayWizard({
   teams,
@@ -90,10 +86,10 @@ export default function MatchDayWizard({
     [matchPhaseGroups]
   )
   const recommendedEventDefinitionIds = useMemo(
-    () => getRecommendedEventDefinitionIds(allEvents, selectedTeam?.inferredAgePhase ?? 'ALL'),
-    [allEvents, selectedTeam?.inferredAgePhase]
+    () => getRecommendedEventDefinitionIds(allEvents),
+    [allEvents]
   )
-  const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>(recommendedEventDefinitionIds)
+  const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const totalSteps = 6
   const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
@@ -107,6 +103,10 @@ export default function MatchDayWizard({
       setError('Add the opposition before continuing.')
       return
     }
+    if (step === 5 && selectedEventDefinitionIds.length === 0) {
+      setError(zeroEventValidationMessage)
+      return
+    }
 
     setError(null)
     setStep((currentStep) => Math.min(totalSteps, currentStep + 1))
@@ -115,7 +115,13 @@ export default function MatchDayWizard({
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
   }
-  const applyDefaultEvents = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const selectVisibleEvents = (visibleEventDefinitionIds: string[]) => {
+    setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
+      Array.from(new Set([...currentEventDefinitionIds, ...visibleEventDefinitionIds]))
+    )
+  }
+  const clearSelectedEvents = () => setSelectedEventDefinitionIds([])
   const toggleEventDefinition = (eventDefinitionId: string) => {
     setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
       currentEventDefinitionIds.includes(eventDefinitionId)
@@ -126,6 +132,11 @@ export default function MatchDayWizard({
 
   const createMatch = () => {
     setError(null)
+    if (selectedEventDefinitionIds.length === 0) {
+      setError(zeroEventValidationMessage)
+      return
+    }
+
     const formData = new FormData()
     formData.set('teamId', teamId)
     formData.set('date', date)
@@ -201,7 +212,6 @@ export default function MatchDayWizard({
               selected={team.id === teamId}
               onClick={() => {
                 setTeamId(team.id)
-                setSelectedEventDefinitionIds(getRecommendedEventDefinitionIds(allEvents, team.inferredAgePhase))
               }}
             />
           ))}
@@ -274,7 +284,9 @@ export default function MatchDayWizard({
           selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
           selectedEventCount={selectedEventDefinitionIds.length}
           onToggleEvent={toggleEventDefinition}
-          onUseDefaults={applyDefaultEvents}
+          onSelectRecommendedDefaults={selectRecommendedDefaults}
+          onSelectVisibleEvents={selectVisibleEvents}
+          onClearAll={clearSelectedEvents}
         />
       )}
 
@@ -297,7 +309,6 @@ export default function MatchDayWizard({
       <WizardActions>
         <Button type="button" variant="secondary" onClick={goBack} disabled={step === 1 || isPending}>Back</Button>
         <div className="ml-auto flex gap-2">
-          {step === 5 && <Button type="button" variant="ghost" onClick={() => { applyDefaultEvents(); goNext() }}>Skip</Button>}
           {step < totalSteps ? (
             <Button type="button" onClick={goNext}>Next</Button>
           ) : (
@@ -336,7 +347,9 @@ function EventPicker({
   selectedEventDefinitionIdSet,
   selectedEventCount,
   onToggleEvent,
-  onUseDefaults,
+  onSelectRecommendedDefaults,
+  onSelectVisibleEvents,
+  onClearAll,
 }: {
   agePhase: AgePhase
   events: TaxonomyEvent[]
@@ -355,7 +368,9 @@ function EventPicker({
   selectedEventDefinitionIdSet: Set<string>
   selectedEventCount: number
   onToggleEvent: (eventType: string) => void
-  onUseDefaults: () => void
+  onSelectRecommendedDefaults: () => void
+  onSelectVisibleEvents: (visibleEventDefinitionIds: string[]) => void
+  onClearAll: () => void
 }) {
   const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
   const matchPhaseOptions = getUniqueOptions(events, 'matchPhase', 'matchPhaseLabel')
@@ -375,10 +390,18 @@ function EventPicker({
     return true
   })
   const selectedEvents = events.filter((event) => selectedEventDefinitionIdSet.has(event.id))
+  const visibleEventIds = visibleEvents.map((event) => event.id)
 
   return (
     <div className="space-y-4">
-      <EventSetupHeader agePhase={agePhase} selectedEventCount={selectedEventCount} onUseDefaults={onUseDefaults} />
+      <EventSetupHeader
+        agePhase={agePhase}
+        selectedEventCount={selectedEventCount}
+        visibleEventCount={visibleEvents.length}
+        onSelectRecommendedDefaults={onSelectRecommendedDefaults}
+        onSelectAllVisible={() => onSelectVisibleEvents(visibleEventIds)}
+        onClearAll={onClearAll}
+      />
 
       {selectedEvents.length > 0 && (
         <div className="rounded-xl border border-blue-100 bg-white p-3">
@@ -491,11 +514,17 @@ function EventPicker({
 function EventSetupHeader({
   agePhase,
   selectedEventCount,
-  onUseDefaults,
+  visibleEventCount,
+  onSelectRecommendedDefaults,
+  onSelectAllVisible,
+  onClearAll,
 }: {
   agePhase: AgePhase
   selectedEventCount: number
-  onUseDefaults: () => void
+  visibleEventCount: number
+  onSelectRecommendedDefaults: () => void
+  onSelectAllVisible: () => void
+  onClearAll: () => void
 }) {
   const workloadGuidance = getWorkloadGuidance(selectedEventCount)
 
@@ -509,9 +538,17 @@ function EventSetupHeader({
           </p>
           <p className="mt-1 font-semibold">{workloadGuidance.label}</p>
         </div>
-        <button type="button" onClick={onUseDefaults} className="font-semibold text-blue-800 hover:underline">
-          Use defaults
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onSelectRecommendedDefaults} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white">
+            Select recommended defaults
+          </button>
+          <button type="button" onClick={onSelectAllVisible} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white" disabled={visibleEventCount === 0}>
+            Select all visible
+          </button>
+          <button type="button" onClick={onClearAll} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-slate-700 hover:bg-white" disabled={selectedEventCount === 0}>
+            Clear all
+          </button>
+        </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
         <span className="rounded-full bg-white/70 px-2.5 py-1">Suggested for {agePhaseLabels[agePhase]}</span>
