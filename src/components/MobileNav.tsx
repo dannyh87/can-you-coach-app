@@ -48,7 +48,7 @@ export default function MobileNav({
   const closeMenu = () => setIsOpen(false)
 
   return (
-    <div className="md:hidden">
+    <div className="lg:hidden">
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
@@ -66,7 +66,7 @@ export default function MobileNav({
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             aria-label="Close navigation menu"

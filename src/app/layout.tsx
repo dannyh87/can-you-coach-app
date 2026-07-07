@@ -14,11 +14,11 @@ const inter = Inter({ subsets: ['latin'] })
 
 const navigationLinks = [
   { href: '/', label: 'Home' },
+  { href: '/how-to-use', label: 'How to use' },
   { href: '/club-setup', label: 'Club Setup' },
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
-  { href: '/how-to-use', label: 'How to use' },
 ]
 
 export const metadata: Metadata = {
@@ -88,7 +88,7 @@ export default async function RootLayout({
               accessSummary={accessSummary}
             />
 
-            <div className="hidden items-center gap-3 md:flex">
+            <div className="hidden items-center gap-2 lg:flex">
               <nav
                 className="flex flex-wrap gap-1 text-sm"
                 aria-label="Main navigation"
@@ -97,7 +97,7 @@ export default async function RootLayout({
                   <Link
                     key={link.href}
                     href={link.href}
-                    className="shrink-0 rounded-full px-3 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+                    className="shrink-0 rounded-full px-2.5 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
                   >
                     {link.label}
                   </Link>
