@@ -3,7 +3,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
-import { getCurrentAccessSummary, type AccessSummary } from '@/lib/accessSummary'
+import { getCurrentAccessSummary } from '@/lib/accessSummary'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
 import MobileNav from '@/components/MobileNav'
@@ -12,13 +12,16 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const navigationLinks = [
+const primaryNavigationLinks = [
   { href: '/', label: 'Home' },
   { href: '/how-to-use', label: 'How to use' },
-  { href: '/club-setup', label: 'Club Setup' },
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
+]
+
+const secondaryNavigationLinks = [
+  { href: '/club-setup', label: 'Club Setup' },
 ]
 
 export const metadata: Metadata = {
@@ -51,14 +54,6 @@ export const viewport: Viewport = {
   themeColor: '#172554',
 }
 
-const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
-  slate: 'border-slate-200 bg-white text-slate-700',
-  blue: 'border-blue-200 bg-blue-50 text-blue-800',
-  green: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  amber: 'border-amber-200 bg-amber-50 text-amber-900',
-  purple: 'border-purple-200 bg-purple-50 text-purple-800',
-}
-
 export default async function RootLayout({
   children,
 }: {
@@ -66,34 +61,36 @@ export default async function RootLayout({
 }) {
   const user = await getOptionalCurrentUser()
   const accessSummary = user ? await getCurrentAccessSummary(user) : null
-  const userNavigationLinks = user && canManageGlobalEventLibrary(user)
-    ? [...navigationLinks, { href: '/super-admin/events', label: 'Super Admin' }]
-    : navigationLinks
+  const userSecondaryNavigationLinks = user && canManageGlobalEventLibrary(user)
+    ? [...secondaryNavigationLinks, { href: '/super-admin/events', label: 'Super Admin' }]
+    : secondaryNavigationLinks
+  const mobileNavigationLinks = [...primaryNavigationLinks, ...userSecondaryNavigationLinks]
   const body = (
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
         <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <Link href="/" className="inline-flex items-center gap-2 text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
+            <Link href="/" className="inline-flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
               <span className="grid h-9 w-9 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white shadow-sm">
                 CYC
               </span>
-              <span>Can You Coach</span>
+              <span className="whitespace-nowrap">Can You Coach</span>
             </Link>
 
             <MobileNav
-              links={userNavigationLinks}
+              links={mobileNavigationLinks}
               showDevTools={isRoleTesterEnabled()}
               showAccount={isClerkEnabled()}
               accessSummary={accessSummary}
+              className="lg:hidden"
             />
 
-            <div className="hidden items-center gap-2 lg:flex">
+            <div className="hidden min-w-0 items-center gap-2 lg:flex">
               <nav
-                className="flex flex-wrap gap-1 text-sm"
+                className="flex items-center gap-1 whitespace-nowrap text-sm"
                 aria-label="Main navigation"
               >
-                {userNavigationLinks.map((link) => (
+                {primaryNavigationLinks.map((link) => (
                   <Link
                     key={link.href}
                     href={link.href}
@@ -104,32 +101,15 @@ export default async function RootLayout({
                 ))}
               </nav>
 
-              {isRoleTesterEnabled() && (
-                <Link
-                  href="/super-admin/dev-tools"
-                  className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 sm:text-sm"
-                >
-                  Dev Tools
-                </Link>
-              )}
-
-              {accessSummary && (
-                <span
-                  title={accessSummary.title}
-                  className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${accessBadgeClasses[accessSummary.tone]}`}
-                >
-                  {accessSummary.label}
-                </span>
-              )}
-
-              {isClerkEnabled() && (
-                <Link
-                  href="/sign-in"
-                  className="shrink-0 rounded-full bg-emerald-700 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-                >
-                  Account
-                </Link>
-              )}
+              <MobileNav
+                links={userSecondaryNavigationLinks}
+                showDevTools={isRoleTesterEnabled()}
+                showAccount={isClerkEnabled()}
+                accessSummary={accessSummary}
+                className="hidden lg:block"
+                buttonLabel="Menu"
+                ariaLabel="Open menu"
+              />
             </div>
           </div>
         </header>

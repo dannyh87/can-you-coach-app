@@ -15,6 +15,9 @@ type MobileNavProps = {
   showDevTools: boolean
   showAccount: boolean
   accessSummary?: AccessSummary | null
+  className?: string
+  buttonLabel?: string
+  ariaLabel?: string
 }
 
 const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
@@ -30,6 +33,9 @@ export default function MobileNav({
   showDevTools,
   showAccount,
   accessSummary,
+  className,
+  buttonLabel,
+  ariaLabel,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false)
   const menuId = useId()
@@ -46,18 +52,19 @@ export default function MobileNav({
   }, [isOpen])
 
   const closeMenu = () => setIsOpen(false)
+  const menuButtonLabel = isOpen ? 'Close menu' : (buttonLabel ?? 'Open menu')
 
   return (
-    <div className="lg:hidden">
+    <div className={className}>
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label={isOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-label={isOpen ? 'Close navigation menu' : (ariaLabel ?? 'Open navigation menu')}
       >
-        <span className="sr-only">{isOpen ? 'Close menu' : 'Open menu'}</span>
+        <span className={buttonLabel ? '' : 'sr-only'}>{menuButtonLabel}</span>
         <span className="flex flex-col gap-1.5" aria-hidden="true">
           <span className={`h-0.5 w-5 rounded-full bg-current transition ${isOpen ? 'translate-y-2 rotate-45' : ''}`} />
           <span className={`h-0.5 w-5 rounded-full bg-current transition ${isOpen ? 'opacity-0' : ''}`} />
@@ -66,7 +73,7 @@ export default function MobileNav({
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50">
           <button
             type="button"
             aria-label="Close navigation menu"
