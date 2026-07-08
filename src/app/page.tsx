@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 
 import ActionLink from '@/components/ui/ActionLink'
 import DashboardSnapshot from '@/components/DashboardSnapshot'
@@ -13,6 +14,7 @@ import { getOptionalCurrentUser } from '@/lib/auth'
 import { getDashboardData } from '@/lib/dashboard'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
+import { shouldRedirectToOnboarding } from '@/lib/firstTimeOnboarding'
 import { getOnboardingState } from '@/lib/onboarding'
 import { prisma } from '@/lib/prisma'
 
@@ -154,6 +156,7 @@ export default async function Home() {
   const user = await getOptionalCurrentUser()
 
   if (!user) return <LandingPage />
+  if (await shouldRedirectToOnboarding(user)) redirect('/onboarding')
 
   return <AuthenticatedHome userId={user.id} />
 }

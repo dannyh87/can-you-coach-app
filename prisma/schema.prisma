@@ -12,6 +12,8 @@ model User {
   clerkUserId                  String?               @unique
   email                        String                @unique
   passwordHash                 String?
+  onboardingCompletedAt        DateTime?
+  onboardingRole               OnboardingRole?
   createdAt                    DateTime              @default(now())
   updatedAt                    DateTime              @updatedAt
   clubs                        Club[]
@@ -22,6 +24,12 @@ model User {
   spectatorAccess              SpectatorAccess[]
   submittedMatchEvents         SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
   acceptedSubmittedMatchEvents SubmittedMatchEvent[] @relation("AcceptedSubmittedMatchEvents")
+}
+
+enum OnboardingRole {
+  CLUB_OFFICIAL
+  COACH
+  PARENT_SPECTATOR
 }
 
 enum ClubRole {
