@@ -1269,7 +1269,10 @@ export default async function MatchDayDetailPage({
 
   if (!match) notFound()
 
-  const setupEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: false })
+  const setupEventOptions = await getActiveRecordableEventDefinitions({
+    legacyOnly: false,
+    clubId: match.team.clubId,
+  })
   const setupEventOptionsById = new Map(
     setupEventOptions.map((eventOption) => [eventOption.id, eventOption])
   )

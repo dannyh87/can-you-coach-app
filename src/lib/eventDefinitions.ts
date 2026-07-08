@@ -1,4 +1,4 @@
-import type { EventDefinition, MatchEventCategory, MatchEventType } from '@prisma/client'
+import type { EventDefinition, EventDefinitionMatchDayGroup, MatchEventCategory, MatchEventType } from '@prisma/client'
 
 import {
   getMatchEventPrismaCategory,
@@ -31,6 +31,26 @@ const eventDefinitionCategoryLabels: Record<string, string> = {
   OTHER: 'Other',
 }
 
+export const matchDayGroupLabels = {
+  GOALS_OUTCOMES: 'Goals & Outcomes',
+  SHOOTING: 'Shooting',
+  PASSING: 'Passing',
+  POSSESSION: 'Possession',
+  DEFENDING: 'Defending',
+  DISCIPLINE: 'Discipline',
+  GOALKEEPING: 'Goalkeeping',
+  CUSTOM_OTHER: 'Custom / Other',
+} satisfies Record<EventDefinitionMatchDayGroup, string>
+
+export const matchDayGroupOptions = Object.entries(matchDayGroupLabels).map(([value, label]) => ({
+  value: value as EventDefinitionMatchDayGroup,
+  label,
+}))
+
+export function getMatchDayGroupLabel(matchDayGroup: EventDefinitionMatchDayGroup | null | undefined) {
+  return matchDayGroup ? matchDayGroupLabels[matchDayGroup] : null
+}
+
 export type RecordableEventOption = {
   id: string
   legacyEventType: MatchEventType | null
@@ -38,6 +58,8 @@ export type RecordableEventOption = {
   category: string
   categoryLabel: string
   subcategory: string | null
+  matchDayGroup: EventDefinitionMatchDayGroup | null
+  matchDayGroupLabel: string | null
   description: string | null
   videoUrl: string | null
   matchPhase: MatchPhase
@@ -67,6 +89,8 @@ export function mapEventDefinitionToRecordableOption(
     category: eventDefinition.category,
     categoryLabel: eventDefinitionCategoryLabels[eventDefinition.category] ?? eventDefinition.category,
     subcategory: eventDefinition.subcategory,
+    matchDayGroup: eventDefinition.matchDayGroup,
+    matchDayGroupLabel: getMatchDayGroupLabel(eventDefinition.matchDayGroup),
     description: eventDefinition.description,
     videoUrl: eventDefinition.videoUrl,
     matchPhase,
@@ -116,16 +140,23 @@ export function getMatchDayEventCategoryFallback(
 
 export async function getActiveRecordableEventDefinitions({
   legacyOnly = false,
+  clubId,
 }: {
   legacyOnly?: boolean
+  clubId?: string
 } = {}) {
   const eventDefinitions = await prisma.eventDefinition.findMany({
     where: {
-      scope: 'GLOBAL',
+      OR: [
+        { scope: 'GLOBAL' },
+        ...(clubId ? [{ scope: 'CLUB' as const, clubId }] : []),
+      ],
       isActive: true,
       ...(legacyOnly ? { legacyEventType: { not: null } } : {}),
     },
     orderBy: [
+      { scope: 'desc' },
+      { matchDayGroup: 'asc' },
       { matchPhase: 'asc' },
       { category: 'asc' },
       { subcategory: 'asc' },

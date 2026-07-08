@@ -2,6 +2,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
 import EventLibraryClient from '@/app/super-admin/events/EventLibraryClient'
+import { matchDayGroupOptions } from '@/lib/eventDefinitions'
 import { normalizeEventDefinitionName, createEventDefinitionSlug } from '@/lib/eventDefinitionSimilarity'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -56,6 +57,8 @@ const positionOptions = [
   { value: 'CENTRAL_PLAYER', label: 'Central player' },
 ] as const
 
+const matchDayGroupValues = matchDayGroupOptions.map((option) => option.value)
+
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
   return typeof value === 'string' ? value.trim() : ''
@@ -74,6 +77,13 @@ const getOptionalUrlValue = (value: string) => {
   } catch {
     return { ok: false as const, reason: 'Video URL is invalid.' }
   }
+}
+
+const getOptionalMatchDayGroupValue = (formData: FormData) => {
+  const matchDayGroup = getTextValue(formData, 'matchDayGroup')
+  return matchDayGroupValues.includes(matchDayGroup as (typeof matchDayGroupValues)[number])
+    ? matchDayGroup as (typeof matchDayGroupValues)[number]
+    : null
 }
 
 const getCheckedValues = <T extends string>(formData: FormData, key: string, allowedValues: readonly T[]) => {
@@ -110,8 +120,11 @@ async function createUniqueSlug(name: string, excludeId?: string) {
   let suffix = 2
 
   while (true) {
-    const existing = await prisma.eventDefinition.findUnique({
-      where: { slug: candidateSlug },
+    const existing = await prisma.eventDefinition.findFirst({
+      where: {
+        scope: 'GLOBAL',
+        slug: candidateSlug,
+      },
       select: { id: true },
     })
 
@@ -135,6 +148,7 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
   const matchPhase = getTextValue(formData, 'matchPhase')
   const category = getTextValue(formData, 'category')
   const fourCorner = getTextValue(formData, 'fourCorner')
+  const matchDayGroup = getOptionalMatchDayGroupValue(formData)
   const agePhases = getCheckedValues(formData, 'agePhase', agePhaseValues)
   const positionRelevance = getCheckedValues(formData, 'positionRelevance', positionValues)
   const videoUrl = getOptionalUrlValue(videoUrlInput)
@@ -154,8 +168,8 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
   if (positionRelevance.length === 0) return { ok: false, reason: 'Select at least one position relevance.' }
 
   const normalizedName = normalizeEventDefinitionName(name)
-  const duplicate = await prisma.eventDefinition.findUnique({
-    where: { normalizedName },
+  const duplicate = await prisma.eventDefinition.findFirst({
+    where: { scope: 'GLOBAL', normalizedName },
     select: { name: true },
   })
 
@@ -174,6 +188,7 @@ async function createEventDefinition(formData: FormData): Promise<EventDefinitio
       videoUrl: videoUrl.value,
       matchPhase: matchPhase as (typeof matchPhaseValues)[number],
       category: category as (typeof categoryValues)[number],
+      matchDayGroup,
       agePhases,
       fourCorner: fourCorner as (typeof fourCornerValues)[number],
       positionRelevance,
@@ -202,6 +217,7 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
   const matchPhase = getTextValue(formData, 'matchPhase')
   const category = getTextValue(formData, 'category')
   const fourCorner = getTextValue(formData, 'fourCorner')
+  const matchDayGroup = getOptionalMatchDayGroupValue(formData)
   const agePhases = getCheckedValues(formData, 'agePhase', agePhaseValues)
   const positionRelevance = getCheckedValues(formData, 'positionRelevance', positionValues)
   const videoUrl = getOptionalUrlValue(videoUrlInput)
@@ -228,8 +244,8 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
   if (!existing) return { ok: false, reason: 'Event definition was not found.' }
 
   const normalizedName = normalizeEventDefinitionName(name)
-  const duplicate = await prisma.eventDefinition.findUnique({
-    where: { normalizedName },
+  const duplicate = await prisma.eventDefinition.findFirst({
+    where: { scope: 'GLOBAL', normalizedName },
     select: { id: true, name: true },
   })
 
@@ -248,6 +264,7 @@ async function updateEventDefinition(formData: FormData): Promise<EventDefinitio
       videoUrl: videoUrl.value,
       matchPhase: matchPhase as (typeof matchPhaseValues)[number],
       category: category as (typeof categoryValues)[number],
+      matchDayGroup,
       agePhases,
       fourCorner: fourCorner as (typeof fourCornerValues)[number],
       positionRelevance,
@@ -365,6 +382,7 @@ export default async function SuperAdminEventsPage() {
         videoUrl: eventDefinition.videoUrl,
         matchPhase: eventDefinition.matchPhase,
         category: eventDefinition.category,
+        matchDayGroup: eventDefinition.matchDayGroup,
         agePhases: eventDefinition.agePhases,
         fourCorner: eventDefinition.fourCorner,
         positionRelevance: eventDefinition.positionRelevance,
@@ -376,6 +394,7 @@ export default async function SuperAdminEventsPage() {
       }))}
       matchPhaseOptions={matchPhaseOptions}
       categoryOptions={categoryOptions}
+      matchDayGroupOptions={matchDayGroupOptions}
       agePhaseOptions={agePhaseOptions}
       fourCornerOptions={fourCornerOptions}
       positionOptions={positionOptions}

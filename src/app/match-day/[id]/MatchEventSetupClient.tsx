@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-import type { RecordableEventOption } from '@/lib/eventDefinitions'
+import { getMatchDayGroupLabel, type RecordableEventOption } from '@/lib/eventDefinitions'
 
 type MatchActionResult =
   | { ok: true }
@@ -345,6 +345,9 @@ function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGro
 }
 
 function getEventDisplayGroupLabel(event: RecordableEventOption) {
+  const configuredGroupLabel = getMatchDayGroupLabel(event.matchDayGroup)
+  if (configuredGroupLabel) return configuredGroupLabel
+
   const searchableText = `${event.label} ${event.category} ${event.categoryLabel} ${event.subcategory ?? ''} ${event.legacyEventType ?? ''}`.toLowerCase()
 
   if (event.legacyEventType === 'GOAL' || event.legacyEventType === 'ASSIST' || searchableText.includes('goal') || searchableText.includes('assist') || searchableText.includes('outcome')) {

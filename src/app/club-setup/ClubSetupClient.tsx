@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import ClubEventsSection, { type ClubEventRow, type Option } from '@/app/club-setup/ClubEventsSection'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import {
@@ -51,12 +52,23 @@ type ModalMode = 'clubDetail' | 'editClub' | 'addTeam' | 'teamDetail' | 'editTea
 
 type ClubSetupClientProps = {
   clubs: ClubRow[]
+  clubEvents: ClubEventRow[]
   canCreateFirstClub: boolean
+  matchPhaseOptions: readonly Option[]
+  categoryOptions: readonly Option[]
+  matchDayGroupOptions: readonly Option[]
+  agePhaseOptions: readonly Option[]
+  fourCornerOptions: readonly Option[]
+  positionOptions: readonly Option[]
   createClubAction: SetupAction
   updateClubAction: SetupAction
   createTeamAction: SetupAction
   updateTeamAction: SetupAction
   deleteTeamAction: SetupAction
+  createClubEventAction: SetupAction
+  updateClubEventAction: SetupAction
+  archiveClubEventAction: SetupAction
+  restoreClubEventAction: SetupAction
 }
 
 const footballPyramidStepOptions = [
@@ -72,12 +84,23 @@ const footballPyramidStepOptions = [
 
 export default function ClubSetupClient({
   clubs,
+  clubEvents,
   canCreateFirstClub,
+  matchPhaseOptions,
+  categoryOptions,
+  matchDayGroupOptions,
+  agePhaseOptions,
+  fourCornerOptions,
+  positionOptions,
   createClubAction,
   updateClubAction,
   createTeamAction,
   updateTeamAction,
   deleteTeamAction,
+  createClubEventAction,
+  updateClubEventAction,
+  archiveClubEventAction,
+  restoreClubEventAction,
 }: ClubSetupClientProps) {
   const router = useRouter()
   const [selectedClubId, setSelectedClubId] = useState(clubs[0]?.id ?? '')
@@ -88,6 +111,7 @@ export default function ClubSetupClient({
   const selectedClub =
     clubs.find((club) => club.id === selectedClubId) ?? clubs[0] ?? null
   const teams = selectedClub?.teams ?? []
+  const selectedClubEvents = selectedClub ? clubEvents.filter((event) => event.clubId === selectedClub.id) : []
   const totalPlayers = teams.reduce((total, team) => total + team.playerCount, 0)
   const totalFitnessSessions = teams.reduce(
     (total, team) => total + team.fitnessSessionCount,
@@ -408,13 +432,28 @@ export default function ClubSetupClient({
         )}
       </SectionCard>
 
+      <ClubEventsSection
+        club={{ id: selectedClub.id, name: selectedClub.name }}
+        events={selectedClubEvents}
+        matchPhaseOptions={matchPhaseOptions}
+        categoryOptions={categoryOptions}
+        matchDayGroupOptions={matchDayGroupOptions}
+        agePhaseOptions={agePhaseOptions}
+        fourCornerOptions={fourCornerOptions}
+        positionOptions={positionOptions}
+        createClubEventAction={createClubEventAction}
+        updateClubEventAction={updateClubEventAction}
+        archiveClubEventAction={archiveClubEventAction}
+        restoreClubEventAction={restoreClubEventAction}
+      />
+
       {modalMode && (
         <ModalShell
           title={modalMode === 'editClub'
             ? 'Edit Club'
             : modalMode === 'clubDetail'
               ? selectedClub.name
-              : modalMode === 'addTeam'
+            : modalMode === 'addTeam'
               ? 'Add Team'
               : modalMode === 'editTeam'
                 ? 'Edit Team'
@@ -492,6 +531,7 @@ export default function ClubSetupClient({
                 onConfirm={deleteSelectedTeam}
               />
             )}
+
         </ModalShell>
       )}
     </>

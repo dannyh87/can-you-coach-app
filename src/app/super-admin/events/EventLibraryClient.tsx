@@ -21,6 +21,7 @@ type EventDefinition = {
   videoUrl: string | null
   matchPhase: string
   category: string
+  matchDayGroup: string | null
   agePhases: string[]
   fourCorner: string
   positionRelevance: string[]
@@ -35,6 +36,7 @@ type EventLibraryClientProps = {
   eventDefinitions: EventDefinition[]
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
+  matchDayGroupOptions: readonly Option[]
   agePhaseOptions: readonly Option[]
   fourCornerOptions: readonly Option[]
   positionOptions: readonly Option[]
@@ -58,6 +60,7 @@ export default function EventLibraryClient({
   eventDefinitions,
   matchPhaseOptions,
   categoryOptions,
+  matchDayGroupOptions,
   agePhaseOptions,
   fourCornerOptions,
   positionOptions,
@@ -279,6 +282,7 @@ export default function EventLibraryClient({
           <EventDefinitionFields
             matchPhaseOptions={matchPhaseOptions}
             categoryOptions={categoryOptions}
+            matchDayGroupOptions={matchDayGroupOptions}
             agePhaseOptions={agePhaseOptions}
             fourCornerOptions={fourCornerOptions}
             positionOptions={positionOptions}
@@ -356,6 +360,7 @@ export default function EventLibraryClient({
           setEditingEventId={setEditingEventId}
           matchPhaseOptions={matchPhaseOptions}
           categoryOptions={categoryOptions}
+          matchDayGroupOptions={matchDayGroupOptions}
           agePhaseOptions={agePhaseOptions}
           fourCornerOptions={fourCornerOptions}
           positionOptions={positionOptions}
@@ -392,6 +397,7 @@ export default function EventLibraryClient({
               setEditingEventId={setEditingEventId}
               matchPhaseOptions={matchPhaseOptions}
               categoryOptions={categoryOptions}
+              matchDayGroupOptions={matchDayGroupOptions}
               agePhaseOptions={agePhaseOptions}
               fourCornerOptions={fourCornerOptions}
               positionOptions={positionOptions}
@@ -563,6 +569,7 @@ function EventDefinitionsTable({
   setEditingEventId,
   matchPhaseOptions,
   categoryOptions,
+  matchDayGroupOptions,
   agePhaseOptions,
   fourCornerOptions,
   positionOptions,
@@ -585,6 +592,7 @@ function EventDefinitionsTable({
   setEditingEventId: (eventDefinitionId: string | null) => void
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
+  matchDayGroupOptions: readonly Option[]
   agePhaseOptions: readonly Option[]
   fourCornerOptions: readonly Option[]
   positionOptions: readonly Option[]
@@ -650,6 +658,7 @@ function EventDefinitionsTable({
                 isActiveTable={isActiveTable}
                 matchPhaseOptions={matchPhaseOptions}
                 categoryOptions={categoryOptions}
+                matchDayGroupOptions={matchDayGroupOptions}
                 agePhaseOptions={agePhaseOptions}
                 fourCornerOptions={fourCornerOptions}
                 positionOptions={positionOptions}
@@ -708,6 +717,7 @@ function FragmentRow({
   isActiveTable,
   matchPhaseOptions,
   categoryOptions,
+  matchDayGroupOptions,
   agePhaseOptions,
   fourCornerOptions,
   positionOptions,
@@ -728,6 +738,7 @@ function FragmentRow({
   isActiveTable: boolean
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
+  matchDayGroupOptions: readonly Option[]
   agePhaseOptions: readonly Option[]
   fourCornerOptions: readonly Option[]
   positionOptions: readonly Option[]
@@ -796,6 +807,7 @@ function FragmentRow({
             <Badge tone="blue">Global event</Badge>
             {eventDefinition.requiresLocation && <Badge tone="amber">Requires location</Badge>}
             {eventDefinition.legacyEventType && <Badge tone="gray">Legacy-backed</Badge>}
+            {eventDefinition.matchDayGroup && <Badge tone="blue">{getOptionLabel(matchDayGroupOptions, eventDefinition.matchDayGroup)}</Badge>}
           </div>
         </td>
         <td className="px-3 py-3 align-top">
@@ -859,6 +871,7 @@ function FragmentRow({
                 eventDefinition={eventDefinition}
                 matchPhaseOptions={matchPhaseOptions}
                 categoryOptions={categoryOptions}
+                matchDayGroupOptions={matchDayGroupOptions}
                 agePhaseOptions={agePhaseOptions}
                 fourCornerOptions={fourCornerOptions}
                 positionOptions={positionOptions}
@@ -893,6 +906,7 @@ function EventDefinitionFields({
   eventDefinition,
   matchPhaseOptions,
   categoryOptions,
+  matchDayGroupOptions,
   agePhaseOptions,
   fourCornerOptions,
   positionOptions,
@@ -900,6 +914,7 @@ function EventDefinitionFields({
   eventDefinition?: EventDefinition
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
+  matchDayGroupOptions: readonly Option[]
   agePhaseOptions: readonly Option[]
   fourCornerOptions: readonly Option[]
   positionOptions: readonly Option[]
@@ -950,6 +965,19 @@ function EventDefinitionFields({
             className="mt-1 w-full rounded-lg border px-3 py-2"
             placeholder="Optional"
           />
+        </label>
+        <label className="text-sm font-medium">
+          Match Day group
+          <select
+            name="matchDayGroup"
+            defaultValue={eventDefinition?.matchDayGroup ?? ''}
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+          >
+            <option value="">Infer from metadata</option>
+            {matchDayGroupOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </label>
         <label className="text-sm font-medium">
           4 Corner

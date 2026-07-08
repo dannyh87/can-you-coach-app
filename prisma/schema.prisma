@@ -214,13 +214,14 @@ model EventDefinition {
   createdByUserId    String?
   legacyEventType    MatchEventType?           @unique
   name               String
-  slug               String                    @unique
-  normalizedName     String                    @unique
+  slug               String
+  normalizedName     String
   description        String?
   videoUrl           String?
   matchPhase         EventDefinitionMatchPhase
   category           EventDefinitionCategory
   subcategory        String?
+  matchDayGroup      EventDefinitionMatchDayGroup?
   agePhases          EventDefinitionAgePhase[]
   fourCorner         EventDefinitionFourCorner
   positionRelevance  EventDefinitionPosition[]
@@ -236,14 +237,19 @@ model EventDefinition {
 
   @@index([scope])
   @@index([clubId])
+  @@index([slug])
+  @@index([normalizedName])
   @@index([isActive])
   @@index([scope, isActive])
   @@index([category])
   @@index([subcategory])
+  @@index([matchDayGroup])
   @@index([requiresLocation])
   @@index([createdByUserId])
   @@index([enabledByDefault])
   @@index([benchmarkable])
+  @@unique([scope, clubId, normalizedName])
+  @@unique([scope, clubId, slug])
 }
 
 enum MatchType {
@@ -324,6 +330,17 @@ enum EventDefinitionCategory {
   DISCIPLINE
   INJURIES
   OTHER
+}
+
+enum EventDefinitionMatchDayGroup {
+  GOALS_OUTCOMES
+  SHOOTING
+  PASSING
+  POSSESSION
+  DEFENDING
+  DISCIPLINE
+  GOALKEEPING
+  CUSTOM_OTHER
 }
 
 enum EventDefinitionAgePhase {
