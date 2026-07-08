@@ -12,16 +12,19 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const primaryNavigationLinks = [
+const mainNavigationLinks = [
   { href: '/', label: 'Home' },
   { href: '/how-to-use', label: 'How to use' },
+  { href: '/reports', label: 'Reports' },
+]
+
+const coachingNavigationLinks = [
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
 ]
 
-const secondaryNavigationLinks = [
-  { href: '/reports', label: 'Reports' },
+const clubNavigationLinks = [
   { href: '/club-setup', label: 'Club Setup' },
 ]
 
@@ -62,10 +65,16 @@ export default async function RootLayout({
 }) {
   const user = await getOptionalCurrentUser()
   const accessSummary = user ? await getCurrentAccessSummary(user) : null
-  const userSecondaryNavigationLinks = user && canManageGlobalEventLibrary(user)
-    ? [...secondaryNavigationLinks, { href: '/super-admin/events', label: 'Super Admin' }]
-    : secondaryNavigationLinks
-  const mobileNavigationLinks = [...primaryNavigationLinks, ...userSecondaryNavigationLinks]
+  const adminNavigationLinks = user && canManageGlobalEventLibrary(user)
+    ? [{ href: '/super-admin/events', label: 'Super Admin' }]
+    : []
+  const navigationGroups = [
+    { title: 'Main', links: mainNavigationLinks },
+    { title: 'Coaching', links: coachingNavigationLinks },
+    { title: 'Club', links: clubNavigationLinks },
+    { title: 'Admin', links: adminNavigationLinks },
+    { title: 'Account', links: [] },
+  ]
   const body = (
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
@@ -79,39 +88,14 @@ export default async function RootLayout({
             </Link>
 
             <MobileNav
-              links={mobileNavigationLinks}
+              groups={navigationGroups}
               showDevTools={isRoleTesterEnabled()}
               showAccount={isClerkEnabled()}
               accessSummary={accessSummary}
-              className="lg:hidden"
+              className="shrink-0"
+              buttonLabel="Menu"
+              ariaLabel="Open menu"
             />
-
-            <div className="hidden min-w-0 items-center gap-2 lg:flex">
-              <nav
-                className="flex items-center gap-1 whitespace-nowrap text-sm"
-                aria-label="Main navigation"
-              >
-                {primaryNavigationLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="shrink-0 rounded-full px-2.5 py-2 font-semibold text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </nav>
-
-              <MobileNav
-                links={userSecondaryNavigationLinks}
-                showDevTools={isRoleTesterEnabled()}
-                showAccount={isClerkEnabled()}
-                accessSummary={accessSummary}
-                className="hidden lg:block"
-                buttonLabel="Menu"
-                ariaLabel="Open menu"
-              />
-            </div>
           </div>
         </header>
 
