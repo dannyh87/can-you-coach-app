@@ -108,7 +108,7 @@ export default async function RootLayout({
   if (!isClerkEnabled()) return body
 
   return (
-    <ClerkProvider signUpUrl="/sign-in">
+    <ClerkProvider signUpUrl="/sign-up">
       {body}
     </ClerkProvider>
   )

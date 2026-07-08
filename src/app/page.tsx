@@ -9,7 +9,7 @@ import ParentDashboardPanel from '@/components/ParentDashboardPanel'
 import RecentReportsPanel from '@/components/RecentReportsPanel'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { accessibleMatchWhere, accessibleSessionWhere, accessibleTeamWhere } from '@/lib/accessWhere'
-import { getCurrentUser } from '@/lib/auth'
+import { getOptionalCurrentUser } from '@/lib/auth'
 import { getDashboardData } from '@/lib/dashboard'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
@@ -56,6 +56,70 @@ const actionCards = [
   },
 ]
 
+const audienceCards = [
+  {
+    title: 'Coaches',
+    description: 'Record what happened without losing focus on the players in front of you.',
+  },
+  {
+    title: 'Club owners & head coaches',
+    description: 'Create a shared way to track teams, player development and club priorities.',
+  },
+  {
+    title: 'Assistants & analysts',
+    description: 'Capture match moments, support reviews and spot useful patterns over time.',
+  },
+  {
+    title: 'Parents & spectators',
+    description: 'Give families a clearer connection to progress without opening up club admin.',
+  },
+]
+
+const featureCards = [
+  {
+    title: 'Match Day Tracking',
+    description: 'Track shots, passes, goals, assists, touches and the events your club cares about.',
+  },
+  {
+    title: 'Fitness Testing',
+    description: 'Run simple tests, save results and compare player progress across sessions.',
+  },
+  {
+    title: 'Player Progress',
+    description: 'Build a useful history around each player, not just a one-off memory from the weekend.',
+  },
+  {
+    title: 'Club & Team Setup',
+    description: 'Keep clubs, squads, seasons and teams organised before training or match day starts.',
+  },
+  {
+    title: 'Custom Events',
+    description: 'Create club-specific match events so your data reflects the way you coach.',
+  },
+  {
+    title: 'Reports & Trends',
+    description: 'Review completed matches and spot trends that support better coaching conversations.',
+  },
+]
+
+const workflowSteps = [
+  {
+    step: '01',
+    title: 'Set up your club and teams',
+    description: 'Add the basics once so coaches can focus on the session, not the spreadsheet.',
+  },
+  {
+    step: '02',
+    title: 'Track matches and fitness tests',
+    description: 'Use pitch-side tools that are quick enough for real grassroots football.',
+  },
+  {
+    step: '03',
+    title: 'Review progress and share insight',
+    description: 'Use simple evidence to shape development plans, parent updates and team reviews.',
+  },
+]
+
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 const formatDateTime = (date: Date) =>
   new Intl.DateTimeFormat('en-GB', {
@@ -87,10 +151,175 @@ const getFitnessSessionHref = (session: {
 }
 
 export default async function Home() {
-  const user = await getCurrentUser()
-  const teamWhere = await accessibleTeamWhere(user.id)
-  const sessionWhere = await accessibleSessionWhere(user.id)
-  const matchWhere = await accessibleMatchWhere(user.id)
+  const user = await getOptionalCurrentUser()
+
+  if (!user) return <LandingPage />
+
+  return <AuthenticatedHome userId={user.id} />
+}
+
+function LandingPage() {
+  return (
+    <main className="overflow-hidden bg-slate-950 text-white">
+      <section className="relative isolate px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.32),transparent_34%),radial-gradient(circle_at_80%_10%,rgba(132,204,22,0.18),transparent_28%),linear-gradient(135deg,#020617_0%,#064e3b_48%,#111827_100%)]" />
+        <div className="absolute inset-x-4 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-emerald-300/50 to-transparent" />
+
+        <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
+          <div>
+            <p className="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-100">
+              Grassroots football, clearer coaching
+            </p>
+            <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
+              Coach the game. Capture the moments. See the progress.
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-emerald-50/85 sm:text-xl">
+              Can You Coach helps grassroots clubs record the moments that matter, from match day events to fitness tests, so coaches can support player development without turning football into admin.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white">
+                Sign up
+              </ActionLink>
+              <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white">
+                Log in
+              </ActionLink>
+              <ActionLink href="#what-it-does" variant="ghost" size="lg" className="text-emerald-100 hover:bg-white/10 focus-visible:ring-white">
+                See what it does
+              </ActionLink>
+            </div>
+          </div>
+
+          <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-2xl shadow-emerald-950/40 backdrop-blur sm:p-5">
+            <div className="rounded-[1.5rem] bg-white p-5 text-slate-950 shadow-xl">
+              <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-700">Match day</p>
+                  <h2 className="mt-1 text-2xl font-black">Useful evidence, fast</h2>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Live</span>
+              </div>
+              <div className="mt-5 grid gap-3">
+                {['Shots and chances', 'Custom club events', 'Player minutes', 'Fitness results'].map((item, index) => (
+                  <div key={item} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div>
+                      <p className="font-bold text-slate-950">{item}</p>
+                      <p className="mt-1 text-sm text-slate-500">Track it, review it, coach from it.</p>
+                    </div>
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white">
+                      {index + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-stone-50 px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
+        <div className="mx-auto w-full max-w-6xl">
+          <LandingSectionHeader
+            eyebrow="Who it is for"
+            title="Built for real coaches on real touchlines."
+            description="Simple enough for match day, structured enough for clubs that want better player development conversations."
+          />
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {audienceCards.map((card) => (
+              <LandingCard key={card.title} {...card} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="what-it-does" className="bg-white px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
+        <div className="mx-auto w-full max-w-6xl">
+          <LandingSectionHeader
+            eyebrow="What it does"
+            title="Everything starts with the moments you already notice."
+            description="Track touches, shots, passes, custom club events, fitness scores and trends without pretending grassroots football is a control room."
+          />
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {featureCards.map((card) => (
+              <LandingCard key={card.title} {...card} featured />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-emerald-950 px-4 py-12 text-white sm:px-6 sm:py-16">
+        <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-200">Why it matters</p>
+            <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Data should support coaching, not replace it.</h2>
+          </div>
+          <div className="space-y-4 text-base leading-7 text-emerald-50/85">
+            <p>
+              Grassroots coaches often rely on memory, gut feel and a busy Saturday morning. That experience matters, but it is easy to miss patterns when the game moves quickly.
+            </p>
+            <p>
+              Can You Coach gives clubs simple evidence over time. It helps coaches talk about development, parents understand progress, and players see more than just the final score.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-stone-50 px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
+        <div className="mx-auto w-full max-w-6xl">
+          <LandingSectionHeader
+            eyebrow="Simple workflow"
+            title="Set up once. Track what matters. Review the story."
+            description="A practical flow for coaches, assistants and clubs who need tools that fit around football."
+          />
+          <div className="mt-8 grid gap-4 lg:grid-cols-3">
+            {workflowSteps.map((step) => (
+              <div key={step.step} className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+                <p className="text-5xl font-black text-emerald-700">{step.step}</p>
+                <h3 className="mt-5 text-xl font-extrabold">{step.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
+        <div className="mx-auto max-w-4xl rounded-[2rem] bg-gradient-to-br from-emerald-700 to-slate-950 p-6 text-center text-white shadow-2xl shadow-emerald-950/20 sm:p-10">
+          <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-100">Ready when your team is</p>
+          <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Start building better coaching conversations.</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-emerald-50/85">
+            Create your account, set up your club, and start capturing the moments that help players improve.
+          </p>
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white">
+              Create your account
+            </ActionLink>
+            <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white">
+              Log in
+            </ActionLink>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/10 bg-slate-950 px-4 py-8 text-white sm:px-6">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-lg font-black">Can You Coach</p>
+            <p className="mt-1 text-sm text-slate-400">Simple football data for better grassroots coaching.</p>
+          </div>
+          <div className="flex flex-wrap gap-4 text-sm font-semibold text-slate-300">
+            <Link href="/sign-up" className="hover:text-white">Sign up</Link>
+            <Link href="/sign-in" className="hover:text-white">Log in</Link>
+          </div>
+        </div>
+      </footer>
+    </main>
+  )
+}
+
+async function AuthenticatedHome({ userId }: { userId: string }) {
+  const teamWhere = await accessibleTeamWhere(userId)
+  const sessionWhere = await accessibleSessionWhere(userId)
+  const matchWhere = await accessibleMatchWhere(userId)
 
   const [
     teamCount,
@@ -151,8 +380,8 @@ export default async function Home() {
       orderBy: { updatedAt: 'desc' },
       take: 4,
     }),
-    getOnboardingState(user.id),
-    getDashboardData(user.id),
+    getOnboardingState(userId),
+    getDashboardData(userId),
   ])
 
   const recentActivity = [
@@ -337,6 +566,44 @@ export default async function Home() {
         )}
       </section>
     </main>
+  )
+}
+
+function LandingSectionHeader({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string
+  title: string
+  description: string
+}) {
+  return (
+    <div className="max-w-3xl">
+      <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-700">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-5xl">{title}</h2>
+      <p className="mt-4 text-base leading-7 text-slate-600 sm:text-lg">{description}</p>
+    </div>
+  )
+}
+
+function LandingCard({
+  title,
+  description,
+  featured = false,
+}: {
+  title: string
+  description: string
+  featured?: boolean
+}) {
+  return (
+    <article className={`rounded-[1.75rem] border p-5 shadow-sm ${featured ? 'border-emerald-100 bg-emerald-50/45' : 'border-slate-200 bg-white'}`}>
+      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white">
+        {title.slice(0, 1)}
+      </div>
+      <h3 className="mt-5 text-xl font-extrabold text-slate-950">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
+    </article>
   )
 }
 
