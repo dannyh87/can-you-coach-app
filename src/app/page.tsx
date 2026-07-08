@@ -180,10 +180,10 @@ function LandingPage() {
               Can You Coach helps grassroots clubs record the moments that matter, from match day events to fitness tests, so coaches can support player development without turning football into admin.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white">
+              <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
                 Sign up
               </ActionLink>
-              <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white">
+              <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-emerald-200/60 bg-slate-950/45 text-white shadow-lg shadow-slate-950/20 hover:border-emerald-100 hover:bg-slate-950/65 focus-visible:ring-white">
                 Log in
               </ActionLink>
               <ActionLink href="#what-it-does" variant="ghost" size="lg" className="text-emerald-100 hover:bg-white/10 focus-visible:ring-white">
@@ -293,10 +293,10 @@ function LandingPage() {
             Create your account, set up your club, and start capturing the moments that help players improve.
           </p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white">
+            <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
               Create your account
             </ActionLink>
-            <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white">
+            <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-emerald-200/60 bg-slate-950/45 text-white shadow-lg shadow-slate-950/20 hover:border-emerald-100 hover:bg-slate-950/65 focus-visible:ring-white">
               Log in
             </ActionLink>
           </div>
