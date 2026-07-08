@@ -16,6 +16,8 @@ model User {
   updatedAt                    DateTime              @updatedAt
   clubs                        Club[]
   fitnessTestTypes             FitnessTestType[]
+  invitationsSent              Invitation[]          @relation("InvitationsSent")
+  invitationsAccepted          Invitation[]          @relation("InvitationsAccepted")
   memberships                  ClubMembership[]
   spectatorAccess              SpectatorAccess[]
   submittedMatchEvents         SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
@@ -39,6 +41,7 @@ model Club {
   sendFitnessReportEmails Boolean           @default(true)
   createdAt               DateTime          @default(now())
   updatedAt               DateTime          @updatedAt
+  invitations             Invitation[]
   user                    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   teams                   Team[]
   memberships             ClubMembership[]
@@ -81,10 +84,59 @@ model Team {
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   club                Club                 @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  invitations         Invitation[]
   players             Player[]
   fitnessTestSessions FitnessTestSession[]
   matchDays           MatchDay[]
   assignments         TeamAssignment[]
+}
+
+enum InvitationType {
+  TEAM_COACH
+  TEAM_ASSISTANT
+  PLAYER_PARENT
+  PLAYER_SPECTATOR
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id               String           @id @default(cuid())
+  token            String           @unique
+  email            String
+  normalizedEmail  String
+  type             InvitationType
+  status           InvitationStatus @default(PENDING)
+
+  clubId           String?
+  teamId           String?
+  playerId         String?
+
+  invitedByUserId  String
+  acceptedByUserId String?
+
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  revokedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  club             Club?            @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  team             Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player           Player?          @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  invitedBy        User             @relation("InvitationsSent", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy       User?            @relation("InvitationsAccepted", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([normalizedEmail])
+  @@index([status])
+  @@index([clubId])
+  @@index([teamId])
+  @@index([playerId])
 }
 
 model MatchDay {
@@ -382,6 +434,7 @@ model Player {
   updatedAt            DateTime              @updatedAt
   team                 Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   fitnessTestResults   FitnessTestResult[]
+  invitations          Invitation[]
   matchDayPlayers      MatchDayPlayer[]
   matchPlayerStints    MatchPlayerStint[]
   matchEvents          MatchEvent[]

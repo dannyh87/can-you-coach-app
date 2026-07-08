@@ -4,8 +4,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-type ActionResult = { ok: true } | { ok: false; reason: string }
+type ActionResult = { ok: true; inviteLink?: string } | { ok: false; reason: string }
 type StaffRole = 'OWNER' | 'COACH' | 'ASSISTANT_COACH'
+type InviteType = 'TEAM_COACH' | 'TEAM_ASSISTANT' | 'PLAYER_PARENT' | 'PLAYER_SPECTATOR'
 
 type ClubAccessRow = {
   id: string
@@ -29,6 +30,14 @@ type ClubAccessRow = {
     playerName: string
     teamName: string
   }>
+  pendingInvites: Array<{
+    id: string
+    email: string
+    type: InviteType
+    targetName: string
+    expiresAt: string
+    inviteLink: string
+  }>
 }
 
 const roleDescriptions = [
@@ -45,6 +54,7 @@ type ClubAccessClientProps = {
   removeStaffAccessAction: (formData: FormData) => Promise<ActionResult>
   addParentAccessAction: (formData: FormData) => Promise<ActionResult>
   removeParentAccessAction: (formData: FormData) => Promise<ActionResult>
+  revokePendingInviteAction: (formData: FormData) => Promise<ActionResult>
 }
 
 const formatRole = (role: StaffRole) => {
@@ -60,12 +70,14 @@ export default function ClubAccessClient({
   removeStaffAccessAction,
   addParentAccessAction,
   removeParentAccessAction,
+  revokePendingInviteAction,
 }: ClubAccessClientProps) {
   const router = useRouter()
   const [selectedClubId, setSelectedClubId] = useState(clubs[0]?.id ?? '')
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [generatedInviteLink, setGeneratedInviteLink] = useState<string | null>(null)
   const selectedClub = clubs.find((club) => club.id === selectedClubId) ?? clubs[0]
 
   const runAction = async ({
@@ -86,11 +98,13 @@ export default function ClubAccessClient({
     setPendingAction(pendingLabel)
     setMessage(null)
     setError(null)
+    setGeneratedInviteLink(null)
 
     const result = await action(new FormData(form))
 
     if (result.ok) {
       setMessage(successMessage)
+      if (result.inviteLink) setGeneratedInviteLink(result.inviteLink)
       if (resetOnSuccess) form.reset()
       router.refresh()
     } else {
@@ -118,6 +132,7 @@ export default function ClubAccessClient({
     <div className="space-y-6">
       {message && <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">{message}</p>}
       {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+      {generatedInviteLink && <CopyInviteLink inviteLink={generatedInviteLink} />}
 
       <label className="block text-sm font-semibold text-slate-700">
         Club
@@ -133,8 +148,8 @@ export default function ClubAccessClient({
       {selectedClub && (
         <>
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-xl font-bold text-slate-950">Add staff access</h2>
-            <p className="mt-1 text-sm text-slate-600">Staff users get club/team permissions through club membership.</p>
+            <h2 className="text-xl font-bold text-slate-950">Invite staff access</h2>
+            <p className="mt-1 text-sm text-slate-600">Generate a copyable invite link. Access is added only after the invited email signs in and accepts.</p>
             <RoleHelp />
             <form
               className="mt-4 grid gap-3 md:grid-cols-3"
@@ -144,7 +159,7 @@ export default function ClubAccessClient({
                   form: event.currentTarget,
                   action: addStaffAccessAction,
                   pendingLabel: 'add-staff',
-                  successMessage: 'Staff access saved.',
+                  successMessage: 'Staff invite link generated.',
                   resetOnSuccess: true,
                 })
               }}
@@ -154,13 +169,20 @@ export default function ClubAccessClient({
                 Email
                 <input name="email" type="email" className="mt-1 w-full rounded-lg border px-3 py-2" required />
               </label>
-              <RoleSelect defaultValue="COACH" />
-              <TeamCheckboxes teams={selectedClub.teams} selectedTeamIds={[]} />
+              <StaffInviteRoleSelect />
+              <TeamSelect teams={selectedClub.teams} />
               <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 md:col-span-3" disabled={Boolean(pendingAction)}>
-                {pendingAction === 'add-staff' ? 'Saving...' : 'Add staff user'}
+                {pendingAction === 'add-staff' ? 'Generating...' : 'Generate staff invite'}
               </button>
             </form>
           </section>
+
+          <PendingInvitesSection
+            invites={selectedClub.pendingInvites}
+            pendingAction={pendingAction}
+            revokePendingInviteAction={revokePendingInviteAction}
+            runAction={runAction}
+          />
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-xl font-bold text-slate-950">Staff access</h2>
@@ -229,8 +251,8 @@ export default function ClubAccessClient({
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-            <h2 className="text-xl font-bold text-slate-950">Add parent contributor</h2>
-            <p className="mt-1 text-sm text-slate-600">Parent contributors are linked to players only. They do not receive club membership.</p>
+            <h2 className="text-xl font-bold text-slate-950">Invite parent or spectator</h2>
+            <p className="mt-1 text-sm text-slate-600">Generate a copyable invite link. Parent and spectator invites link to one player only and do not create club membership.</p>
             <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
               <p className="font-bold">Parent contributors are read-only for now.</p>
               <p className="mt-1 text-blue-900">
@@ -245,7 +267,7 @@ export default function ClubAccessClient({
                   form: event.currentTarget,
                   action: addParentAccessAction,
                   pendingLabel: 'add-parent',
-                  successMessage: 'Parent linked to selected players.',
+                  successMessage: 'Player invite link generated.',
                   resetOnSuccess: true,
                 })
               }}
@@ -255,9 +277,10 @@ export default function ClubAccessClient({
                 Parent email
                 <input name="email" type="email" className="mt-1 w-full rounded-lg border px-3 py-2" required />
               </label>
-              <PlayerCheckboxes teams={selectedClub.teams} />
+              <PlayerInviteTypeSelect />
+              <PlayerSelect teams={selectedClub.teams} />
               <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 md:col-span-2" disabled={Boolean(pendingAction)}>
-                {pendingAction === 'add-parent' ? 'Saving...' : 'Link parent to players'}
+                {pendingAction === 'add-parent' ? 'Generating...' : 'Generate player invite'}
               </button>
             </form>
           </section>
@@ -312,6 +335,30 @@ function RoleSelect({ defaultValue }: { defaultValue: StaffRole }) {
         <option value="OWNER">Club Admin</option>
         <option value="COACH">Coach</option>
         <option value="ASSISTANT_COACH">Assistant Coach</option>
+      </select>
+    </label>
+  )
+}
+
+function StaffInviteRoleSelect() {
+  return (
+    <label className="text-sm font-semibold text-slate-700">
+      Role
+      <select name="role" defaultValue="COACH" className="mt-1 w-full rounded-lg border px-3 py-2">
+        <option value="COACH">Coach</option>
+        <option value="ASSISTANT_COACH">Assistant Coach</option>
+      </select>
+    </label>
+  )
+}
+
+function PlayerInviteTypeSelect() {
+  return (
+    <label className="text-sm font-semibold text-slate-700">
+      Invite type
+      <select name="type" defaultValue="PLAYER_PARENT" className="mt-1 w-full rounded-lg border px-3 py-2">
+        <option value="PLAYER_PARENT">Parent</option>
+        <option value="PLAYER_SPECTATOR">Spectator</option>
       </select>
     </label>
   )
@@ -384,30 +431,153 @@ function TeamCheckboxes({
   )
 }
 
-function PlayerCheckboxes({ teams }: { teams: ClubAccessRow['teams'] }) {
+function TeamSelect({ teams }: { teams: ClubAccessRow['teams'] }) {
   return (
-    <fieldset className="md:col-span-2">
-      <legend className="text-sm font-bold text-slate-700">Linked players</legend>
-      {teams.every((team) => team.players.length === 0) && (
-        <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Add active players before linking parent contributors.
+    <label className="text-sm font-semibold text-slate-700">
+      Assigned team
+      {teams.length === 0 ? (
+        <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Create teams before inviting staff.
         </p>
+      ) : (
+        <select name="teamId" required className="mt-1 w-full rounded-lg border px-3 py-2">
+          {teams.map((team) => (
+            <option key={team.id} value={team.id}>{team.name}</option>
+          ))}
+        </select>
       )}
-      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        {teams.map((team) => (
-          <div key={team.id} className="rounded-xl border border-slate-200 p-3">
-            <p className="font-bold text-slate-950">{team.name}</p>
-            <div className="mt-2 grid gap-2">
-              {team.players.map((player) => (
-                <label key={player.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" name="playerId" value={player.id} />
-                  <span>{player.squadNumber === null ? '' : `#${player.squadNumber} `}{player.name}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </fieldset>
+    </label>
   )
+}
+
+function PlayerSelect({ teams }: { teams: ClubAccessRow['teams'] }) {
+  const players = teams.flatMap((team) =>
+    team.players.map((player) => ({
+      ...player,
+      teamName: team.name,
+    }))
+  )
+
+  return (
+    <label className="text-sm font-semibold text-slate-700 md:col-span-2">
+      Linked player
+      {players.length === 0 ? (
+        <p className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Add active players before inviting parents or spectators.
+        </p>
+      ) : (
+        <select name="playerId" required className="mt-1 w-full rounded-lg border px-3 py-2">
+          {players.map((player) => (
+            <option key={player.id} value={player.id}>
+              {player.teamName} - {player.squadNumber === null ? '' : `#${player.squadNumber} `}{player.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </label>
+  )
+}
+
+function CopyInviteLink({ inviteLink }: { inviteLink: string }) {
+  return (
+    <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+      <p className="font-bold">Copy this invite link</p>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <input readOnly value={inviteLink} className="min-w-0 flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono text-xs text-slate-900" />
+        <button
+          type="button"
+          onClick={() => navigator.clipboard.writeText(inviteLink)}
+          className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800"
+        >
+          Copy
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PendingInvitesSection({
+  invites,
+  pendingAction,
+  revokePendingInviteAction,
+  runAction,
+}: {
+  invites: ClubAccessRow['pendingInvites']
+  pendingAction: string | null
+  revokePendingInviteAction: (formData: FormData) => Promise<ActionResult>
+  runAction: ({
+    form,
+    action,
+    pendingLabel,
+    successMessage,
+    resetOnSuccess,
+  }: {
+    form: HTMLFormElement
+    action: (formData: FormData) => Promise<ActionResult>
+    pendingLabel: string
+    successMessage: string
+    resetOnSuccess?: boolean
+  }) => Promise<void>
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <h2 className="text-xl font-bold text-slate-950">Pending invites</h2>
+      <p className="mt-1 text-sm text-slate-600">Copy links or revoke pending invites. Accepted and revoked invites are not shown here.</p>
+      {invites.length === 0 ? (
+        <p className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">No pending invites.</p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {invites.map((invite) => (
+            <article key={invite.id} className="rounded-xl border border-slate-200 p-4 text-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-slate-950">{invite.email}</p>
+                  <p className="mt-1 text-slate-500">{formatInviteType(invite.type)} · {invite.targetName}</p>
+                  <p className="mt-1 text-xs text-slate-500">Expires {formatDate(invite.expiresAt)}</p>
+                </div>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    if (!window.confirm(`Revoke invite for ${invite.email}?`)) return
+                    runAction({
+                      form: event.currentTarget,
+                      action: revokePendingInviteAction,
+                      pendingLabel: `revoke-invite:${invite.id}`,
+                      successMessage: 'Invite revoked.',
+                    })
+                  }}
+                >
+                  <input type="hidden" name="invitationId" value={invite.id} />
+                  <button className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50" disabled={Boolean(pendingAction)}>
+                    {pendingAction === `revoke-invite:${invite.id}` ? 'Revoking...' : 'Revoke'}
+                  </button>
+                </form>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input readOnly value={invite.inviteLink} className="min-w-0 flex-1 rounded-lg border bg-slate-50 px-3 py-2 font-mono text-xs" />
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(invite.inviteLink)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-800 hover:bg-slate-50"
+                >
+                  Copy
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function formatInviteType(type: InviteType) {
+  if (type === 'TEAM_COACH') return 'Coach'
+  if (type === 'TEAM_ASSISTANT') return 'Assistant Coach'
+  if (type === 'PLAYER_PARENT') return 'Parent'
+  return 'Spectator'
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(value))
 }

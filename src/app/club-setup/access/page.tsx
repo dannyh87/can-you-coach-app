@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 
 import ClubAccessClient from '@/app/club-setup/access/ClubAccessClient'
 import PageHeader from '@/components/ui/PageHeader'
 import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { createPlayerInvitation, createTeamInvitation, getInvitationAcceptUrl, revokeInvitation } from '@/lib/invitations'
 import { ensureDefaultClub } from '@/lib/localUser'
 import { isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -11,9 +13,11 @@ import { prisma } from '@/lib/prisma'
 export const dynamic = 'force-dynamic'
 
 const staffRoles = ['OWNER', 'COACH', 'ASSISTANT_COACH'] as const
+const staffInviteRoles = ['COACH', 'ASSISTANT_COACH'] as const
+const playerInviteTypes = ['PLAYER_PARENT', 'PLAYER_SPECTATOR'] as const
 
 type AccessActionResult =
-  | { ok: true }
+  | { ok: true; inviteLink?: string }
   | { ok: false; reason: string }
 
 const getTextValue = (formData: FormData, key: string) => {
@@ -30,7 +34,10 @@ const getSelectedIds = (formData: FormData, key: string) =>
       .filter(Boolean)
   ))
 
-const normalizeEmail = (email: string) => email.trim().toLowerCase()
+const getRequestOrigin = async () => {
+  const requestHeaders = await headers()
+  return requestHeaders.get('origin') ?? 'http://localhost:3000'
+}
 
 async function requireClubOwner(userId: string, clubId: string): Promise<AccessActionResult> {
   if (!clubId) return { ok: false, reason: 'Missing club.' }
@@ -41,55 +48,35 @@ async function requireClubOwner(userId: string, clubId: string): Promise<AccessA
   return { ok: true }
 }
 
-async function upsertUserByEmail(email: string) {
-  return prisma.user.upsert({
-    where: { email },
-    update: {},
-    create: { email },
-  })
-}
-
 async function addStaffAccess(formData: FormData): Promise<AccessActionResult> {
   'use server'
 
   const currentUser = await getCurrentUser()
   const clubId = getTextValue(formData, 'clubId')
-  const email = normalizeEmail(getTextValue(formData, 'email'))
+  const email = getTextValue(formData, 'email')
   const role = getTextValue(formData, 'role')
-  const teamIds = getSelectedIds(formData, 'teamId')
+  const teamId = getTextValue(formData, 'teamId')
 
   const permission = await requireClubOwner(currentUser.id, clubId)
   if (!permission.ok) return permission
   if (!email) return { ok: false, reason: 'Email is required.' }
-  if (!staffRoles.includes(role as (typeof staffRoles)[number])) {
+  if (!staffInviteRoles.includes(role as (typeof staffInviteRoles)[number])) {
     return { ok: false, reason: 'Role is invalid.' }
   }
+  if (!teamId) return { ok: false, reason: 'Select a team for this invite.' }
 
-  const validTeams = await prisma.team.findMany({
-    where: { clubId, id: { in: teamIds } },
-    select: { id: true },
+  const result = await createTeamInvitation({
+    clubId,
+    teamId,
+    email,
+    invitedByUserId: currentUser.id,
+    type: role === 'COACH' ? 'TEAM_COACH' : 'TEAM_ASSISTANT',
+    origin: await getRequestOrigin(),
   })
-  const validTeamIds = validTeams.map((team) => team.id)
-  const user = await upsertUserByEmail(email)
-
-  await prisma.$transaction(async (tx) => {
-    const membership = await tx.clubMembership.upsert({
-      where: { userId_clubId: { userId: user.id, clubId } },
-      update: { role: role as (typeof staffRoles)[number] },
-      create: { userId: user.id, clubId, role: role as (typeof staffRoles)[number] },
-    })
-
-    await tx.teamAssignment.deleteMany({ where: { membershipId: membership.id } })
-    if (role !== 'OWNER') {
-      await tx.teamAssignment.createMany({
-        data: validTeamIds.map((teamId) => ({ membershipId: membership.id, teamId })),
-        skipDuplicates: true,
-      })
-    }
-  })
+  if (!result.ok) return result
 
   revalidatePath('/club-setup/access')
-  return { ok: true }
+  return { ok: true, inviteLink: result.inviteLink }
 }
 
 async function updateStaffAccess(formData: FormData): Promise<AccessActionResult> {
@@ -157,25 +144,41 @@ async function addParentAccess(formData: FormData): Promise<AccessActionResult> 
 
   const currentUser = await getCurrentUser()
   const clubId = getTextValue(formData, 'clubId')
-  const email = normalizeEmail(getTextValue(formData, 'email'))
-  const playerIds = getSelectedIds(formData, 'playerId')
+  const email = getTextValue(formData, 'email')
+  const playerId = getTextValue(formData, 'playerId')
+  const type = getTextValue(formData, 'type')
 
   const permission = await requireClubOwner(currentUser.id, clubId)
   if (!permission.ok) return permission
   if (!email) return { ok: false, reason: 'Email is required.' }
-  if (playerIds.length === 0) return { ok: false, reason: 'Select at least one player.' }
+  if (!playerId) return { ok: false, reason: 'Select a player.' }
+  if (!playerInviteTypes.includes(type as (typeof playerInviteTypes)[number])) {
+    return { ok: false, reason: 'Invite type is invalid.' }
+  }
 
-  const validPlayers = await prisma.player.findMany({
-    where: { id: { in: playerIds }, team: { clubId } },
-    select: { id: true },
+  const result = await createPlayerInvitation({
+    clubId,
+    playerId,
+    email,
+    invitedByUserId: currentUser.id,
+    type: type as (typeof playerInviteTypes)[number],
+    origin: await getRequestOrigin(),
   })
-  if (validPlayers.length === 0) return { ok: false, reason: 'No valid players were selected.' }
+  if (!result.ok) return result
 
-  const user = await upsertUserByEmail(email)
-  await prisma.spectatorAccess.createMany({
-    data: validPlayers.map((player) => ({ userId: user.id, clubId, playerId: player.id })),
-    skipDuplicates: true,
-  })
+  revalidatePath('/club-setup/access')
+  return { ok: true, inviteLink: result.inviteLink }
+}
+
+async function revokePendingInvite(formData: FormData): Promise<AccessActionResult> {
+  'use server'
+
+  const currentUser = await getCurrentUser()
+  const invitationId = getTextValue(formData, 'invitationId')
+  if (!invitationId) return { ok: false, reason: 'Missing invite.' }
+
+  const result = await revokeInvitation({ invitationId, userId: currentUser.id })
+  if (!result.ok) return result
 
   revalidatePath('/club-setup/access')
   return { ok: true }
@@ -203,6 +206,7 @@ async function removeParentAccess(formData: FormData): Promise<AccessActionResul
 export default async function ClubAccessPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
+  const origin = await getRequestOrigin()
 
   const clubs = await prisma.club.findMany({
     where: {
@@ -237,6 +241,14 @@ export default async function ClubAccessPage() {
           player: { include: { team: true } },
         },
         orderBy: [{ user: { email: 'asc' } }, { player: { surname: 'asc' } }],
+      },
+      invitations: {
+        where: { status: 'PENDING' },
+        include: {
+          team: true,
+          player: { include: { team: true } },
+        },
+        orderBy: { createdAt: 'desc' },
       },
     },
     orderBy: { name: 'asc' },
@@ -293,12 +305,25 @@ export default async function ClubAccessPage() {
             playerName: `${access.player.firstName} ${access.player.surname}`,
             teamName: access.player.team.name,
           })),
+          pendingInvites: club.invitations.map((invitation) => ({
+            id: invitation.id,
+            email: invitation.email,
+            type: invitation.type,
+            expiresAt: invitation.expiresAt.toISOString(),
+            inviteLink: getInvitationAcceptUrl(invitation.token, origin),
+            targetName: invitation.team
+              ? invitation.team.name
+              : invitation.player
+                ? `${invitation.player.firstName} ${invitation.player.surname} (${invitation.player.team.name})`
+                : 'Not available',
+          })),
         }))}
         addStaffAccessAction={addStaffAccess}
         updateStaffAccessAction={updateStaffAccess}
         removeStaffAccessAction={removeStaffAccess}
         addParentAccessAction={addParentAccess}
         removeParentAccessAction={removeParentAccess}
+        revokePendingInviteAction={revokePendingInvite}
       />
       )}
     </main>
