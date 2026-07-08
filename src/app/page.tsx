@@ -183,7 +183,7 @@ function LandingPage() {
               <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
                 Sign up
               </ActionLink>
-              <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-emerald-200/60 bg-slate-950/45 text-white shadow-lg shadow-slate-950/20 hover:border-emerald-100 hover:bg-slate-950/65 focus-visible:ring-white">
+              <ActionLink href="/sign-in" variant="secondary" size="lg" className="!border-emerald-200/60 !bg-slate-950/70 !text-white shadow-lg shadow-slate-950/20 hover:!border-emerald-100 hover:!bg-slate-950 focus-visible:!ring-white">
                 Log in
               </ActionLink>
               <ActionLink href="#what-it-does" variant="ghost" size="lg" className="text-emerald-100 hover:bg-white/10 focus-visible:ring-white">
@@ -296,7 +296,7 @@ function LandingPage() {
             <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
               Create your account
             </ActionLink>
-            <ActionLink href="/sign-in" variant="secondary" size="lg" className="border-emerald-200/60 bg-slate-950/45 text-white shadow-lg shadow-slate-950/20 hover:border-emerald-100 hover:bg-slate-950/65 focus-visible:ring-white">
+            <ActionLink href="/sign-in" variant="secondary" size="lg" className="!border-emerald-200/60 !bg-slate-950/70 !text-white shadow-lg shadow-slate-950/20 hover:!border-emerald-100 hover:!bg-slate-950 focus-visible:!ring-white">
               Log in
             </ActionLink>
           </div>
