@@ -48,8 +48,13 @@ export default async function MyPlayerPage() {
           description="View the player profile, fitness results and match summaries linked to your account."
         />
         <EmptyState
-          title="No linked player found"
-          description="Ask the club owner to link your account to a player before using spectator access."
+          title="Waiting for your player link"
+          description="Ask your coach or club official to invite you to a player. Once you accept the invite, your player will appear here. Open invite links directly and sign in with the invited email address."
+          action={(
+            <Link href="/" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+              Back to dashboard
+            </Link>
+          )}
         />
       </main>
     )

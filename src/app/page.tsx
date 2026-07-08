@@ -158,7 +158,7 @@ export default async function Home() {
   if (!user) return <LandingPage />
   if (await shouldRedirectToOnboarding(user)) redirect('/onboarding')
 
-  return <AuthenticatedHome userId={user.id} />
+  return <AuthenticatedHome user={user} />
 }
 
 function LandingPage() {
@@ -319,7 +319,12 @@ function LandingPage() {
   )
 }
 
-async function AuthenticatedHome({ userId }: { userId: string }) {
+async function AuthenticatedHome({
+  user,
+}: {
+  user: { id: string; onboardingRole: 'CLUB_OFFICIAL' | 'COACH' | 'PARENT_SPECTATOR' | null }
+}) {
+  const userId = user.id
   const teamWhere = await accessibleTeamWhere(userId)
   const sessionWhere = await accessibleSessionWhere(userId)
   const matchWhere = await accessibleMatchWhere(userId)
@@ -386,6 +391,10 @@ async function AuthenticatedHome({ userId }: { userId: string }) {
     getOnboardingState(userId),
     getDashboardData(userId),
   ])
+
+  if (dashboardData.kind === 'no_access') {
+    return <NoAccessDashboard onboardingRole={user.onboardingRole} />
+  }
 
   const recentActivity = [
     ...recentFitnessSessions.map((session) => ({
@@ -570,6 +579,133 @@ async function AuthenticatedHome({ userId }: { userId: string }) {
       </section>
     </main>
   )
+}
+
+function NoAccessDashboard({
+  onboardingRole,
+}: {
+  onboardingRole: 'CLUB_OFFICIAL' | 'COACH' | 'PARENT_SPECTATOR' | null
+}) {
+  const content = getNoAccessDashboardContent(onboardingRole)
+
+  return (
+    <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:p-6">
+      <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-slate-950 via-emerald-950 to-emerald-700 text-white shadow-[0_24px_70px_rgba(15,23,42,0.16)]">
+        <div className="p-5 sm:p-8">
+          <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-50">
+            Next step
+          </p>
+          <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">
+            {content.heading}
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-emerald-50/85 sm:text-lg">
+            {content.copy}
+          </p>
+          {content.actions.length > 0 && (
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              {content.actions.map((action, index) => (
+                <ActionLink
+                  key={action.href}
+                  href={action.href}
+                  variant={index === 0 ? 'primary' : 'secondary'}
+                  size="lg"
+                  className={index === 0
+                    ? 'bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white'
+                    : 'border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white'}
+                >
+                  {action.label}
+                </ActionLink>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {content.showInviteGuidance && <InviteGuidanceCard />}
+
+      <section className="mt-5 grid gap-4 sm:grid-cols-3">
+        {content.steps.map((step) => (
+          <article key={step.title} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-700">{step.eyebrow}</p>
+            <h2 className="mt-2 text-lg font-black text-slate-950">{step.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
+          </article>
+        ))}
+      </section>
+    </main>
+  )
+}
+
+function InviteGuidanceCard() {
+  return (
+    <section className="mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-5 text-blue-950 shadow-sm sm:p-6">
+      <p className="text-sm font-extrabold uppercase tracking-wide text-blue-800">I have an invite link</p>
+      <p className="mt-2 text-sm leading-6">
+        Open the invite link you were sent. Make sure you sign in with the invited email address. Invite links look like <span className="font-mono font-bold">/invite/accept?token=...</span>
+      </p>
+    </section>
+  )
+}
+
+function getNoAccessDashboardContent(
+  onboardingRole: 'CLUB_OFFICIAL' | 'COACH' | 'PARENT_SPECTATOR' | null
+) {
+  if (onboardingRole === 'COACH') {
+    return {
+      heading: 'You’re nearly ready to coach',
+      copy: 'Ask your club official or head coach to invite you to a team from Club Setup → Access. Once accepted, your team will appear here.',
+      actions: [],
+      showInviteGuidance: true,
+      steps: [
+        { eyebrow: 'Step 1', title: 'Ask for an invite', description: 'A club official or head coach creates your team invite from Access Management.' },
+        { eyebrow: 'Step 2', title: 'Open the link', description: 'Use the invite link while signed in with the email address that was invited.' },
+        { eyebrow: 'Step 3', title: 'Start coaching', description: 'After acceptance, your assigned team appears on the dashboard.' },
+      ],
+    }
+  }
+
+  if (onboardingRole === 'PARENT_SPECTATOR') {
+    return {
+      heading: 'Waiting for your player link',
+      copy: 'Ask your coach or club official to invite you to a player. Once accepted, you’ll be able to view and record information for that player.',
+      actions: [{ href: '/my-player', label: 'Go to My Player' }],
+      showInviteGuidance: true,
+      steps: [
+        { eyebrow: 'Step 1', title: 'Ask for a player invite', description: 'A coach or club official links your email to one player.' },
+        { eyebrow: 'Step 2', title: 'Accept the invite', description: 'Open the invite link and sign in with the invited email address.' },
+        { eyebrow: 'Step 3', title: 'Follow progress', description: 'Your linked player will appear in My Player after acceptance.' },
+      ],
+    }
+  }
+
+  if (onboardingRole === 'CLUB_OFFICIAL') {
+    return {
+      heading: 'Set up your club',
+      copy: 'Create your club, add teams and players, then invite coaches and parents.',
+      actions: [{ href: '/club-setup', label: 'Open Club Setup' }],
+      showInviteGuidance: false,
+      steps: [
+        { eyebrow: 'Step 1', title: 'Create your club', description: 'Add the club record that will own your teams and setup.' },
+        { eyebrow: 'Step 2', title: 'Add teams and players', description: 'Build the squad structure before match day or fitness testing.' },
+        { eyebrow: 'Step 3', title: 'Invite people', description: 'Invite coaches, assistants, parents and spectators from Club Setup → Access.' },
+      ],
+    }
+  }
+
+  return {
+    heading: 'Choose how to get started',
+    copy: 'You can set up a club yourself, or accept an invite from a club, team or player when someone sends you one.',
+    actions: [
+      { href: '/onboarding', label: 'Open Onboarding' },
+      { href: '/club-setup', label: 'Open Club Setup' },
+    ],
+    showInviteGuidance: true,
+    steps: [
+      { eyebrow: 'Option 1', title: 'Set up a club', description: 'Create your own club if you are the official or head coach managing setup.' },
+      { eyebrow: 'Option 2', title: 'Accept an invite', description: 'Use an invite link from a club official, coach or head coach.' },
+      { eyebrow: 'Option 3', title: 'Come back later', description: 'Your dashboard will update automatically once access is added.' },
+    ],
+  }
 }
 
 function LandingSectionHeader({
