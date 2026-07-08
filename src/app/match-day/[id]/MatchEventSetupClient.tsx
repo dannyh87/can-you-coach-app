@@ -14,6 +14,11 @@ type EventOption = {
   value: string
 }
 
+type EventDisplayGroup = {
+  label: string
+  events: RecordableEventOption[]
+}
+
 type MatchEventSetupClientProps = {
   matchDayId: string
   eventOptions: readonly RecordableEventOption[]
@@ -25,12 +30,14 @@ type MatchEventSetupClientProps = {
 export default function MatchEventSetupClient({
   matchDayId,
   eventOptions,
-  categoryOptions,
   selectedEventDefinitionIds,
   updateMatchEventSetupAction,
 }: MatchEventSetupClientProps) {
   const router = useRouter()
   const [selectedValues, setSelectedValues] = useState<string[]>(selectedEventDefinitionIds)
+  const [openGroupLabels, setOpenGroupLabels] = useState<string[]>(() =>
+    getDefaultOpenEventGroupLabels(eventOptions, selectedEventDefinitionIds)
+  )
   const [searchTerm, setSearchTerm] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(
@@ -80,6 +87,10 @@ export default function MatchEventSetupClient({
     if (subcategoryFilter !== 'ALL' && eventOption.subcategory !== subcategoryFilter) return false
     return true
   })
+  const selectedEventOptions = eventOptions.filter((eventOption) => selectedValues.includes(eventOption.id))
+  const selectedSummaryEvents = selectedEventOptions.slice(0, 8)
+  const hiddenSelectedCount = Math.max(0, selectedEventOptions.length - selectedSummaryEvents.length)
+  const eventGroups = getEventDisplayGroups(visibleEventOptions)
 
   const saveEventSetup = async () => {
     setIsSaving(true)
@@ -178,61 +189,114 @@ export default function MatchEventSetupClient({
             </select>
           </label>
         </div>
-        {categoryOptions.map((category) => {
-          const categoryEvents = visibleEventOptions.filter(
-            (eventOption) => eventOption.category === category.value
-          )
+        <section className="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-extrabold text-slate-950">
+                {selectedValues.length} events selected
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                These buttons will be available during live event recording.
+              </p>
+            </div>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+              Match setup
+            </span>
+          </div>
+          {selectedEventOptions.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              Select at least one event before starting the match.
+            </p>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selectedSummaryEvents.map((eventOption) => (
+                <span key={eventOption.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  {eventOption.label}
+                </span>
+              ))}
+              {hiddenSelectedCount > 0 && (
+                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-bold text-white">
+                  +{hiddenSelectedCount} more
+                </span>
+              )}
+            </div>
+          )}
+        </section>
+
+        {eventGroups.length === 0 ? (
+          <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-600">
+            No events match the current filters.
+          </p>
+        ) : eventGroups.map((group) => {
+          const selectedCount = group.events.filter((eventOption) => selectedValues.includes(eventOption.id)).length
+          const isGroupOpen = openGroupLabels.includes(group.label)
 
           return (
-            <div key={category.value} className="rounded-xl bg-white p-4 shadow-sm">
-              <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
-                {category.label}
-              </h3>
-              {categoryEvents.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-400">No standard events yet.</p>
-              ) : (
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {categoryEvents.map((eventOption) => {
+            <details
+              key={group.label}
+              className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+              open={isGroupOpen}
+              onToggle={(event) => {
+                const isOpen = event.currentTarget.open
+                setOpenGroupLabels((currentLabels) =>
+                  isOpen
+                    ? Array.from(new Set([...currentLabels, group.label]))
+                    : currentLabels.filter((label) => label !== group.label)
+                )
+              }}
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 marker:hidden">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-950">
+                    {group.label}
+                  </h3>
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {group.events.length} events · {selectedCount} selected
+                  </p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  Open
+                </span>
+              </summary>
+              <div className="grid grid-cols-1 gap-2 border-t border-slate-100 p-3 sm:grid-cols-2">
+                {group.events.map((eventOption) => {
                     const isSelected = selectedValues.includes(eventOption.id)
 
                     return (
                       <article
                         key={eventOption.id}
-                        className={`rounded-lg border px-3 py-4 text-left text-sm ${
+                        className={`rounded-2xl border text-left text-sm transition ${
                           isSelected
-                            ? 'border-blue-600 bg-blue-50 text-blue-950'
-                            : 'bg-white text-gray-900'
+                            ? 'border-blue-600 bg-blue-50 text-blue-950 shadow-sm'
+                            : 'border-slate-200 bg-white text-slate-900 hover:border-emerald-200 hover:bg-emerald-50/40'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <span className="block font-bold">{eventOption.label}</span>
-                            {eventOption.subcategory && <span className="mt-1 block text-xs opacity-80">{eventOption.subcategory}</span>}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => toggleEventDefinition(eventOption.id)}
-                            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 ${
-                              isSelected
-                                ? 'bg-blue-700 text-white'
-                                : 'border border-blue-200 bg-white text-blue-800'
-                            }`}
+                        <label className="flex min-h-24 cursor-pointer items-start gap-3 p-4">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleEventDefinition(eventOption.id)}
+                            className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-700 focus:ring-blue-700"
                             disabled={isSaving}
-                          >
-                            {isSelected ? 'Selected' : 'Select'}
-                          </button>
-                        </div>
-                        <span className="mt-2 flex flex-wrap gap-1">
-                          {eventOption.enabledByDefault && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800">Default</span>}
-                          {eventOption.requiresLocation && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">Requires pitch location</span>}
-                        </span>
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="block text-base font-extrabold">{eventOption.label}</span>
+                            <span className="mt-1 block text-xs font-semibold uppercase tracking-wide opacity-70">
+                              {eventOption.subcategory ?? eventOption.categoryLabel}
+                            </span>
+                            <span className="mt-3 flex flex-wrap gap-1">
+                              {eventOption.enabledByDefault && <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800">Default</span>}
+                              {eventOption.requiresLocation && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">Requires pitch location</span>}
+                              {isSelected && <span className="rounded-full bg-blue-700 px-2 py-0.5 text-[11px] font-bold text-white">Selected</span>}
+                            </span>
+                          </div>
+                        </label>
                         <EventGuidanceDetails event={eventOption} />
                       </article>
                     )
-                  })}
-                </div>
-              )}
-            </div>
+                })}
+              </div>
+            </details>
           )
         })}
       </div>
@@ -247,6 +311,52 @@ export default function MatchEventSetupClient({
       </button>
     </section>
   )
+}
+
+function getDefaultOpenEventGroupLabels(events: readonly RecordableEventOption[], selectedEventIds: string[]) {
+  const selectedEventIdSet = new Set(selectedEventIds)
+
+  return getEventDisplayGroups([...events])
+    .filter((group) => group.events.some((event) => selectedEventIdSet.has(event.id) || event.enabledByDefault))
+    .map((group) => group.label)
+}
+
+function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGroup[] {
+  const groupOrder = [
+    'Goals & Outcomes',
+    'Shooting',
+    'Passing',
+    'Possession',
+    'Defending',
+    'Discipline',
+    'Goalkeeping',
+    'Custom / Other',
+  ]
+  const groups = new Map(groupOrder.map((label) => [label, [] as RecordableEventOption[]]))
+
+  for (const event of events) {
+    const groupLabel = getEventDisplayGroupLabel(event)
+    groups.get(groupLabel)?.push(event)
+  }
+
+  return groupOrder
+    .map((label) => ({ label, events: groups.get(label) ?? [] }))
+    .filter((group) => group.events.length > 0)
+}
+
+function getEventDisplayGroupLabel(event: RecordableEventOption) {
+  const searchableText = `${event.label} ${event.category} ${event.categoryLabel} ${event.subcategory ?? ''} ${event.legacyEventType ?? ''}`.toLowerCase()
+
+  if (event.legacyEventType === 'GOAL' || event.legacyEventType === 'ASSIST' || searchableText.includes('goal') || searchableText.includes('assist') || searchableText.includes('outcome')) {
+    return 'Goals & Outcomes'
+  }
+  if (searchableText.includes('shot') || searchableText.includes('shooting') || searchableText.includes('finish')) return 'Shooting'
+  if (searchableText.includes('pass') || searchableText.includes('cross')) return 'Passing'
+  if (event.matchPhase === 'IN_POSSESSION' || searchableText.includes('possession') || searchableText.includes('touch') || searchableText.includes('receiving') || searchableText.includes('dribbling') || searchableText.includes('1v1')) return 'Possession'
+  if (event.matchPhase === 'OUT_OF_POSSESSION' || searchableText.includes('defend') || searchableText.includes('tackle') || searchableText.includes('interception') || searchableText.includes('press')) return 'Defending'
+  if (event.matchPhase === 'DISCIPLINE' || searchableText.includes('discipline') || searchableText.includes('card') || searchableText.includes('foul')) return 'Discipline'
+  if (searchableText.includes('goalkeep') || searchableText.includes('keeper') || searchableText.includes('save')) return 'Goalkeeping'
+  return 'Custom / Other'
 }
 
 function EventGuidanceDetails({ event }: { event: RecordableEventOption }) {
