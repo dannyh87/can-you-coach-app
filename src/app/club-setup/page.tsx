@@ -260,6 +260,29 @@ async function updateClub(formData: FormData): Promise<SetupActionResult> {
   return { ok: true }
 }
 
+async function updateClubReportEmailPreferences(formData: FormData): Promise<SetupActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const id = getTextValue(formData, 'id')
+
+  if (!id) return { ok: false, reason: 'Missing club.' }
+  if (!(await isOwnerForClub(user.id, id))) {
+    return { ok: false, reason: 'You cannot update this club.' }
+  }
+
+  await prisma.club.update({
+    where: { id },
+    data: {
+      sendMatchReportEmails: formData.get('sendMatchReportEmails') === 'on',
+      sendFitnessReportEmails: formData.get('sendFitnessReportEmails') === 'on',
+    },
+  })
+
+  revalidatePath('/club-setup')
+  return { ok: true }
+}
+
 async function createTeam(formData: FormData): Promise<SetupActionResult> {
   'use server'
 
@@ -596,9 +619,11 @@ export default async function ClubSetupPage() {
   const clubRows = clubs.map((club) => ({
     id: club.id,
     name: club.name,
-    location: club.location,
-    notes: club.notes,
-    teams: club.teams.map((team) => ({
+      location: club.location,
+      notes: club.notes,
+      sendMatchReportEmails: club.sendMatchReportEmails,
+      sendFitnessReportEmails: club.sendFitnessReportEmails,
+      teams: club.teams.map((team) => ({
       id: team.id,
       clubId: team.clubId,
       clubName: club.name,
@@ -658,6 +683,7 @@ export default async function ClubSetupPage() {
         positionOptions={positionOptions}
         createClubAction={createClub}
         updateClubAction={updateClub}
+        updateClubReportEmailPreferencesAction={updateClubReportEmailPreferences}
         createTeamAction={createTeam}
         updateTeamAction={updateTeam}
         deleteTeamAction={deleteTeam}

@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import { canManageFitnessSession, canRecordFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
+import { sendCompletedFitnessReportEmail } from '@/lib/reportEmails'
 
 type StartFitnessTestMode = 'liveDropout' | 'liveTimedFinish'
 
@@ -136,6 +137,8 @@ export async function endFitnessTestSession(formData: FormData): Promise<
       completedAt,
     },
   })
+
+  await sendCompletedFitnessReportEmail(session.id)
 
   revalidatePath('/fitness')
   revalidatePath(`/fitness/sessions/${session.id}`)

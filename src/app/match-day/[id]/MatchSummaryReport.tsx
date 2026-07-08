@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 
-import MatchSummaryCsvButtons, {
-  type MatchCsvMetadata,
-  type MatchEventCsvRow,
-  type MatchSummaryCsvRow,
-} from '@/app/match-day/[id]/MatchSummaryCsvButtons'
+import MatchSummaryCsvButtons from '@/app/match-day/[id]/MatchSummaryCsvButtons'
+import type {
+  MatchCsvMetadata,
+  MatchEventCsvRow,
+  MatchSummaryCsvRow,
+} from '@/lib/reportCsv'
 
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
 

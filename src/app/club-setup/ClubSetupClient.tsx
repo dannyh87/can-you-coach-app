@@ -45,6 +45,8 @@ type ClubRow = {
   name: string
   location: string | null
   notes: string | null
+  sendMatchReportEmails: boolean
+  sendFitnessReportEmails: boolean
   teams: TeamRow[]
 }
 
@@ -62,6 +64,7 @@ type ClubSetupClientProps = {
   positionOptions: readonly Option[]
   createClubAction: SetupAction
   updateClubAction: SetupAction
+  updateClubReportEmailPreferencesAction: SetupAction
   createTeamAction: SetupAction
   updateTeamAction: SetupAction
   deleteTeamAction: SetupAction
@@ -94,6 +97,7 @@ export default function ClubSetupClient({
   positionOptions,
   createClubAction,
   updateClubAction,
+  updateClubReportEmailPreferencesAction,
   createTeamAction,
   updateTeamAction,
   deleteTeamAction,
@@ -331,6 +335,15 @@ export default function ClubSetupClient({
         <StatCard label="Fitness sessions" value={totalFitnessSessions} />
       </section>
 
+      {error && !modalMode && <Alert variant="error" className="mb-6">{error}</Alert>}
+
+      <ReportEmailPreferencesSection
+        club={selectedClub}
+        action={updateClubReportEmailPreferencesAction}
+        isSubmitting={isSubmitting}
+        onSubmit={submitAction}
+      />
+
       <SectionCard
         title="Teams"
         description={`Teams belonging to ${selectedClub.name}.`}
@@ -535,6 +548,65 @@ export default function ClubSetupClient({
         </ModalShell>
       )}
     </>
+  )
+}
+
+function ReportEmailPreferencesSection({
+  club,
+  action,
+  isSubmitting,
+  onSubmit,
+}: {
+  club: ClubRow
+  action: SetupAction
+  isSubmitting: boolean
+  onSubmit: (action: SetupAction, formData: FormData) => Promise<void>
+}) {
+  return (
+    <SectionCard
+      className="mb-6"
+      title="Report emails"
+      description={`Automatically email completed reports for ${club.name} to current club owners only.`}
+    >
+      <form action={(formData) => onSubmit(action, formData)} className="grid gap-4">
+        <input type="hidden" name="id" value={club.id} />
+        <label className="flex gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+          <input
+            type="checkbox"
+            name="sendMatchReportEmails"
+            defaultChecked={club.sendMatchReportEmails}
+            disabled={isSubmitting}
+            className="mt-1 h-4 w-4"
+          />
+          <span>
+            <span className="block font-semibold text-slate-950">Email match reports on completion</span>
+            <span className="mt-1 block text-slate-600">
+              Sends completed Match Day summaries and CSV attachments to club owners.
+            </span>
+          </span>
+        </label>
+        <label className="flex gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm">
+          <input
+            type="checkbox"
+            name="sendFitnessReportEmails"
+            defaultChecked={club.sendFitnessReportEmails}
+            disabled={isSubmitting}
+            className="mt-1 h-4 w-4"
+          />
+          <span>
+            <span className="block font-semibold text-slate-950">Email fitness reports on completion</span>
+            <span className="mt-1 block text-slate-600">
+              Sends completed fitness test summaries and CSV attachments to club owners.
+            </span>
+          </span>
+        </label>
+        <div>
+          <Button type="submit" size="sm" disabled={isSubmitting}>
+            {isSubmitting ? 'Saving...' : 'Save report email preferences'}
+          </Button>
+        </div>
+      </form>
+    </SectionCard>
   )
 }
 

@@ -1,16 +1,11 @@
 'use client'
 
-import { buildCsv, downloadCsv, slugifyFilename } from '@/lib/csv'
-
-type FitnessCsvResult = {
-  playerName: string
-  squadNumber: number | null
-  result: string
-  resultValue: number | null
-  resultStatus: string
-  rank: number | null
-  notes: string | null
-}
+import { downloadCsv } from '@/lib/csv'
+import {
+  buildFitnessResultsCsv,
+  getFitnessCsvFilename,
+  type FitnessCsvResult,
+} from '@/lib/reportCsv'
 
 type FitnessResultsCsvButtonProps = {
   sessionName: string
@@ -23,22 +18,6 @@ type FitnessResultsCsvButtonProps = {
   results: FitnessCsvResult[]
 }
 
-const headers = [
-  'Session',
-  'Date',
-  'Team',
-  'Club',
-  'Test Type',
-  'Status',
-  'Player',
-  'Squad Number',
-  'Result',
-  'Result Value',
-  'Result Status',
-  'Rank',
-  'Notes',
-]
-
 export default function FitnessResultsCsvButton({
   sessionName,
   dateLabel,
@@ -50,27 +29,17 @@ export default function FitnessResultsCsvButton({
   results,
 }: FitnessResultsCsvButtonProps) {
   const downloadResults = () => {
-    const rows = results.map((result) => [
+    const metadata = {
       sessionName,
       dateLabel,
       teamName,
       clubName,
       testTypeName,
       sessionStatusLabel,
-      result.playerName,
-      result.squadNumber ?? '',
-      result.result,
-      result.resultValue ?? '',
-      result.resultStatus,
-      result.rank ?? '',
-      result.notes ?? '',
-    ])
-    const csvContent = buildCsv(headers, rows)
-    const filename = `fitness-results-${slugifyFilename(testTypeName)}-${slugifyFilename(
-      teamName
-    )}-${dateForFilename}.csv`
+      dateForFilename,
+    }
 
-    downloadCsv(filename, csvContent)
+    downloadCsv(getFitnessCsvFilename(metadata), buildFitnessResultsCsv(metadata, results))
   }
 
   return (

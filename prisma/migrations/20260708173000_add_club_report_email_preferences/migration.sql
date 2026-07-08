@@ -1,0 +1,3 @@
+ALTER TABLE "Club"
+ADD COLUMN "sendMatchReportEmails" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "sendFitnessReportEmails" BOOLEAN NOT NULL DEFAULT true;

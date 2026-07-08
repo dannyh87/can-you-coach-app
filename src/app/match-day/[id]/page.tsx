@@ -24,6 +24,7 @@ import {
 } from '@/lib/matchEventTaxonomy'
 import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
+import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 
 export const dynamic = 'force-dynamic'
 
@@ -592,6 +593,8 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
       })
     ),
   ])
+
+  await sendCompletedMatchReportEmail(match.id)
 
   revalidatePath(`/match-day/${match.id}`)
   revalidatePath('/match-day')
