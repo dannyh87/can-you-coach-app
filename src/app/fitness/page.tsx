@@ -127,6 +127,10 @@ export default async function FitnessPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
   const manageableTeamIds = await getManageableTeamIds(user.id)
+  const [spectatorAccessCount, membershipCount] = await Promise.all([
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
+    prisma.clubMembership.count({ where: { userId: user.id } }),
+  ])
 
   const teams = await prisma.team.findMany({
     where: await accessibleTeamWhere(user.id),
@@ -213,6 +217,35 @@ export default async function FitnessPage() {
       />
 
       {teams.length === 0 ? (
+        spectatorAccessCount > 0 ? (
+          <EmptyState
+            eyebrow="Linked player access"
+            title="Fitness testing is managed by coaches."
+            description="Parents and spectators can view linked player information and recent fitness results in My Player, but cannot create or record fitness tests."
+            action={(
+              <Link href="/my-player" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                Go to My Player
+              </Link>
+            )}
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'COACH' ? (
+          <EmptyState
+            eyebrow="Team invite needed"
+            title="Ask your club for a team invite."
+            description="Fitness tests appear after a club official or head coach invites you to a team. Open the invite link directly and sign in with the invited email."
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'PARENT_SPECTATOR' ? (
+          <EmptyState
+            eyebrow="Player invite needed"
+            title="Waiting for your player link."
+            description="Ask your coach or club official to invite you to a player. Fitness results for that player will appear in My Player once recorded by coaches."
+            action={(
+              <Link href="/my-player" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                Go to My Player
+              </Link>
+            )}
+          />
+        ) : (
         <EmptyState
           title="Create a team first"
           description="Fitness test sessions must belong to a team."
@@ -225,6 +258,7 @@ export default async function FitnessPage() {
           </Link>
           )}
         />
+        )
       ) : fitnessTestTypes.length === 0 ? (
         <EmptyState
           title="No fitness test types found"
@@ -234,6 +268,7 @@ export default async function FitnessPage() {
         <FitnessClient
           sessions={sessionRows}
           teams={teamOptions}
+          canCreateSessions={teamOptions.length > 0}
           fitnessTestTypes={fitnessTestTypeOptions}
           createFitnessTestSessionAction={createFitnessTestSession}
           deleteFitnessTestSessionAction={deleteFitnessTestSession}

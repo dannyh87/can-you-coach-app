@@ -75,6 +75,7 @@ type FitnessSortOption =
 type FitnessClientProps = {
   sessions: FitnessSessionRow[]
   teams: TeamOption[]
+  canCreateSessions: boolean
   fitnessTestTypes: FitnessTestTypeOption[]
   createFitnessTestSessionAction: FitnessAction
   deleteFitnessTestSessionAction: FitnessAction
@@ -83,6 +84,7 @@ type FitnessClientProps = {
 export default function FitnessClient({
   sessions,
   teams,
+  canCreateSessions,
   fitnessTestTypes,
   createFitnessTestSessionAction,
   deleteFitnessTestSessionAction,
@@ -255,9 +257,15 @@ export default function FitnessClient({
             <h2 className="mt-1 text-2xl font-extrabold tracking-tight">What do you need to do?</h2>
           </div>
           <div className="grid gap-2 sm:grid-cols-4 lg:min-w-[620px]">
-            <ActionLink href="/fitness/sessions/new" variant="secondary" size="lg" className="bg-white text-blue-950 hover:bg-blue-50">
-              Start Fitness Test
-            </ActionLink>
+            {canCreateSessions ? (
+              <ActionLink href="/fitness/sessions/new" variant="secondary" size="lg" className="bg-white text-blue-950 hover:bg-blue-50">
+                Start Fitness Test
+              </ActionLink>
+            ) : (
+              <span className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-center text-sm font-bold text-white">
+                Coach-created tests only
+              </span>
+            )}
             <Button type="button" onClick={showCompletedResults} variant="secondary" size="lg" className="border-white/20 bg-white/10 text-white hover:bg-white/20">
               View Results
             </Button>
@@ -280,11 +288,11 @@ export default function FitnessClient({
       <SectionCard
         title="Fitness Sessions"
         description="Continue live tests or review completed results."
-        actions={(
+        actions={canCreateSessions ? (
           <ActionLink href="/fitness/sessions/new" variant="primary" size="sm">
             Start Fitness Test
           </ActionLink>
-        )}
+        ) : undefined}
         bodyClassName="p-0"
       >
 

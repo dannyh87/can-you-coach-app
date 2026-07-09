@@ -116,10 +116,10 @@ export default async function MyPlayerPage() {
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:p-6">
       <PageHeader
         title="My Player"
-        description="Read-only spectator access for your linked player or players."
+        description="View linked-player details, recent results and match observation access."
       />
       <p className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-950">
-        You are linked to {linkedPlayerRows.length} player{linkedPlayerRows.length === 1 ? '' : 's'}. This view is read-only.
+        You are linked to {linkedPlayerRows.length} player{linkedPlayerRows.length === 1 ? '' : 's'}. Player profile and result history are read-only; live match observations are available when coaches start a match.
       </p>
       <Link
         href="/my-player/matches"
@@ -233,7 +233,7 @@ export default async function MyPlayerPage() {
       </div>
 
       <p className="mt-6 text-sm text-slate-500">
-        Need club, squad or admin access? Ask the club owner to update your role. Spectator access is read-only.
+        Need club, squad or admin access? Ask the club owner to update your role. Linked-player access stays separate from club membership.
       </p>
       <Link href="/" className="mt-3 inline-flex text-sm font-semibold text-blue-800 hover:underline">
         Back to Home

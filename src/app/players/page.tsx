@@ -171,6 +171,10 @@ export default async function PlayersPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
   const manageableTeamIds = await getManageableTeamIds(user.id)
+  const [spectatorAccessCount, membershipCount] = await Promise.all([
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
+    prisma.clubMembership.count({ where: { userId: user.id } }),
+  ])
 
   const teams = await prisma.team.findMany({
     where: await accessibleTeamWhere(user.id),
@@ -232,6 +236,35 @@ export default async function PlayersPage() {
       />
 
       {teams.length === 0 ? (
+        spectatorAccessCount > 0 ? (
+          <EmptyState
+            eyebrow="Linked player access"
+            title="Your player access lives in My Player."
+            description="Parents and spectators can view linked player information and submit match observations for linked players when a match is live. Coaches manage squads, fitness data and match setup."
+            action={(
+              <Link href="/my-player" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                Go to My Player
+              </Link>
+            )}
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'COACH' ? (
+          <EmptyState
+            eyebrow="Team invite needed"
+            title="Ask your club for a team invite."
+            description="Open the invite link directly and sign in with the email address that was invited. Your squad will appear here after the invite is accepted."
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'PARENT_SPECTATOR' ? (
+          <EmptyState
+            eyebrow="Player invite needed"
+            title="Waiting for your player link."
+            description="Ask your coach or club official to invite you to a player. Once accepted, your player will appear in My Player."
+            action={(
+              <Link href="/my-player" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                Go to My Player
+              </Link>
+            )}
+          />
+        ) : (
         <EmptyState
           title="Create a team first"
           description="Players need a team before they can be added. Set up your club and team first."
@@ -244,10 +277,12 @@ export default async function PlayersPage() {
           </Link>
           )}
         />
+        )
       ) : (
         <PlayersClient
           players={playerRows}
           teams={teamOptions}
+          canManagePlayers={teamOptions.length > 0}
           createPlayerAction={createPlayer}
           updatePlayerAction={updatePlayer}
           archivePlayerAction={archivePlayer}

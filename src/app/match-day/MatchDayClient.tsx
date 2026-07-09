@@ -48,6 +48,7 @@ type MatchDayRow = {
 type MatchDayClientProps = {
   teams: TeamOption[]
   matches: MatchDayRow[]
+  canCreateMatches: boolean
   createMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
   deleteMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
 }
@@ -57,6 +58,7 @@ type ModalMode = 'create' | 'detail' | 'delete' | null
 export default function MatchDayClient({
   teams,
   matches,
+  canCreateMatches,
   createMatchDayAction,
   deleteMatchDayAction,
 }: MatchDayClientProps) {
@@ -143,12 +145,12 @@ export default function MatchDayClient({
 
       <SectionCard
         title="Matches"
-        description="Review created match records and open details."
-        actions={(
+        description={canCreateMatches ? 'Review created match records and open details.' : 'Review matches for your assigned team. Coaches create and manage fixtures.'}
+        actions={canCreateMatches ? (
           <ActionLink href="/match-day/new" variant="primary">
             Create Match Day
           </ActionLink>
-        )}
+        ) : undefined}
         bodyClassName="p-0"
       >
 

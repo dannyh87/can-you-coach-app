@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import ClubSetupClient from '@/app/club-setup/ClubSetupClient'
+import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
 import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { matchDayGroupOptions } from '@/lib/eventDefinitions'
@@ -199,11 +200,14 @@ async function createClub(formData: FormData): Promise<SetupActionResult> {
 
   if (!name) return { ok: false, reason: 'Club name is required.' }
 
-  const membershipCount = await prisma.clubMembership.count({ where: { userId: user.id } })
-  if (membershipCount > 0) {
+  const [membershipCount, spectatorAccessCount] = await Promise.all([
+    prisma.clubMembership.count({ where: { userId: user.id } }),
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
+  ])
+  if (membershipCount > 0 || spectatorAccessCount > 0) {
     return {
       ok: false,
-      reason: 'Club creation is only available before you have club access. Ask a club admin to update your role if you need setup access.',
+      reason: 'Club creation is only available before you have club or linked-player access. Ask a club admin to update your role if you need setup access.',
     }
   }
 
@@ -562,7 +566,7 @@ export default async function ClubSetupPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
 
-  const [ownerMemberships, totalMembershipCount] = await Promise.all([
+  const [ownerMemberships, totalMembershipCount, spectatorAccessCount] = await Promise.all([
     prisma.clubMembership.findMany({
       where: {
         userId: user.id,
@@ -571,6 +575,7 @@ export default async function ClubSetupPage() {
       select: { clubId: true },
     }),
     prisma.clubMembership.count({ where: { userId: user.id } }),
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
   ])
 
   const clubs = await prisma.club.findMany({
@@ -653,6 +658,24 @@ export default async function ClubSetupPage() {
         </Link>
       )}
 
+      {clubRows.length === 0 && spectatorAccessCount > 0 ? (
+        <EmptyState
+          eyebrow="Linked player access"
+          title="Club setup is for club owners."
+          description="Parents and spectators can view linked player information and submit live match observations from My Player. Coaches and club owners manage teams, players and access."
+          action={(
+            <Link href="/my-player" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+              Go to My Player
+            </Link>
+          )}
+        />
+      ) : clubRows.length === 0 && totalMembershipCount > 0 ? (
+        <EmptyState
+          eyebrow="Owner access needed"
+          title="You cannot manage club setup."
+          description="Ask a club owner to update your role if you need to create teams, manage access or customise club event definitions."
+        />
+      ) : (
       <ClubSetupClient
         clubs={clubRows}
         clubEvents={clubEvents.map((eventDefinition) => ({
@@ -674,7 +697,7 @@ export default async function ClubSetupPage() {
           isActive: eventDefinition.isActive,
           usedCount: eventDefinition._count.matchDayEventTypes + eventDefinition._count.matchEvents,
         }))}
-        canCreateFirstClub={totalMembershipCount === 0}
+        canCreateFirstClub={totalMembershipCount === 0 && spectatorAccessCount === 0}
         matchPhaseOptions={matchPhaseOptions}
         categoryOptions={categoryOptions}
         matchDayGroupOptions={matchDayGroupOptions}
@@ -692,6 +715,7 @@ export default async function ClubSetupPage() {
         archiveClubEventAction={archiveClubEvent}
         restoreClubEventAction={restoreClubEvent}
       />
+      )}
     </main>
   )
 }

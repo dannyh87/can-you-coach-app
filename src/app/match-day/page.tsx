@@ -142,6 +142,10 @@ export default async function MatchDayPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
   const manageableTeamIds = await getManageableTeamIds(user.id)
+  const [spectatorAccessCount, membershipCount] = await Promise.all([
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
+    prisma.clubMembership.count({ where: { userId: user.id } }),
+  ])
 
   const teams = await prisma.team.findMany({
     where: await accessibleTeamWhere(user.id),
@@ -199,6 +203,35 @@ export default async function MatchDayPage() {
       />
 
       {teams.length === 0 ? (
+        spectatorAccessCount > 0 ? (
+          <EmptyState
+            eyebrow="Linked player access"
+            title="Use My Player for match observations."
+            description="Parents and spectators can submit observations for linked players when coaches start a live match. Coaches create fixtures and manage match-day squads."
+            action={(
+              <Link href="/my-player/matches" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                View Match Observations
+              </Link>
+            )}
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'COACH' ? (
+          <EmptyState
+            eyebrow="Team invite needed"
+            title="Ask your club for a team invite."
+            description="Match days appear after a club official or head coach invites you to a team. Open the invite link directly and sign in with the invited email."
+          />
+        ) : membershipCount === 0 && user.onboardingRole === 'PARENT_SPECTATOR' ? (
+          <EmptyState
+            eyebrow="Player invite needed"
+            title="Waiting for your player link."
+            description="Ask your coach or club official to invite you to a player. Match observations for that player will appear in My Player when matches are live."
+            action={(
+              <Link href="/my-player/matches" className="inline-flex rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">
+                View Match Observations
+              </Link>
+            )}
+          />
+        ) : (
         <EmptyState
           title="Create a team first"
           description="Match days must belong to a team."
@@ -211,10 +244,12 @@ export default async function MatchDayPage() {
           </Link>
           )}
         />
+        )
       ) : (
         <MatchDayClient
           teams={teamOptions}
           matches={matchRows}
+          canCreateMatches={teamOptions.length > 0}
           createMatchDayAction={createMatchDay}
           deleteMatchDayAction={deleteMatchDay}
         />

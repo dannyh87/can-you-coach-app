@@ -44,7 +44,7 @@ const roleDescriptions = [
   { role: 'Club Admin', description: 'Full club setup, users, teams and players.' },
   { role: 'Coach', description: 'Manage assigned teams and create/manage sessions.' },
   { role: 'Assistant Coach', description: 'Record and help with assigned teams.' },
-  { role: 'Parent Contributor', description: 'Linked-player-only access. No club membership.' },
+  { role: 'Parent Contributor', description: 'Linked-player access with live match observations. No club membership.' },
 ]
 
 type ClubAccessClientProps = {

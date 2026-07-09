@@ -4,6 +4,7 @@ import { Inter } from 'next/font/google'
 import Link from 'next/link'
 import { getOptionalCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { getCurrentAccessSummary } from '@/lib/accessSummary'
+import { prisma } from '@/lib/prisma'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
 import MobileNav from '@/components/MobileNav'
@@ -12,21 +13,88 @@ import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
 
-const mainNavigationLinks = [
+type NavigationLink = {
+  href: string
+  label: string
+}
+
+const mainNavigationLinks: NavigationLink[] = [
   { href: '/', label: 'Home' },
   { href: '/how-to-use', label: 'How to use' },
-  { href: '/reports', label: 'Reports' },
 ]
 
-const coachingNavigationLinks = [
+const reportsNavigationLink = { href: '/reports', label: 'Reports' }
+
+const coachingNavigationLinks: NavigationLink[] = [
   { href: '/players', label: 'Players' },
   { href: '/fitness', label: 'Fitness' },
   { href: '/match-day', label: 'Match Day' },
 ]
 
-const clubNavigationLinks = [
+const clubNavigationLinks: NavigationLink[] = [
   { href: '/club-setup', label: 'Club Setup' },
 ]
+
+const parentNavigationLinks: NavigationLink[] = [
+  { href: '/my-player', label: 'My Player' },
+  { href: '/my-player/matches', label: 'Match Observations' },
+]
+
+async function getNavigationProfile(user: Awaited<ReturnType<typeof getOptionalCurrentUser>>) {
+  if (!user) {
+    return {
+      mainLinks: mainNavigationLinks,
+      coachingLinks: [] as NavigationLink[],
+      clubLinks: [] as NavigationLink[],
+    }
+  }
+
+  const [memberships, parentLinkCount] = await Promise.all([
+    prisma.clubMembership.findMany({
+      where: { userId: user.id },
+      select: { role: true, teamAssignments: { select: { teamId: true } } },
+    }),
+    prisma.spectatorAccess.count({ where: { userId: user.id } }),
+  ])
+  const hasOwnerAccess = memberships.some((membership) => membership.role === 'OWNER')
+  const hasCoachAccess = memberships.some((membership) => membership.role === 'COACH')
+  const hasAssistantAccess = memberships.some((membership) => membership.role === 'ASSISTANT_COACH')
+  const hasClubAccess = memberships.length > 0
+  const hasParentAccess = parentLinkCount > 0
+  const hasTeamAccess = memberships.some((membership) =>
+    membership.role === 'OWNER' || membership.teamAssignments.length > 0
+  )
+  const isParentOnly = hasParentAccess && !hasClubAccess
+  const isNoAccess = !hasParentAccess && !hasClubAccess
+  const canUseCoachingRoutes = hasOwnerAccess || hasCoachAccess || hasAssistantAccess || hasTeamAccess
+
+  if (isParentOnly) {
+    return {
+      mainLinks: mainNavigationLinks,
+      coachingLinks: parentNavigationLinks,
+      clubLinks: [] as NavigationLink[],
+    }
+  }
+
+  if (isNoAccess) {
+    return {
+      mainLinks: [
+        ...mainNavigationLinks,
+        { href: '/onboarding', label: 'Onboarding' },
+      ],
+      coachingLinks: [] as NavigationLink[],
+      clubLinks: user.onboardingRole === 'CLUB_OFFICIAL' || user.onboardingRole === null
+        ? clubNavigationLinks
+        : [],
+    }
+  }
+
+  return {
+    mainLinks: canUseCoachingRoutes ? [...mainNavigationLinks, reportsNavigationLink] : mainNavigationLinks,
+    coachingLinks: canUseCoachingRoutes ? coachingNavigationLinks : [] as NavigationLink[],
+    clubLinks: hasOwnerAccess ? clubNavigationLinks : [] as NavigationLink[],
+  }
+}
 
 export const metadata: Metadata = {
   title: 'Can You Coach',
@@ -64,14 +132,17 @@ export default async function RootLayout({
   children: React.ReactNode
 }) {
   const user = await getOptionalCurrentUser()
-  const accessSummary = user ? await getCurrentAccessSummary(user) : null
+  const [accessSummary, navigationProfile] = await Promise.all([
+    user ? getCurrentAccessSummary(user) : null,
+    getNavigationProfile(user),
+  ])
   const adminNavigationLinks = user && canManageGlobalEventLibrary(user)
     ? [{ href: '/super-admin/events', label: 'Super Admin' }]
     : []
   const navigationGroups = [
-    { title: 'Main', links: mainNavigationLinks },
-    { title: 'Coaching', links: coachingNavigationLinks },
-    { title: 'Club', links: clubNavigationLinks },
+    { title: 'Main', links: navigationProfile.mainLinks },
+    { title: 'Coaching', links: navigationProfile.coachingLinks },
+    { title: 'Club', links: navigationProfile.clubLinks },
     { title: 'Admin', links: adminNavigationLinks },
     { title: 'Account', links: [] },
   ]

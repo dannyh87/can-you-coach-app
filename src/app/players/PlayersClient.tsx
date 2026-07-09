@@ -63,6 +63,7 @@ type PlayerSortOption =
 type PlayersClientProps = {
   players: PlayerRow[]
   teams: TeamOption[]
+  canManagePlayers: boolean
   createPlayerAction: PlayerAction
   updatePlayerAction: PlayerAction
   archivePlayerAction: PlayerAction
@@ -81,6 +82,7 @@ const formatPreferredPosition = (preferredPosition: string | null) =>
 export default function PlayersClient({
   players,
   teams,
+  canManagePlayers,
   createPlayerAction,
   updatePlayerAction,
   archivePlayerAction,
@@ -234,15 +236,15 @@ export default function PlayersClient({
 
       <SectionCard
         title="Player List"
-        description="Click a row to view details or edit a player."
-        actions={(
+        description={canManagePlayers ? 'Click a row to view details or edit a player.' : 'View players for your assigned team. Coaches manage squad edits.'}
+        actions={canManagePlayers ? (
           <Button
             type="button"
             onClick={openAddModal}
           >
             Add Player
           </Button>
-        )}
+        ) : undefined}
         bodyClassName="p-0"
       >
 
@@ -470,6 +472,7 @@ export default function PlayersClient({
             {modalMode === 'detail' && selectedPlayer && (
               <PlayerDetail
                 player={selectedPlayer}
+                canManagePlayers={canManagePlayers}
                 isSubmitting={isSubmitting}
                 onEdit={openEditModal}
                 onArchiveOrRestore={archiveOrRestore}
@@ -589,11 +592,13 @@ function PlayerForm({
 
 function PlayerDetail({
   player,
+  canManagePlayers,
   isSubmitting,
   onEdit,
   onArchiveOrRestore,
 }: {
   player: PlayerRow
+  canManagePlayers: boolean
   isSubmitting: boolean
   onEdit: () => void
   onArchiveOrRestore: () => Promise<void>
@@ -609,17 +614,23 @@ function PlayerDetail({
         <DetailItem label="Joined club" value={player.joinedClubDateDisplay} />
       </div>
 
-      <div className="flex flex-wrap gap-2 pt-2">
-        <Button
-          type="button"
-          onClick={onEdit}
-          disabled={isSubmitting}
-        >
-          Edit Player
-        </Button>
-      </div>
+      {canManagePlayers ? (
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button
+            type="button"
+            onClick={onEdit}
+            disabled={isSubmitting}
+          >
+            Edit Player
+          </Button>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm font-semibold text-blue-900">
+          You can view this squad. Ask a coach or club admin if player details need changing.
+        </p>
+      )}
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+      {canManagePlayers && <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">
           Player status admin
         </h3>
@@ -639,7 +650,7 @@ function PlayerDetail({
               ? 'Archive Player'
               : 'Restore Player'}
         </Button>
-      </div>
+      </div>}
     </div>
   )
 }
