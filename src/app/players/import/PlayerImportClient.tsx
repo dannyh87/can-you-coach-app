@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState, type DragEvent } from 'react'
 
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
@@ -50,6 +50,26 @@ type PlayerImportClientProps = {
 const formatSquadNumber = (squadNumber: number | null) =>
   squadNumber === null ? '' : String(squadNumber)
 
+const excelFileExtensions = ['.xlsx', '.xls']
+
+const formatFileSize = (size: number) => {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const getFileExtension = (fileName: string) => {
+  const dotIndex = fileName.lastIndexOf('.')
+  return dotIndex === -1 ? '' : fileName.slice(dotIndex).toLowerCase()
+}
+
+const isCsvFile = (file: File) => {
+  const extension = getFileExtension(file.name)
+  return extension === '.csv' && (!file.type || file.type === 'text/csv' || file.type === 'application/vnd.ms-excel')
+}
+
+const isExcelFile = (file: File) => excelFileExtensions.includes(getFileExtension(file.name))
+
 export default function PlayerImportClient({
   teams,
   template,
@@ -57,8 +77,11 @@ export default function PlayerImportClient({
   confirmPlayerImportAction,
 }: PlayerImportClientProps) {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [teamId, setTeamId] = useState(teams[0]?.id ?? '')
   const [csvText, setCsvText] = useState(template)
+  const [selectedFile, setSelectedFile] = useState<{ name: string; size: number } | null>(null)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [preview, setPreview] = useState<Extract<PreviewResult, { ok: true }> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [summary, setSummary] = useState<Extract<ConfirmResult, { ok: true }> | null>(null)
@@ -71,6 +94,72 @@ export default function PlayerImportClient({
     formData.set('teamId', teamId)
     formData.set('csvText', csvText)
     return formData
+  }
+
+  const clearImportState = () => {
+    setPreview(null)
+    setSummary(null)
+  }
+
+  const handleImportFile = async (file: File | null) => {
+    setError(null)
+    clearImportState()
+
+    if (!file) return
+
+    if (isExcelFile(file)) {
+      setSelectedFile(null)
+      setError('Excel import is not available yet. Please export or save your spreadsheet as a CSV file and upload that instead.')
+      return
+    }
+
+    if (!isCsvFile(file)) {
+      setSelectedFile(null)
+      setError('Please upload a CSV file.')
+      return
+    }
+
+    try {
+      const text = await file.text()
+      if (!text.trim()) {
+        setSelectedFile(null)
+        setError('The selected CSV file is empty.')
+        return
+      }
+
+      setSelectedFile({ name: file.name, size: file.size })
+      setCsvText(text)
+    } catch {
+      setSelectedFile(null)
+      setError('The selected file could not be read. Please check the file and try again.')
+    }
+  }
+
+  const removeSelectedFile = () => {
+    setSelectedFile(null)
+    clearImportState()
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDraggingFile(true)
+  }
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDraggingFile(false)
+    }
+  }
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDraggingFile(false)
+    void handleImportFile(event.dataTransfer.files[0] ?? null)
   }
 
   const previewImport = async () => {
@@ -130,8 +219,8 @@ export default function PlayerImportClient({
       )}
 
       <SectionCard
-        title="1. Choose team and paste CSV"
-        description="Position is optional for imports. Dates work best as YYYY-MM-DD. V1 imports up to 100 rows."
+        title="1. Choose team and add CSV"
+        description="Drag in a CSV, choose a file, or paste CSV manually. Position is optional. Dates work best as YYYY-MM-DD. V1 imports up to 100 rows."
       >
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.7fr)]">
           <div className="space-y-4">
@@ -154,26 +243,79 @@ export default function PlayerImportClient({
               </select>
             </label>
 
-            <label className="block text-sm font-medium">
-              CSV data
-              <textarea
-                value={csvText}
+            <div
+              onDragOver={handleDragOver}
+              onDragEnter={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`rounded-2xl border-2 border-dashed p-5 text-center transition sm:p-6 ${
+                isDraggingFile
+                  ? 'border-blue-700 bg-blue-50 ring-4 ring-blue-100'
+                  : 'border-slate-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50/40'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
                 onChange={(event) => {
-                  setCsvText(event.target.value)
-                  setPreview(null)
-                  setSummary(null)
+                  void handleImportFile(event.target.files?.[0] ?? null)
                 }}
-                rows={12}
-                className={`${fieldClassName} font-mono text-xs`}
-                spellCheck={false}
               />
-            </label>
+              <div className="mx-auto max-w-md">
+                <p className="text-base font-bold text-slate-950">
+                  Drag and drop a CSV file here, or click to choose a file.
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Using Excel? Export or save your spreadsheet as CSV first.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button type="button" variant="secondary" onClick={openFilePicker} disabled={isPreviewing || isImporting}>
+                    Choose CSV file
+                  </Button>
+                  {selectedFile && (
+                    <Button type="button" variant="ghost" onClick={removeSelectedFile} disabled={isPreviewing || isImporting}>
+                      Remove file
+                    </Button>
+                  )}
+                </div>
+                {selectedFile && (
+                  <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
+                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <details className="rounded-xl border border-slate-200 bg-white p-4" open={!selectedFile}>
+              <summary className="cursor-pointer text-sm font-bold text-slate-800">
+                Paste or edit CSV manually
+              </summary>
+              <label className="mt-4 block text-sm font-medium">
+                CSV data
+                <textarea
+                  value={csvText}
+                  onChange={(event) => {
+                    setCsvText(event.target.value)
+                    clearImportState()
+                  }}
+                  rows={12}
+                  className={`${fieldClassName} font-mono text-xs`}
+                  spellCheck={false}
+                />
+              </label>
+            </details>
 
             <div className="flex flex-wrap gap-2">
-              <Button type="button" onClick={previewImport} disabled={isPreviewing || isImporting || !teamId}>
+              <Button type="button" onClick={previewImport} disabled={isPreviewing || isImporting || !teamId || !csvText.trim()}>
                 {isPreviewing ? 'Previewing...' : 'Preview import'}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setCsvText(template)} disabled={isPreviewing || isImporting}>
+              <Button type="button" variant="secondary" onClick={() => {
+                setCsvText(template)
+                setSelectedFile(null)
+                clearImportState()
+              }} disabled={isPreviewing || isImporting}>
                 Reset template
               </Button>
             </div>
@@ -191,7 +333,7 @@ export default function PlayerImportClient({
               </Button>
             </div>
             <p className="mt-3 text-sm text-slate-600">
-              Headers can use common alternatives like First Name, Last Name, Squad Number, shirtNumber and DOB.
+              Accepted columns: firstName, surname, name, squadNumber, position and dateOfBirth. Headers can use common alternatives like First Name, Last Name, Squad Number, shirtNumber and DOB.
             </p>
           </aside>
         </div>

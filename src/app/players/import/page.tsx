@@ -155,7 +155,7 @@ export default async function PlayerImportPage() {
       </div>
       <PageHeader
         title="Import Players"
-        description="Paste CSV data, preview validation, then confirm before players are created."
+        description="Upload, drop or paste CSV data, preview validation, then confirm before players are created."
       />
 
       {teamOptions.length === 0 ? (

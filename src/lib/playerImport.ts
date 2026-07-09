@@ -41,12 +41,15 @@ export type PlayerImportError = {
 
 export type PlayerImportResult = PlayerImportPreview | PlayerImportError
 
-type HeaderKey = 'firstName' | 'surname' | 'squadNumber' | 'position' | 'dateOfBirth'
+type HeaderKey = 'firstName' | 'surname' | 'name' | 'squadNumber' | 'position' | 'dateOfBirth'
 
 const headerAliases: Record<string, HeaderKey> = {
   firstname: 'firstName',
   surname: 'surname',
   lastname: 'surname',
+  name: 'name',
+  fullname: 'name',
+  playername: 'name',
   squadnumber: 'squadNumber',
   shirtnumber: 'squadNumber',
   position: 'position',
@@ -82,8 +85,11 @@ export function buildPlayerImportPreview(csvText: string, existingPlayers: Exist
   }
 
   const headerMap = getHeaderMap(records[0])
-  if (headerMap.firstName === undefined || headerMap.surname === undefined) {
-    return { ok: false, reason: 'CSV must include firstName and surname columns.' }
+  if (
+    (headerMap.firstName === undefined || headerMap.surname === undefined) &&
+    headerMap.name === undefined
+  ) {
+    return { ok: false, reason: 'CSV must include firstName and surname columns, or a name column.' }
   }
 
   const existingActiveSquadNumbers = new Set(
@@ -103,8 +109,9 @@ export function buildPlayerImportPreview(csvText: string, existingPlayers: Exist
 
   const rows = dataRows.map((record, index) => {
     const rowNumber = index + 2
-    const firstName = normalizeText(getCell(record, headerMap.firstName))
-    const surname = normalizeText(getCell(record, headerMap.surname))
+    const nameParts = splitFullName(normalizeText(getCell(record, headerMap.name)))
+    const firstName = normalizeText(getCell(record, headerMap.firstName)) || nameParts.firstName
+    const surname = normalizeText(getCell(record, headerMap.surname)) || nameParts.surname
     const squadNumberText = normalizeText(getCell(record, headerMap.squadNumber))
     const position = normalizeText(getCell(record, headerMap.position))
     const dateOfBirth = normalizeText(getCell(record, headerMap.dateOfBirth))
@@ -155,11 +162,11 @@ export function buildPlayerImportPreview(csvText: string, existingPlayers: Exist
       if (csvExactKeys.has(exactDuplicateKey)) {
         errors.push('This row duplicates another row in this CSV.')
       }
-      if (!dateOfBirthValue && existingNameKeys.has(nameKey)) {
-        warnings.push('A player with this name already exists in this team. Add dateOfBirth to confirm they are different players.')
+      if (existingNameKeys.has(nameKey)) {
+        errors.push('A player with this name already exists in this team.')
       }
       if (csvNameKeys.has(nameKey)) {
-        warnings.push('Another row in this CSV has the same player name.')
+        errors.push('Another row in this CSV has the same player name.')
       }
 
       csvExactKeys.add(exactDuplicateKey)
@@ -207,6 +214,15 @@ function getHeaderMap(headers: string[]) {
     if (key && map[key] === undefined) map[key] = index
     return map
   }, {})
+}
+
+function splitFullName(value: string) {
+  const parts = value.split(' ').filter(Boolean)
+
+  return {
+    firstName: parts[0] ?? '',
+    surname: parts.slice(1).join(' '),
+  }
 }
 
 function getCell(record: string[], index: number | undefined) {
