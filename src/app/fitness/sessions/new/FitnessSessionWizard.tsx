@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react'
 
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import Button from '@/components/ui/Button'
 import { fieldClassName } from '@/components/ui/formStyles'
 import { WizardActions, WizardOptionCard, WizardShell } from '@/components/ui/Wizard'
@@ -25,6 +26,13 @@ type FitnessTestTypeOption = {
   recordingModeLabel: string
   preferredMode: string
   preferredModeLabel: string
+  setupInstructions: string | null
+  equipmentNeeded: string | null
+  scoringNotes: string | null
+  spaceRequired: string | null
+  coachNotes: string | null
+  videoUrl: string | null
+  targetScores: string | null
 }
 
 type WizardResult = { ok: false; reason: string } | void
@@ -181,6 +189,13 @@ export default function FitnessSessionWizard({
             <Detail label="Allowed modes" value={selectedTestType.recordingModeLabel} />
           </dl>
           <p className="mt-3 text-sm text-blue-900">The test will open in the preferred supported recording mode. Unsupported modes are not available.</p>
+          <FitnessTestGuidance
+            guidance={selectedTestType}
+            title="Test setup"
+            description="Use this as a quick pitch-side check before you create the session."
+            compact
+            className="mt-4"
+          />
         </div>
       )}
 

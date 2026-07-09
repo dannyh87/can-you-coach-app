@@ -24,6 +24,7 @@ type FitnessTimerClientProps = {
   sessionStatusLabel: string
   resultUnit: string
   higherIsBetter: boolean
+  targetScores?: string | null
   rankingsHref: string
   progressHref: string
   isLive: boolean
@@ -87,6 +88,7 @@ function FitnessTimerInner({
   sessionStatusLabel,
   resultUnit,
   higherIsBetter,
+  targetScores,
   rankingsHref,
   progressHref,
   isLive,
@@ -387,6 +389,7 @@ function FitnessTimerInner({
           players={timerPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
+          targetScores={targetScores}
           statusLabel="Completed"
           rankingsHref={rankingsHref}
           progressHref={progressHref}

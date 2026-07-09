@@ -2,6 +2,7 @@ import type { FitnessResultStatus } from '@prisma/client'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import EmptyState from '@/components/ui/EmptyState'
 import { getCurrentUser } from '@/lib/auth'
 import { canViewFitnessSession } from '@/lib/permissions'
@@ -160,6 +161,15 @@ export default async function FitnessSessionRankingsPage({
             {rankingDirectionLabel} {rankedResults.length} player{rankedResults.length === 1 ? '' : 's'} ranked; {missingResults.length} active player{missingResults.length === 1 ? '' : 's'} still need a numeric result before they can be ranked.
           </p>
         </div>
+
+        <FitnessTestGuidance
+          guidance={session.fitnessTestType}
+          title="What does this score mean?"
+          compact
+          collapsible
+          showSetup={false}
+          className="mt-4"
+        />
       </section>
 
       <section className="mt-6 space-y-4">

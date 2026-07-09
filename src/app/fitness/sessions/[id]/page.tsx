@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
 
 import FitnessResultsCsvButton from '@/app/fitness/sessions/[id]/FitnessResultsCsvButton'
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
 import { getCurrentUser } from '@/lib/auth'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
@@ -367,6 +368,13 @@ export default async function FitnessSessionPage({
           <p className="mt-4 text-sm text-gray-600">{session.notes}</p>
         )}
 
+        <FitnessTestGuidance
+          guidance={session.fitnessTestType}
+          title="Setup and scoring guidance"
+          description="Use this before recording, and keep the setup consistent when comparing future results."
+          className="mt-4"
+        />
+
         {session.status === 'DRAFT' && (
           <form action={startFitnessTestSession} className="mt-4">
             <input type="hidden" name="fitnessTestSessionId" value={session.id} />
@@ -475,6 +483,7 @@ export default async function FitnessSessionPage({
             players={completedSummaryPlayers}
             resultUnit={session.fitnessTestType.resultUnit}
             higherIsBetter={session.fitnessTestType.higherIsBetter}
+            targetScores={session.fitnessTestType.targetScores}
             statusLabel="Saved"
             rankingsHref={`/fitness/sessions/${session.id}/rankings`}
             progressHref="/fitness/progress"

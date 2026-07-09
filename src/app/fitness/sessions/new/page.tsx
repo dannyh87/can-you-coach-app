@@ -116,6 +116,13 @@ export default async function NewFitnessSessionPage() {
       recordingModeLabel: recordingModes.label,
       preferredMode: recordingModes.preferredMode,
       preferredModeLabel: formatFitnessRecordingMode(recordingModes.preferredMode),
+      setupInstructions: fitnessTestType.setupInstructions,
+      equipmentNeeded: fitnessTestType.equipmentNeeded,
+      scoringNotes: fitnessTestType.scoringNotes,
+      spaceRequired: fitnessTestType.spaceRequired,
+      coachNotes: fitnessTestType.coachNotes,
+      videoUrl: fitnessTestType.videoUrl,
+      targetScores: fitnessTestType.targetScores,
     }
   })
 

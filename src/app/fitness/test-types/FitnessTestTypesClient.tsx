@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
+import FitnessTestGuidance, { hasFitnessTestGuidance } from '@/components/FitnessTestGuidance'
 import Alert from '@/components/ui/Alert'
 import Button from '@/components/ui/Button'
 import EmptyState from '@/components/ui/EmptyState'
@@ -30,6 +31,13 @@ type FitnessTestTypeRow = {
   allowedModesLabel: string
   preferredMode: FitnessRecordingMode
   preferredModeLabel: string
+  setupInstructions: string | null
+  equipmentNeeded: string | null
+  scoringNotes: string | null
+  spaceRequired: string | null
+  coachNotes: string | null
+  videoUrl: string | null
+  targetScores: string | null
 }
 
 type FitnessTestTypesClientProps = {
@@ -144,38 +152,43 @@ export default function FitnessTestTypesClient({
           <>
           <div className="divide-y md:hidden">
             {testTypes.map((testType) => (
-              <button
+              <article
                 key={testType.id}
-                type="button"
-                onClick={() => openEditModal(testType)}
-                className="block w-full p-4 text-left hover:bg-blue-50/70"
+                className="p-4 hover:bg-blue-50/70"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-base font-bold">{testType.name}</p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {testType.resultUnit} · {testType.higherIsBetter ? 'Higher is better' : 'Lower is better'}
-                    </p>
+                <button
+                  type="button"
+                  onClick={() => openEditModal(testType)}
+                  className="block w-full text-left"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-bold">{testType.name}</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {testType.resultUnit} · {testType.higherIsBetter ? 'Higher is better' : 'Lower is better'}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                      {testType.isDefault ? 'Default' : 'Custom'}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                    {testType.isDefault ? 'Default' : 'Custom'}
-                  </span>
-                </div>
-                <dl className="mt-4 grid gap-3 text-sm">
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <dt className="text-gray-500">Allowed modes</dt>
-                    <dd className="mt-1 font-semibold text-gray-900">
-                      {testType.allowedModesLabel}
-                    </dd>
-                  </div>
-                  <div className="rounded-lg bg-slate-50 p-3">
-                    <dt className="text-gray-500">Preferred mode</dt>
-                    <dd className="mt-1 font-semibold text-gray-900">
-                      {testType.preferredModeLabel}
-                    </dd>
-                  </div>
-                </dl>
-              </button>
+                  <dl className="mt-4 grid gap-3 text-sm">
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <dt className="text-gray-500">Allowed modes</dt>
+                      <dd className="mt-1 font-semibold text-gray-900">
+                        {testType.allowedModesLabel}
+                      </dd>
+                    </div>
+                    <div className="rounded-lg bg-slate-50 p-3">
+                      <dt className="text-gray-500">Preferred mode</dt>
+                      <dd className="mt-1 font-semibold text-gray-900">
+                        {testType.preferredModeLabel}
+                      </dd>
+                    </div>
+                  </dl>
+                </button>
+                <FitnessTestGuidance guidance={testType} compact collapsible title="Setup guidance" className="mt-4" />
+              </article>
             ))}
           </div>
 
@@ -193,8 +206,8 @@ export default function FitnessTestTypesClient({
               </thead>
               <tbody className="divide-y">
                 {testTypes.map((testType) => (
+                  <Fragment key={testType.id}>
                   <tr
-                    key={testType.id}
                     onClick={() => openEditModal(testType)}
                     className="cursor-pointer hover:bg-blue-50/70"
                   >
@@ -209,6 +222,14 @@ export default function FitnessTestTypesClient({
                       {testType.isDefault ? 'Default' : 'Custom'}
                     </td>
                   </tr>
+                  {hasFitnessTestGuidance(testType) && (
+                    <tr className="border-b bg-slate-50/50">
+                      <td colSpan={6} className="px-4 py-3">
+                        <FitnessTestGuidance guidance={testType} compact collapsible title="Setup and target guidance" />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -350,11 +371,79 @@ function FitnessTestTypeForm({
         </div>
       </fieldset>
 
+      <details className="rounded-lg border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+        <summary className="cursor-pointer text-sm font-bold text-slate-800">
+          Advanced guidance
+        </summary>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <GuidanceTextArea
+            label="Setup instructions"
+            name="setupInstructions"
+            defaultValue={testType?.setupInstructions}
+          />
+          <GuidanceTextArea
+            label="Equipment needed"
+            name="equipmentNeeded"
+            defaultValue={testType?.equipmentNeeded}
+          />
+          <GuidanceTextArea
+            label="Space required"
+            name="spaceRequired"
+            defaultValue={testType?.spaceRequired}
+          />
+          <GuidanceTextArea
+            label="Scoring notes"
+            name="scoringNotes"
+            defaultValue={testType?.scoringNotes}
+          />
+          <GuidanceTextArea
+            label="Target scores"
+            name="targetScores"
+            defaultValue={testType?.targetScores}
+          />
+          <GuidanceTextArea
+            label="Coach notes"
+            name="coachNotes"
+            defaultValue={testType?.coachNotes}
+          />
+          <FormField label="Video URL">
+            <input
+              name="videoUrl"
+              type="url"
+              defaultValue={testType?.videoUrl ?? ''}
+              className={fieldClassName}
+              placeholder="https://www.youtube.com/..."
+            />
+          </FormField>
+        </div>
+      </details>
+
       <div className="flex justify-end md:col-span-2">
         <Button type="submit" disabled={isSubmitting} fullWidth>
           {isSubmitting ? 'Saving...' : submitLabel}
         </Button>
       </div>
     </form>
+  )
+}
+
+function GuidanceTextArea({
+  label,
+  name,
+  defaultValue,
+}: {
+  label: string
+  name: string
+  defaultValue?: string | null
+}) {
+  return (
+    <FormField label={label}>
+      <textarea
+        name={name}
+        defaultValue={defaultValue ?? ''}
+        rows={4}
+        className={fieldClassName}
+      />
+    </FormField>
   )
 }

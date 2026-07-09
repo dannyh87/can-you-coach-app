@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
@@ -308,6 +309,14 @@ export default async function FitnessTimerPage({
         <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           Start the timer, then tap each player as they finish.
         </p>
+
+        <FitnessTestGuidance
+          guidance={session.fitnessTestType}
+          title="Setup guidance"
+          compact
+          collapsible
+          className="mt-4"
+        />
       </section>}
 
       {session.status !== 'COMPLETED' && players.length === 0 ? (
@@ -326,6 +335,7 @@ export default async function FitnessTimerPage({
           sessionStatusLabel={formatFitnessSessionStatus(session.status)}
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
+          targetScores={session.fitnessTestType.targetScores}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}

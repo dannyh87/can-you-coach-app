@@ -24,6 +24,7 @@ type FitnessTestCompleteSummaryProps = {
   players: SummaryPlayer[]
   resultUnit: string
   higherIsBetter: boolean
+  targetScores?: string | null
   statusLabel: string
   rankingsHref: string
   progressHref: string
@@ -58,6 +59,7 @@ export default function FitnessTestCompleteSummary({
   players,
   resultUnit,
   higherIsBetter,
+  targetScores,
   statusLabel,
   rankingsHref,
   progressHref,
@@ -129,6 +131,17 @@ export default function FitnessTestCompleteSummary({
       <p className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-medium leading-6 text-blue-900">
         {playersWithResults} player{playersWithResults === 1 ? '' : 's'} have saved results for this completed test. {rankingDirectionLabel} Use rankings for the full order and progress to compare against previous completed tests.
       </p>
+
+      {targetScores && (
+        <details className="rounded-lg border border-blue-100 bg-white p-4">
+          <summary className="cursor-pointer text-sm font-bold text-blue-950">
+            Target guidance
+          </summary>
+          <p className="mt-3 whitespace-pre-line text-sm leading-6 text-blue-900">
+            {targetScores}
+          </p>
+        </details>
+      )}
 
       {topPerformer && bottomPerformer && (
         <div className="grid gap-3 sm:grid-cols-2">

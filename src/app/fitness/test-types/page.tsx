@@ -25,6 +25,21 @@ const getTextValue = (formData: FormData, key: string) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getOptionalTextValue = (formData: FormData, key: string) => {
+  const value = getTextValue(formData, key)
+  return value || null
+}
+
+const getGuidanceValues = (formData: FormData) => ({
+  setupInstructions: getOptionalTextValue(formData, 'setupInstructions'),
+  equipmentNeeded: getOptionalTextValue(formData, 'equipmentNeeded'),
+  spaceRequired: getOptionalTextValue(formData, 'spaceRequired'),
+  scoringNotes: getOptionalTextValue(formData, 'scoringNotes'),
+  targetScores: getOptionalTextValue(formData, 'targetScores'),
+  coachNotes: getOptionalTextValue(formData, 'coachNotes'),
+  videoUrl: getOptionalTextValue(formData, 'videoUrl'),
+})
+
 const getAllowedRecordingModes = (formData: FormData) => {
   const allowedModes = formData
     .getAll('allowedRecordingMode')
@@ -81,6 +96,7 @@ async function createFitnessTestType(
       isDefault: false,
       allowedRecordingModes: serializeAllowedRecordingModes(allowedModes),
       preferredRecordingMode,
+      ...getGuidanceValues(formData),
     },
   })
 
@@ -136,6 +152,7 @@ async function updateFitnessTestType(
       higherIsBetter,
       allowedRecordingModes: serializeAllowedRecordingModes(allowedModes),
       preferredRecordingMode,
+      ...getGuidanceValues(formData),
     },
   })
 
@@ -164,6 +181,13 @@ export default async function FitnessTestTypesPage() {
       resultUnit: fitnessTestType.resultUnit,
       higherIsBetter: fitnessTestType.higherIsBetter,
       isDefault: fitnessTestType.isDefault,
+      setupInstructions: fitnessTestType.setupInstructions,
+      equipmentNeeded: fitnessTestType.equipmentNeeded,
+      scoringNotes: fitnessTestType.scoringNotes,
+      spaceRequired: fitnessTestType.spaceRequired,
+      coachNotes: fitnessTestType.coachNotes,
+      videoUrl: fitnessTestType.videoUrl,
+      targetScores: fitnessTestType.targetScores,
       allowedModes: recordingModes.allowedModes,
       allowedModesLabel: recordingModes.allowedModes
         .map((mode) => formatFitnessRecordingMode(mode))

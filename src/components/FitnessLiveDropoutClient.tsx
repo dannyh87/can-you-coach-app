@@ -24,6 +24,7 @@ type FitnessLiveDropoutClientProps = {
   sessionStatusLabel: string
   resultUnit: string
   higherIsBetter: boolean
+  targetScores?: string | null
   rankingsHref: string
   progressHref: string
   isLive: boolean
@@ -81,6 +82,7 @@ function FitnessLiveDropoutInner({
   sessionStatusLabel,
   resultUnit,
   higherIsBetter,
+  targetScores,
   rankingsHref,
   progressHref,
   isLive,
@@ -352,6 +354,7 @@ function FitnessLiveDropoutInner({
           players={dropoutPlayers}
           resultUnit={resultUnit}
           higherIsBetter={higherIsBetter}
+          targetScores={targetScores}
           statusLabel="Dropped out"
           rankingsHref={rankingsHref}
           progressHref={progressHref}

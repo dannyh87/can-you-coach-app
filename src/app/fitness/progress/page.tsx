@@ -1,5 +1,6 @@
 import Link from 'next/link'
 
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessProgressChart from '@/components/FitnessProgressChart'
 import EmptyState from '@/components/ui/EmptyState'
 import { accessibleTeamWhere } from '@/lib/accessWhere'
@@ -362,6 +363,18 @@ export default async function FitnessProgressPage({
           </div>
         </form>
       </section>
+
+      {selectedFitnessTestType && (
+        <FitnessTestGuidance
+          guidance={selectedFitnessTestType}
+          title="Target guidance"
+          description="These targets are broad coaching benchmarks, not fixed pass/fail scores. Use them alongside age, position, injury history and level of football. For most grassroots players, the most useful measure is whether the player is improving over time."
+          compact
+          collapsible
+          showSetup={false}
+          className="mb-8"
+        />
+      )}
 
       {!hasSelection ? (
         <EmptyState

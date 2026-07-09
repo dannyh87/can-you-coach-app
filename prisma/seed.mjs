@@ -48,10 +48,19 @@ const demoPlayers = [
   },
 ]
 
+const targetScoreCaveat = 'Use these as broad coaching benchmarks only. Scores vary by age, sex, position, training age, injury history and level of football. For grassroots players, the most useful comparison is often the player\'s own progress over time.'
+
 const fitnessTestTypes = [
   {
     name: 'Yo-Yo Test',
     description: 'Intermittent fitness test used to assess endurance and recovery ability.',
+    spaceRequired: '20m running zone plus a 5m recovery zone behind the start line. Use a flat, safe surface with enough width for the number of runners.',
+    equipmentNeeded: 'Cones, tape measure, speaker, Yo-Yo IR1 audio, phone or tablet, and the Can You Coach live dropout screen.',
+    setupInstructions: `Mark a start cone and a turn cone 20m apart. Mark a recovery cone 5m behind the start line. Players start on the start line, run 20m out, turn, run 20m back, then walk or jog around the 5m recovery marker during the recovery period before the next shuttle. Keep the speaker loud enough for all players to hear the audio clearly.`,
+    scoringNotes: 'Record the final completed level, shuttle or total distance according to the scoring method you use. Players stop when they miss the line twice, cannot keep the pace safely, or choose to drop out. Use the same audio, surface and setup each time.',
+    coachNotes: 'This is a repeat-effort test, not a punishment. Explain the route before starting and remind players to turn safely. It works best when coaches focus on effort, pacing and improvement over time.',
+    videoUrl: null,
+    targetScores: `${targetScoreCaveat}\n\nDeveloping: lower completion distance; use it as a starting baseline.\nGood grassroots level: completes a solid repeated-running score and recovers well between shuttles.\nStrong: high score for local football and likely good repeat-effort capacity.\nExcellent: very high score and ready for demanding match-conditioning work.\nElite / academy-level: only use this comparison for older, well-trained players in a suitable performance environment.`,
     resultUnit: 'Metres',
     higherIsBetter: true,
     allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
@@ -61,6 +70,13 @@ const fitnessTestTypes = [
   {
     name: 'Gacon Test',
     description: 'Progressive running test used to assess aerobic fitness.',
+    spaceRequired: 'Marked pitch, track or straight running area with cone distances matching the exact Gacon protocol your club is using.',
+    equipmentNeeded: 'Cones, tape measure, whistle or interval audio/timer, clear protocol notes, phone or tablet, and the Can You Coach live dropout screen.',
+    setupInstructions: 'Set out the cones to match your chosen Gacon format before players arrive. Brief the exact work and recovery timings, starting distance, distance increases and dropout rules. Do not mix different Gacon versions without naming them clearly in the session notes.',
+    scoringNotes: 'Record the final completed stage, distance or level used by your protocol. Keep the protocol, surface and timing method consistent so future results can be compared fairly.',
+    coachNotes: 'The app seed does not define one fixed Gacon protocol, so coaches should write the version used in the session notes. Consistency matters more than chasing a generic benchmark.',
+    videoUrl: null,
+    targetScores: `${targetScoreCaveat}\n\nDeveloping: early-stage completion; useful as a baseline.\nGood grassroots level: completes a solid number of intervals with controlled pacing.\nStrong: reaches a high stage or distance for local football.\nExcellent: very high stage or distance using the same protocol.\nAvoid elite comparisons unless the exact protocol and benchmark source are known.`,
     resultUnit: 'Metres',
     higherIsBetter: true,
     allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
@@ -70,6 +86,13 @@ const fitnessTestTypes = [
   {
     name: 'Bleep Test',
     description: 'Multi-stage shuttle run test.',
+    spaceRequired: '20m between two clear lines or rows of cones on a flat, safe surface. Leave enough width for every runner to turn safely.',
+    equipmentNeeded: 'Cones, tape measure, speaker, bleep test audio, phone or tablet, and the Can You Coach live dropout screen.',
+    setupInstructions: 'Mark two lines 20m apart. Players run continuously between the lines and must reach the line before each beep. Start the audio only when everyone understands the route and the turn line.',
+    scoringNotes: 'Record the final completed level and shuttle, or the numeric level used by your squad. Players stop when they can no longer keep up safely or miss the line repeatedly. Use the same audio and surface where possible.',
+    coachNotes: 'This is easy to run with groups, but turns can get crowded. Split large squads into lanes or smaller groups and encourage players to pace the early levels sensibly.',
+    videoUrl: null,
+    targetScores: `${targetScoreCaveat}\n\nDeveloping: earlier levels; useful starting point, especially for younger or newer players.\nGood grassroots level: solid middle-to-high level for the age group.\nStrong: higher level showing good aerobic fitness for local football.\nExcellent: very high level and likely above normal grassroots expectations.\nElite / academy-level: only compare older, trained players against academy-style standards.`,
     resultUnit: 'Level',
     higherIsBetter: true,
     allowedRecordingModes: 'MANUAL,LIVE_DROPOUT',
@@ -79,6 +102,13 @@ const fitnessTestTypes = [
   {
     name: 'Bronco Test',
     description: 'Repeated shuttle run completed as quickly as possible.',
+    spaceRequired: 'Straight 60m running lane with markers at 0m, 20m, 40m and 60m. Use a flat, safe surface with run-off space.',
+    equipmentNeeded: 'Cones, tape measure, stopwatch or timer, phone or tablet, and the Can You Coach live timed finish screen.',
+    setupInstructions: 'Mark 0m, 20m, 40m and 60m. From the start line, players run to 20m and back, 40m and back, then 60m and back. That is one set. Repeat for your chosen format, commonly five sets for a 1,200m total.',
+    scoringNotes: 'Record total completion time. Lower time is better. Keep the number of sets, surface, weather conditions and timing method as consistent as possible.',
+    coachNotes: 'This test rewards pacing as well as fitness. Make sure players know the route before starting and avoid running too many players in one lane.',
+    videoUrl: null,
+    targetScores: `${targetScoreCaveat}\n\nDeveloping: slower completion time; use it as a baseline.\nGood grassroots level: completes the test strongly with controlled pacing.\nStrong: competitive time for local football conditioning.\nExcellent: very fast time and suitable for demanding higher-level conditioning.\nElite / academy-level: only compare with care, because timing method and exact Bronco format can change results.`,
     resultUnit: 'Seconds',
     higherIsBetter: false,
     allowedRecordingModes: 'MANUAL,LIVE_TIMED_FINISH',
@@ -410,11 +440,23 @@ async function main() {
         create: data,
       })
     } else {
-      await prisma.eventDefinition.upsert({
-        where: { normalizedName: data.normalizedName },
-        update: data,
-        create: data,
+      const existingEventDefinition = await prisma.eventDefinition.findFirst({
+        where: {
+          scope: data.scope,
+          clubId: data.clubId ?? null,
+          normalizedName: data.normalizedName,
+        },
+        select: { id: true },
       })
+
+      if (existingEventDefinition) {
+        await prisma.eventDefinition.update({
+          where: { id: existingEventDefinition.id },
+          data,
+        })
+      } else {
+        await prisma.eventDefinition.create({ data })
+      }
     }
   }
 }

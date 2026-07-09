@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
@@ -315,6 +316,14 @@ export default async function FitnessLiveDropoutPage({
           Set the current level, then tap each player as they drop out.
           Archived players are excluded.
         </p>
+
+        <FitnessTestGuidance
+          guidance={session.fitnessTestType}
+          title="Setup guidance"
+          compact
+          collapsible
+          className="mt-4"
+        />
       </section>}
 
       {session.status !== 'COMPLETED' && activePlayers.length === 0 ? (
@@ -333,6 +342,7 @@ export default async function FitnessLiveDropoutPage({
           sessionStatusLabel={formatFitnessSessionStatus(session.status)}
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
+          targetScores={session.fitnessTestType.targetScores}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}

@@ -470,6 +470,13 @@ model FitnessTestType {
   userId                 String?
   name                   String
   description            String?
+  setupInstructions      String?
+  equipmentNeeded        String?
+  scoringNotes           String?
+  spaceRequired          String?
+  coachNotes             String?
+  videoUrl               String?
+  targetScores           String?
   resultUnit             String
   higherIsBetter         Boolean
   allowedRecordingModes  String               @default("MANUAL")
