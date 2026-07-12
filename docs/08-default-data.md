@@ -1,61 +1,49 @@
 # Can You Coach - Current Default Data
 
-This document reflects the default data and standard values currently used by the app.
+This document reflects default data and standard values currently used by the app.
 
-## Local MVP User And Club
+## Local Development Seed
 
-The app uses a local MVP user helper.
+`prisma/seed.mjs` seeds safe local development data:
 
-Current behaviour:
+- local demo user
+- Demo Club
+- Brereton Social demo team
+- demo players
+- default fitness test types
+- global match event definitions
 
-- `getLocalUser()` creates or returns a local demo user.
-- A default `Demo Club` can be created for that user when needed.
-- `prisma/seed.mjs` also seeds safe local development data: local user, Demo Club, Brereton Social demo team, demo players, and default fitness test types.
-
-Production authentication is not built.
+Production should only be seeded deliberately.
 
 ## Fitness Test Types
 
-Fitness test types are stored in `FitnessTestType`.
+Seeded default tests:
 
-Important fields:
+- Yo-Yo Test
+- Gacon Test
+- Bleep Test
+- Bronco Test
 
-- `name`
-- `description`
-- `resultUnit`
-- `higherIsBetter`
-- `allowedRecordingModes`
-- `preferredRecordingMode`
-- `isDefault`
-- optional `userId`
+Fitness test types support:
 
-The database supports both default and user-owned test types. Seed/default values are managed through the Prisma seed and app data, not hard-coded UI-only state. Coaches can create and edit custom user-owned test types at `/fitness/test-types`.
+- result unit
+- higher/lower-is-better ranking direction
+- allowed recording modes
+- preferred recording mode
+- setup instructions
+- equipment needed
+- scoring notes
+- coach notes
+- target-score guidance
+- optional video URL
 
-Recording mode values:
+Recording modes:
 
 - `MANUAL`
 - `LIVE_DROPOUT`
 - `LIVE_TIMED_FINISH`
 
-Seeded default recording modes:
-
-- Yo-Yo Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
-- Bleep Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
-- Gacon Test: `allowedRecordingModes = MANUAL,LIVE_DROPOUT`, `preferredRecordingMode = LIVE_DROPOUT`.
-- Bronco Test: `allowedRecordingModes = MANUAL,LIVE_TIMED_FINISH`, `preferredRecordingMode = LIVE_TIMED_FINISH`.
-
-Examples supported by the product direction:
-
-- Gacon Test
-- Yo-Yo Test
-- Bronco Test
-- 505 Agility Test
-- Sprint tests
-- Club-specific tests
-
 ## Fitness Result Statuses
-
-Stored enum values:
 
 - `COMPLETED`
 - `DID_NOT_START`
@@ -63,45 +51,21 @@ Stored enum values:
 - `ABSENT`
 - `DROPPED_OUT`
 
-Coach-facing labels include:
-
-- Completed
-- Did not start
-- Injured
-- Missed/Absent
-- Dropped out
-
 ## Match Types
-
-Stored enum values:
 
 - `LEAGUE`
 - `CUP`
 - `FRIENDLY`
 
-Coach-facing labels:
-
-- League
-- Cup
-- Friendly
+These are match context values, not match formats such as 7v7 or 11v11.
 
 ## Match Venues
-
-Stored enum values:
 
 - `HOME`
 - `AWAY`
 - `NEUTRAL`
 
-Coach-facing labels:
-
-- Home
-- Away
-- Neutral
-
 ## Match Statuses
-
-Stored enum values:
 
 - `DRAFT`
 - `IN_PROGRESS`
@@ -110,48 +74,62 @@ Stored enum values:
 
 ## Match Squad Statuses
 
-Stored enum values:
-
 - `STARTER`
 - `SUBSTITUTE`
 - `NOT_INVOLVED`
 
-Coach-facing labels:
+## Match Event Definitions
 
-- Starter
-- Substitute
-- Not involved
+The app now uses `EventDefinition` records for global and club-specific match event libraries.
 
-## Standard Match Event Types
+Legacy enum-backed global events:
 
-The app currently uses a fixed standard event set. Custom event definitions are not built.
+- Goal
+- Assist
+- Shot on target
+- Shot off target
+- Pass complete
+- Pass incomplete
+- 1v1 success
+- 1v1 unsuccessful
+- Touch
 
-Stored values and labels:
+Seeded DB-only global events include:
 
-- `GOAL` - Goal
-- `ASSIST` - Assist
-- `SHOT_ON_TARGET` - Shot on target
-- `SHOT_OFF_TARGET` - Shot off target
-- `PASS_COMPLETE` - Pass complete
-- `PASS_INCOMPLETE` - Pass incomplete
-- `ONE_V_ONE_SUCCESS` - 1v1 success
-- `ONE_V_ONE_UNSUCCESSFUL` - 1v1 unsuccessful
+- Possession gained
+- Possession lost
+- Shot position
+- Cross position
+- Carry
+- Forward pass
+- Interception
+- Tackle won
+- Key pass
+- Cross
+- Cutback
+- Shot blocked
 
-## Event Categories
+Notes:
 
-Stored values:
+- DB-only events work for coach event recording and reporting.
+- Parent submissions currently use legacy enum-backed event types only.
+- Club owners can add club-specific events in Club Setup.
+- Super Admin users can manage global event definitions.
 
-- `ATTACKING`
-- `IN_POSSESSION`
-- `OUT_OF_POSSESSION`
-- `TRANSITION`
+## Curriculum Recommendation Defaults
 
-Current standard categorisation:
+Match Day recommendations are code-based, not persisted season plans.
 
-- Attacking: goal, assist, shots.
-- In possession: passes and 1v1 events.
-- Out of possession: no standard events yet.
-- Transition: no standard events yet.
+`inferMatchFormat(ageGroup)` maps:
+
+- U6-U7 -> 3v3
+- U8-U9 -> 5v5
+- U10-U11 -> 7v7
+- U12-U13 -> 9v9
+- U14+, Open Age, Adult, Senior, Veterans -> 11v11
+- unknown -> generic recommendation
+
+Recommendations match by event name, slug, normalized name, and aliases. Missing recommended events are shown to coaches but not created automatically.
 
 ## CSV Exports
 
@@ -163,11 +141,10 @@ Examples:
 - `match-summary-brereton-social-vs-uttoxeter-2026-06-09.csv`
 - `match-events-brereton-social-vs-uttoxeter-2026-06-09.csv`
 
-## Future Default Data Not Built
+## Not Seeded Yet
 
-- Benchmark data.
+- Benchmark datasets.
 - Age-group standards.
-- Coaching templates.
-- Session plans.
-- Development pathways.
-- Custom match event libraries.
+- Persisted coaching templates.
+- Season plans or training blocks.
+- Advanced tactical event templates beyond the current global event library.

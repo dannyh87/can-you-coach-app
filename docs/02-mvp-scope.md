@@ -1,86 +1,78 @@
 # Can You Coach - Built MVP Scope
 
-This document reflects what has actually been built so far.
+This document reflects what is currently built.
 
-## In Scope And Built
+## Auth, Onboarding, And Access
 
-### Local MVP User
+- Clerk authentication is supported for production.
+- Local development can run without Clerk using a demo user fallback.
+- Public sign-up and sign-in routes exist.
+- First-time onboarding supports club officials, coaches, and parent/spectator users.
+- Invite acceptance supports team coach, team assistant, player parent, and player spectator invites.
+- Navigation and empty states are role-aware.
+- Server-side permissions remain the source of truth.
 
-- The app uses `getLocalUser()` to create/use a local demo user.
-- A default `Demo Club` can be created automatically for the local MVP user.
-- Production sign up, sign in, sign out, roles, and permissions are not built.
-
-### Club Setup
+## Club Setup
 
 - Create and manage clubs and teams.
-- Teams include name, age group, season, league, and football pyramid step.
-- Team delete is guarded when teams have players, fitness sessions, or match days.
+- Teams store name, age group, season, league, and football pyramid step.
+- Team delete is guarded when related records exist.
+- Owners can manage staff access, team assignments, parent/spectator links, and pending invites.
+- Owners can create club-specific match event definitions.
+- Report email preferences exist for match and fitness reports.
 
-### Players
+## Players
 
-- Add, edit, view, and archive players.
+- Add, edit, view, archive, and restore players.
 - Player fields include first name, surname, squad number, preferred position, date of birth, joined club date, and active status.
-- Archived players are excluded from active recording lists.
+- CSV player import is available.
+- Assistant coaches can view assigned-team players without misleading create/admin controls.
 
-### Fitness Testing
+## Fitness Testing
 
 - Manage default and custom fitness test types at `/fitness/test-types`.
-- Create custom user-owned fitness test types.
-- Edit test type name, unit, ranking direction, allowed recording modes, and preferred recording mode.
-- Persisted recording modes are stored on `FitnessTestType` as `allowedRecordingModes` and `preferredRecordingMode`.
-- Supported recording modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
-- Create fitness sessions for a team and test type.
-- Session statuses: `DRAFT`, `IN_PROGRESS`, `COMPLETED`.
-- Recording modes include manual entry, live dropout, and timed finish flows.
-- Results support numeric value, display text, result status, and notes.
-- Completed sessions are read-only.
-- Completed sessions have an admin-style Reopen for Correction action that returns the session to in-progress while preserving saved results.
-- Rankings and progress reporting are built.
-- Completed summaries show metadata, result count, top/bottom performers, rankings links, and progress links.
-- CSV export is available for saved fitness results.
+- Fitness test types include recording modes, guidance, target-score guidance, setup instructions, equipment, scoring notes, coach notes, and optional video URL.
+- Supported recording modes: `MANUAL`, `LIVE_DROPOUT`, `LIVE_TIMED_FINISH`.
+- Fitness sessions have `DRAFT`, `IN_PROGRESS`, and `COMPLETED` states.
+- Manual entry, live dropout, and live timed finish flows are built.
+- Completed sessions are read-only but can be reopened for correction.
+- Rankings, progress reporting, completed summaries, and CSV exports are built.
 
-### Match Day
+## Match Day
 
-- Create matches with team, opposition, kickoff date/time, match type, venue, score, and status.
-- Match statuses: `DRAFT`, `IN_PROGRESS`, `HALF_TIME`, `COMPLETED`.
-- Draft setup includes squad setup, tracking focus, event setup, and start match controls.
-- Squad setup marks players as starter, substitute, or not involved.
-- Tracking focus chooses which involved players are available for event recording.
-- Event setup selects from the built-in standard event set.
-- Live match controls include score display, GOAL/undo goal controls, first/second half lifecycle, and completed match state.
-- Goals can be added or undone during live play only; goal recording is paused at half-time.
-- Substitution/minutes tracking uses player stints and includes all involved players.
-- Event recording is limited to tracked players who are currently on the pitch.
-- Completed matches show a read-only report.
-- CSV exports are available for completed match summary and event timeline data.
+- Match creation supports team, opposition, kickoff, match type, and venue.
+- Match Day Wizard includes squad setup, tracking focus, event setup, and curriculum recommendations.
+- Curriculum recommendations infer match format from team age group and match against available global/club events.
+- Event setup supports global event definitions and club-specific event definitions scoped to the selected team club.
+- Live match controls include score, halves, timer state, and completion.
+- Substitution/minutes tracking uses player stints.
+- Mobile event recording has compact player chips, category chips, dense event buttons, sticky context, and immediate undo.
+- Location events open the pitch picker only when required.
+- Completed matches show read-only reports and CSV exports.
 
-### Reporting And Export
+## Parent/Spectator Access
 
-- Fitness rankings and progress reports are built.
-- Match completed report includes final score, minutes, team event totals, player event counts, most involved players, and timeline.
-- CSV exports are client-side and do not mutate data.
+- Linked-player users can view player details, recent fitness results, and recent match reports in `/my-player`.
+- Linked-player users can submit observations for linked players during live matches through `/my-player/matches`.
+- Parent submissions currently use legacy enum-backed event types only.
 
-## Built Standard Match Events
+## Reporting
 
-- Goal
-- Assist
-- Shot on target
-- Shot off target
-- Pass complete
-- Pass incomplete
-- 1v1 success
-- 1v1 unsuccessful
+- `/reports` lists Team Event Trends and Fitness Progress.
+- Team Event Trends charts selected match events across completed matches.
+- Fitness Progress charts historical fitness results.
+- Completed match and fitness sessions support CSV exports.
 
-## Out Of Scope For Current MVP
+## Global Event Library
 
-- Production auth.
+- Super Admin users can manage global event definitions.
+- Seeded global event definitions include legacy-backed events and selected DB-only events such as `Carry`, `Forward pass`, `Interception`, `Tackle won`, `Key pass`, `Cross`, `Cutback`, and `Shot blocked`.
+
+## Out Of Scope
+
 - Payments/subscriptions.
-- Parent portals.
-- Assistant coach roles.
-- Video.
-- AI recommendations.
-- Custom match event definitions.
-- Team/opposition-only events.
+- Video upload/analysis.
 - Multi-coach live sync.
-- XLSX/PDF export.
-- Migrating old `/track` localStorage data.
+- Persisted season plans/training blocks.
+- XLSX/PDF exports.
+- Auto-created missing curriculum events.

@@ -1,6 +1,6 @@
 # Can You Coach - Current Agent Instructions
 
-Build on the existing MVP. Do not treat these docs as greenfield requirements.
+Build on the existing app. Do not treat these docs as greenfield requirements.
 
 ## Stack
 
@@ -9,31 +9,38 @@ Build on the existing MVP. Do not treat these docs as greenfield requirements.
 - Tailwind CSS.
 - Prisma.
 - PostgreSQL.
+- Clerk.
 - Recharts.
 
 Do not replace these without explicit approval.
 
 ## Current Architecture
 
-- Prisma schema and current PostgreSQL migrations live in `prisma/`.
-- Previous SQLite migrations are archived in `prisma/migrations_sqlite_archive/` for reference and should not be deleted.
-- Local MVP user logic lives in `src/lib/localUser.ts`.
+- Prisma schema and PostgreSQL migrations live in `prisma/`.
+- Previous SQLite migrations are archived in `prisma/migrations_sqlite_archive/` for reference.
+- Auth helpers live in `src/lib/auth.ts`; local fallback helpers live in `src/lib/localUser.ts`.
+- Access and permission helpers live in `src/lib/accessWhere.ts`, `src/lib/permissions.ts`, `src/lib/accessSummary.ts`, and related auth files.
+- Invitations live in `src/lib/invitations.ts` and `/invite/accept`.
 - Prisma client singleton lives in `src/lib/prisma.ts`.
-- Fitness shared actions/helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
-- Fitness Test Types management lives under `src/app/fitness/test-types/`.
+- Fitness helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
+- Event-definition helpers live in `src/lib/eventDefinitions.ts` and `src/lib/eventDefinitionSimilarity.ts`.
+- Match Day curriculum recommendations live in `src/lib/curriculumRecommendations.ts`.
 - Shared UI primitives live in `src/components/ui/`.
 - Fitness routes live under `src/app/fitness/`.
 - Match Day routes live under `src/app/match-day/`.
+- Parent/spectator routes live under `src/app/my-player/`.
 - Legacy `/track` exists but should not be changed unless explicitly requested.
 
 ## Development Rules
 
 - Prefer the smallest correct change.
-- Preserve current recording behaviours unless explicitly asked to change them.
-- Fitness recording-mode labels, parsing, validation, and serialisation should stay centralised in `src/lib/fitnessRecordingModes.ts`.
-- Do not add Prisma schema changes or migrations unless the requested feature requires persisted data.
+- Preserve server-side permission checks.
+- Do not grant access through navigation or UI changes.
+- Preserve invite acceptance behavior unless explicitly asked to change it.
+- Preserve completed/read-only states for completed matches and completed fitness sessions.
+- Do not add Prisma schema changes or migrations unless persisted data is required.
 - Run `npm run lint` and `npm run build` after meaningful changes.
-- Check `package.json` before running `npm run typecheck`; there is currently no typecheck script.
+- Check `package.json` before running a typecheck script; there is currently no `typecheck` script.
 
 ## Product Rules To Preserve
 
@@ -46,19 +53,19 @@ Do not replace these without explicit approval.
 - Match events do not automatically update the score.
 - Score controls are separate from event recording.
 - Goals can be added/undone during live play only; goal recording is paused at half-time.
+- Parent submissions currently use legacy enum-backed events only.
+- Club custom events must remain scoped to the selected club/team.
+- Curriculum recommendations must not auto-create event definitions or force selections.
 
 ## Do Not Add Without Approval
 
-- Production auth.
-- Payments.
-- Production auth or deployment architecture changes beyond the current Vercel-ready setup.
-- Video.
-- Custom match event definitions.
-- Parent portals.
-- Roles/permissions.
+- Payments/subscriptions.
+- Video upload or analysis.
 - Multi-coach live sync.
-- AI recommendations.
+- Persisted Season Plan or Training Block models.
 - XLSX/PDF exports.
+- Auto-generated event libraries or AI-driven recommendations.
+- Changes that weaken roles, permissions, invite checks, or parent/spectator restrictions.
 
 ## Verification Expectations
 
@@ -82,7 +89,7 @@ Use a PostgreSQL `DATABASE_URL`, for example:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
 ```
 
-For production migrations on Vercel-managed Postgres, use:
+For production migrations on managed Postgres, use:
 
 ```bash
 npm run db:migrate:deploy

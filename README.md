@@ -1,40 +1,50 @@
 # Can You Coach App
 
-Can You Coach is a local MVP for grassroots football coaches to manage squads, record fitness testing, run Match Day tracking, and review/download useful reports.
+Can You Coach helps grassroots football clubs record match events, fitness results, and player development over time. The app is built to show progress beyond the scoreline and give coaches clearer evidence for training and match-day decisions.
 
-The app is built with Next.js App Router, TypeScript, Tailwind CSS, Prisma, PostgreSQL, and Clerk authentication. Local development can still run without Clerk keys, using the demo-user fallback.
+The app uses Next.js App Router, TypeScript, Tailwind CSS, Prisma, PostgreSQL, and Clerk authentication. Local development can run without Clerk keys using the demo-user fallback.
 
 ## What Is Built
 
-- Home/navigation page with links to the main MVP areas.
-- Club Setup for creating clubs and teams.
-- Player management for adding, editing, viewing, and archiving players.
-- Fitness testing sessions with draft, in-progress, and completed states.
-- Fitness Test Types management for custom test types and persisted recording-mode settings.
-- Fitness recording modes for manual entry, live dropout tests, and live timed finish tests.
-- Fitness rankings, progress reports, completed read-only summaries, Reopen for Correction, and CSV result downloads.
-- Match Day setup, squad selection, tracking focus, event setup, live match controls, substitutions, goal controls, completed reports, and CSV downloads.
-- Shared UI primitives under `src/components/ui/`.
-- Prisma PostgreSQL database with migrations in `prisma/migrations`.
-- Archived SQLite migration history in `prisma/migrations_sqlite_archive` for reference.
+- Public landing page focused on grassroots development beyond the scoreline.
+- Clerk sign-in/sign-up routes with local fallback auth for development.
+- First-time onboarding for club officials, coaches, and parent/spectator users.
+- Role-aware navigation and empty states.
+- Club Setup for clubs, teams, access management, invitations, and club custom match events.
+- Player management, player profiles, archive/restore, and CSV import.
+- Fitness test type management, guidance content, target-score guidance, sessions, live recording modes, rankings, progress reporting, and CSV exports.
+- Match Day wizard with squad setup, tracking focus, curriculum event recommendations, club/global event selection, live controls, mobile-first event recording, substitutions, reports, and CSV exports.
+- Parent/spectator `My Player` access with linked-player views and live match observations.
+- Reports landing page with Team Event Trends and Fitness Progress.
+- Super Admin global event library management.
 
 ## Main Routes
 
-- `/` - app home and navigation.
-- `/club-setup` - club and team setup.
-- `/players` - player list and player management.
+- `/` - public landing page or authenticated dashboard.
+- `/sign-in` and `/sign-up` - Clerk auth routes.
+- `/onboarding` - first-time onboarding.
+- `/club-setup` - club, team, report email, and club event setup.
+- `/club-setup/access` - staff and parent/spectator invitation/access management.
+- `/players` - player list and management.
 - `/players/[id]` - player profile/details.
-- `/fitness` - fitness session list and creation.
-- `/fitness/test-types` - manage default and custom fitness test type settings.
-- `/fitness/sessions/[id]` - fitness session detail, manual results, completed result view, CSV export.
+- `/players/import` - CSV player import.
+- `/fitness` - fitness session list.
+- `/fitness/test-types` - default and custom fitness test settings/guidance.
+- `/fitness/sessions/new` - create a fitness session.
+- `/fitness/sessions/[id]` - session detail, manual results, completed view, CSV export.
 - `/fitness/sessions/[id]/live` - live dropout recording.
 - `/fitness/sessions/[id]/timer` - live timed finish recording.
-- `/fitness/sessions/[id]/rankings` - rankings for a fitness session.
+- `/fitness/sessions/[id]/rankings` - session rankings.
 - `/fitness/progress` - fitness progress reporting.
-- `/match-day` - match list and creation.
-- `/match-day/[id]` - match setup, live match, completed match report, CSV export.
-- `/my-player` - read-only spectator route for one linked player.
-- `/track` - legacy localStorage prototype; not part of the Prisma Match Day MVP.
+- `/match-day` - match list.
+- `/match-day/new` - Match Day wizard with curriculum recommendations.
+- `/match-day/[id]` - draft setup, live match, event recording, completed report.
+- `/my-player` - linked-player parent/spectator view.
+- `/my-player/matches` - parent/spectator match observations.
+- `/reports` - reports index.
+- `/reports/team-trends` - team event trend reporting.
+- `/super-admin/events` - global event library management.
+- `/track` - legacy localStorage prototype; not part of the Prisma Match Day workflow.
 
 ## Local Development
 
@@ -50,21 +60,21 @@ Create `.env` from `.env.example` and set a PostgreSQL connection string:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
 ```
 
-Clerk is optional for local development. If these values are omitted, the app uses the local demo user and Demo Club fallback:
+Clerk is optional for local development. If Clerk values are omitted, the app uses the local demo user and Demo Club fallback:
 
 ```env
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-in"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
 ```
 
 Apply migrations, seed default data, and generate Prisma Client:
 
 ```bash
 npx prisma migrate dev
-npx prisma db seed
+npm run db:seed
 npx prisma generate
 ```
 
@@ -89,9 +99,9 @@ npx prisma studio
 
 There is currently no `typecheck` script in `package.json`.
 
-## Vercel Deployment
+## Deployment
 
-Use a managed Postgres provider on or with Vercel and set these required environment variables in Vercel:
+Use a managed Postgres provider and set these environment variables:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
@@ -99,7 +109,9 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_..."
 CLERK_SECRET_KEY="sk_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-in"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
+SUPER_ADMIN_EMAILS="admin@example.com"
+ENABLE_ROLE_TESTER="false"
 ```
 
 `DIRECT_URL` is not currently required because `prisma/schema.prisma` only uses `env("DATABASE_URL")`.
@@ -110,32 +122,16 @@ Production migrations should be applied deliberately with:
 npm run db:migrate:deploy
 ```
 
-Do not use `prisma migrate dev` against production. Seed demo/default data only deliberately, usually once:
-
-```bash
-npm run db:seed
-```
-
-Do not auto-seed on every deployment. `.env` is for local development only and should not be committed.
+Do not use `prisma migrate dev` against production. Seed production only deliberately.
 
 ## Data And Auth Status
 
 - Database: PostgreSQL via Prisma.
-- Auth: Clerk sign-in only for production; no public registration route is implemented.
-- Local fallback: when Clerk env vars are missing, a local demo user and Demo Club are created for development.
-- Roles: Owner, Coach, Assistant Coach, Viewer, plus read-only Spectator access linked to one player.
-- Hosting: ready for Vercel with a managed Postgres `DATABASE_URL`.
+- Auth: Clerk in production, local fallback in development.
+- Roles: Owner, Coach, Assistant Coach, Viewer, and linked-player spectator access.
+- Invitations: staff and parent/spectator invite links are implemented.
+- Custom match events: global Super Admin library plus club-specific event definitions.
 - Payments: not implemented.
-- Video: not implemented.
-- Custom match event definitions: not implemented; the app uses a fixed standard event set.
-
-## Current Non-Goals
-
-- Parent portals.
-- Public registration, open sign-up, self-service club creation, invitation flows, payments, and subscriptions.
-- Payments/subscriptions.
-- Production multi-user account separation and hardening.
-- Video upload or analysis.
-- AI recommendations.
-- Multi-coach live sync.
-- XLSX/PDF exports.
+- Video upload/analysis: not implemented.
+- Multi-coach live sync: not implemented.
+- XLSX/PDF exports: not implemented.

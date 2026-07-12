@@ -24,11 +24,11 @@ Use this checklist before deploying Can You Coach to Preview or Production.
 - Run migrations before or during deployment:
 
 ```bash
-npx prisma migrate deploy
+npm run db:migrate:deploy
 ```
 
 - Do not seed demo or test data into production unless this is intentionally documented for a staging/demo environment.
-- If seed data is needed for staging, verify exactly what `prisma/seed.mjs` creates before running it.
+- If seed data is needed for staging or controlled production defaults, verify exactly what `prisma/seed.mjs` creates before running it. The seed includes demo local data plus global event definitions and default fitness tests.
 
 ## Pre-Deploy Verification
 
@@ -48,4 +48,5 @@ npm run build
 
 ## Final Checks
 
-- Confirm `npx prisma generate`, `npm run db:seed`, `npx prisma migrate status`, `npm run lint`, and `npm run build` complete successfully before deployment.
+- Confirm `npx prisma generate`, `npx prisma migrate status`, `npm run lint`, and `npm run build` complete successfully before deployment.
+- Run `npm run db:seed` only when deliberately updating default/staging data.

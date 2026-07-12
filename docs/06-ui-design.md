@@ -1,11 +1,12 @@
 # Can You Coach - Current UI Design
 
-The UI is mobile-first and touchline-friendly. It uses Tailwind CSS and a small set of shared primitives under `src/components/ui/`.
+The UI is mobile-first and touchline-friendly. It uses Tailwind CSS and shared primitives under `src/components/ui/`.
 
 ## Shared UI Primitives
 
 Built components include:
 
+- `ActionLink`
 - `Button`
 - `PageHeader`
 - `SectionCard`
@@ -14,108 +15,87 @@ Built components include:
 - `EmptyState`
 - `ModalShell`
 - `StatCard`
-- form style helpers
+- table and form helpers
 
-The app still contains some feature-specific styling where it is simpler than abstracting everything.
+Feature-specific styling remains where it keeps implementation simpler.
 
-Recent polish made shared page headers, section cards, empty states, mobile spacing, and the top navigation more consistent and phone-friendly.
+## Public Landing Page
+
+The public landing page is concise and outcome-led:
+
+- Hero: `See progress beyond the scoreline`.
+- One strong primary CTA: `Start tracking what matters`.
+- Short problem/solution sections.
+- Three benefit cards: record what matters, see progress over time, share the workload.
+- Detailed explanations are left to `/how-to-use`.
 
 ## Global Navigation
 
-The top navigation links to:
+Navigation is role-aware:
 
-- Home
-- Club Setup
-- Players
-- Fitness
-- Match Day
+- Public users see public home/how-to-use/auth paths.
+- Parent-only users see My Player and Match Observations.
+- No-access users see onboarding and appropriate invite/setup guidance.
+- Coaches and assistants see relevant coaching routes.
+- Owners see Club Setup.
+- Super Admin users see Super Admin routes.
 
-The old `/track` prototype is not linked as a primary MVP workflow.
+## Authenticated Home
 
-## Home
+The authenticated home acts as a dashboard:
 
-Purpose: navigation and overview of the MVP areas.
-
-Current behaviour:
-
-- Links users into Club Setup, Players, Fitness, and Match Day.
-- Does not yet show a full analytics dashboard.
+- No-access state and onboarding guidance.
+- Parent/spectator dashboard panels for linked players.
+- Coach/club dashboard with active sessions, active matches, recent activity, and reports.
 
 ## Club Setup
 
-Purpose: manage clubs and teams.
-
-Current UI:
-
-- Club/team setup cards and forms.
-- Delete guards surface why a team cannot be removed.
+- Owners manage clubs, teams, report email preferences, staff/parent access, and club custom events.
+- Non-owner/parent direct-route states show guidance instead of admin UI.
 
 ## Players
 
-Purpose: manage active and archived players.
-
-Current UI:
-
-- Player list with add/edit flows.
-- Player profile/detail page.
-- Archived players are handled through active status.
+- Coaches/owners can manage players.
+- Assistants can view assigned team players without misleading edit/archive actions.
+- CSV import supports bulk player creation.
 
 ## Fitness
 
-Purpose: create sessions, record results, and review outputs.
+- Fitness list separates tasks, sessions, filters, and results.
+- Fitness test type setup includes practical guidance fields.
+- Live dropout/timer screens use large direct controls.
+- Completed sessions become read-only with clear correction and export options.
 
-Current UI:
+## Match Day Wizard
 
-- Fitness session list and creation modal.
-- Fitness Test Types settings page at `/fitness/test-types` for custom test type creation/editing and persisted recording-mode settings.
-- Session detail page with metadata, lifecycle status, recording links, saved results, and CSV download when results exist.
-- Live dropout and timer pages with large controls.
-- Rankings table.
-- Progress reporting with Recharts.
-- Completed locked/read-only summary panels with rankings/progress links and Reopen for Correction.
+The new match wizard includes:
 
-## Match Day List
+- Match details.
+- Team selection.
+- Squad setup.
+- Match settings.
+- Event setup with curriculum recommendation panel.
+- Review and create.
 
-Purpose: create and find matches.
+The recommendation panel shows age group, inferred format, theme, week focus, matched events, missing events, and a `Use recommended events` CTA. It does not auto-select events.
 
-Current UI:
+## Live Match Recording
 
-- Match list cards/table.
-- Create match modal.
-- Status and score summaries.
+The live event-recording UI is compact on mobile:
 
-## Match Day Detail
+- Sticky recording header with current player/event context and mode switch.
+- Horizontal player chips.
+- Horizontal category chips.
+- Dense two/three-column event button grid.
+- Persistent bottom row with latest event and Undo.
+- Full event history is collapsed by default.
+- Location picker opens only for location-required events.
 
-### Draft State
+Score controls, substitutions, and event recording remain separate.
 
-Order is:
+## Completed Match Reports
 
-1. Squad setup
-2. Tracking focus
-3. Event setup
-4. Start match
-
-Draft UI rules:
-
-- Squad setup controls starter/substitute/not involved status.
-- Tracking focus explains that event tracking does not affect squad involvement or substitutions.
-- Event setup chooses standard event types available for the match.
-
-### Live State
-
-Live match UI contains:
-
-- Score display, live GOAL/undo goal controls, and half/timer controls.
-- Player/substitution controls.
-- Event recording controls.
-
-Event recording supports player-first and event-first modes. Only tracked players currently on the pitch are shown.
-
-Goal controls are separate from event recording. Goals can be added or undone during live play only, and goal recording is paused at half-time.
-
-### Completed State
-
-Completed matches show a report only:
+Completed matches show read-only reports:
 
 - Final score.
 - Minutes played.
@@ -123,21 +103,13 @@ Completed matches show a report only:
 - Player event counts.
 - Most involved players.
 - Timeline.
+- Location maps where location data exists.
 - CSV export buttons.
-
-## CSV Export UI
-
-Fitness:
-
-- `Download results CSV` appears when a fitness session has saved results.
-
-Match Day:
-
-- `Download summary CSV` and `Download events CSV` appear on completed match reports.
 
 ## Design Constraints
 
-- Keep live recording controls large and direct.
-- Avoid adding modal-heavy flows during live play.
+- Keep live controls direct and tap-friendly.
+- Avoid modal-heavy flows during live play.
+- Preserve accessible tap targets even when layouts are compact.
 - Keep completed reports read-only.
-- Prefer clear labels over internal enum names.
+- Prefer clear coach-facing labels over enum names.

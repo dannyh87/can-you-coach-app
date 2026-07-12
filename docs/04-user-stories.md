@@ -1,16 +1,42 @@
 # Can You Coach - Built User Stories
 
-This document records the user stories currently supported by the MVP.
+This document records the user stories currently supported by the app.
 
-## Club And Team Setup
+## Public Landing, Auth, And Onboarding
 
-As a coach, I can create a club and team so that players, fitness sessions, and matches are organised.
+As a new user, I can understand the product quickly, sign up or sign in, and choose the right onboarding path.
 
 Built acceptance criteria:
 
-- Create club and team records.
-- Capture team name, age group, season, league, and football pyramid step.
-- Prevent deleting teams that still have related players, fitness sessions, or match days.
+- Public landing page explains progress beyond the scoreline.
+- Clerk sign-in/sign-up routes exist.
+- Local fallback auth exists for development.
+- Onboarding supports club officials, coaches, and parent/spectator users.
+- No-access users get role-aware guidance.
+
+## Club And Team Setup
+
+As a club owner, I can create a club and teams so that players, fitness sessions, matches, and reports are organised.
+
+Built acceptance criteria:
+
+- Create and update club records.
+- Create and update team records with age group, season, league, and football pyramid step.
+- Prevent deleting teams that still have related records.
+- Manage match and fitness report email preferences.
+
+## Access And Invitations
+
+As a club owner, I can invite staff and parent/spectator contributors so the right people can help without opening up admin access.
+
+Built acceptance criteria:
+
+- Generate staff invites for coach and assistant coach access.
+- Assign staff to teams.
+- Generate parent/spectator invites linked to players.
+- Revoke pending invites.
+- Accept invites from `/invite/accept`.
+- Preserve server-side permission checks.
 
 ## Player Management
 
@@ -20,115 +46,87 @@ Built acceptance criteria:
 
 - Add and edit player details.
 - Capture first name, surname, squad number, preferred position, date of birth, and joined club date.
-- Archive players with `isActive` rather than hard-deleting active history.
+- Archive/restore players using active status.
 - View player detail pages.
+- Import players from CSV.
+- Assistants can view assigned team players without seeing owner/admin controls.
 
-## Fitness Session Creation
+## Fitness Testing
 
-As a coach, I can create a fitness session so that I can record a squad test.
-
-Built acceptance criteria:
-
-- Select team, test type, date, and notes.
-- Save sessions as draft.
-- Start sessions and mark sessions complete through supported recording flows.
-- Display sessions in the Fitness area.
-
-## Fitness Test Type Management
-
-As a coach, I can manage fitness test type settings so that each test uses the correct recording workflow.
+As a coach, I can run and review fitness tests so that I can compare player performance and progress.
 
 Built acceptance criteria:
 
-- View default and custom fitness test types at `/fitness/test-types`.
-- Create custom user-owned fitness test types.
-- Edit test name, unit, higher/lower-is-better ranking direction, allowed recording modes, and preferred recording mode.
-- Allowed modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
-- At least one allowed recording mode is required.
-- Preferred mode must be one of the allowed modes, or it falls back to the first allowed mode.
+- Manage default and custom fitness test types.
+- Store setup instructions, equipment, scoring notes, coach notes, video URL, and target-score guidance.
+- Configure allowed and preferred recording modes.
+- Create fitness sessions for a team and test type.
+- Record manual, live dropout, and live timed finish results.
+- Use statuses: completed, did not start, injured, absent/missed, and dropped out.
+- Lock completed sessions as read-only.
+- Reopen completed sessions for correction while preserving saved results.
+- Review rankings and progress charts.
+- Export fitness results as CSV.
 
-## Fitness Result Recording
+## Match Creation And Setup
 
-As a coach, I can record fitness results so that I can compare player performance.
-
-Built acceptance criteria:
-
-- Manual entry for suitable tests.
-- Live dropout recording for dropout-style tests.
-- Timed finish recording for timed tests.
-- Result statuses include completed, did not start, injured, absent/missed, and dropped out.
-- Results support numeric values, display text, and notes.
-- Completed sessions hide recording controls and become read-only.
-- Completed sessions can be reopened for correction, preserving saved results.
-
-## Fitness Rankings And Progress
-
-As a coach, I can review rankings and progress so that I can understand performance and improvement.
+As a coach, I can create and prepare a match so that live recording is quick and focused.
 
 Built acceptance criteria:
 
-- Session rankings sort by the test type ranking direction.
-- Missing or invalid numeric results are shown separately.
-- Progress reporting shows historical results and simple charts.
-- Completed summary panels show key session metadata and top/bottom performers.
-- Fitness results can be downloaded as CSV.
-
-## Match Creation
-
-As a coach, I can create a match so that I can prepare a Match Day record.
-
-Built acceptance criteria:
-
-- Select team.
-- Enter opposition and kickoff date/time.
-- Select venue and match type.
-- Match starts in draft state.
-
-## Match Squad Setup
-
-As a coach, I can set up a match squad so that involvement and substitutions are tracked.
-
-Built acceptance criteria:
-
-- Pull active team players into a match squad.
-- Mark players as starter, substitute, or not involved.
-- Lock squad editing once the match starts.
-- Keep not-involved players out of live substitution/event workflows.
-
-## Match Tracking Focus
-
-As a coach or parent helper, I can select which involved players are tracked for events so that recording can focus on one player or a small group.
-
-Built acceptance criteria:
-
-- Choose all on-pitch players or selected players only.
-- Tracking focus is draft-only.
-- Tracking focus does not remove players from the squad.
-- Tracking focus does not affect substitutions or minutes.
-- Event recording only shows tracked players currently on the pitch.
+- Create matches with team, opposition, kickoff, venue, and match type.
+- Matches start in draft state.
+- Set up squad statuses: starter, substitute, not involved.
+- Choose tracking focus for event recording.
+- Choose global and club-specific event definitions.
+- Use curriculum recommendations based on age group, inferred match format, theme, week, and available events.
+- Keep manual event selection available.
 
 ## Match Live Recording
 
-As a coach, I can run a live match so that score, halves, minutes, substitutions, and events are captured.
+As a coach, I can run a live match so score, halves, minutes, substitutions, and events are captured.
 
 Built acceptance criteria:
 
-- Start first half, end first half, start second half, complete match.
+- Start first half, end first half, start second half, and complete match.
 - Add or undo team/opposition goals during live play.
-- Pause goal recording at half-time.
+- Pause goal and event recording at half-time.
 - Sub players on and off during active halves.
 - Track player stints and minutes played.
-- Record selected standard events for tracked on-pitch players.
+- Record selected events for tracked on-pitch players.
+- Open pitch location picker only for events that require location.
 - Undo events before completion.
-- Keep goal controls separate from event recording; events do not update the score automatically.
+- Keep goal controls separate from event recording.
+- Mobile recording uses compact player chips, category chips, event grid, sticky context, and persistent undo.
+
+## Parent/Spectator Linked Player Access
+
+As a parent or spectator, I can follow linked-player information without gaining club admin access.
+
+Built acceptance criteria:
+
+- View linked-player profile, fitness results, and recent match reports in `/my-player`.
+- Submit live match observations for linked players from `/my-player/matches`.
+- Keep parent observations separate from coach/admin workflows.
+- Parent submissions currently use legacy enum-backed event types.
 
 ## Completed Match Report
 
-As a coach, I can review a completed match so that I can share and analyse what happened.
+As a coach, I can review a completed match so that I can analyse what happened.
 
 Built acceptance criteria:
 
-- Completed report shows final score, minutes, team event totals, player event counts, most involved players, and timeline.
+- Completed report shows final score, minutes, team event totals, player event counts, most involved players, timeline, and location maps where available.
 - Completed matches are read-only.
 - Download summary CSV.
 - Download events CSV.
+
+## Reports
+
+As a coach, I can review trends so that I can see development over time.
+
+Built acceptance criteria:
+
+- Reports index links to Team Event Trends and Fitness Progress.
+- Team Event Trends filters by team, date range, event, and match type.
+- Fitness Progress shows historical test results and charts.

@@ -1,6 +1,15 @@
 # Can You Coach - Current Reporting And Exports
 
-Reporting currently focuses on simple, useful outputs coaches can review or share.
+Reporting focuses on simple outputs that help coaches review progress over time.
+
+## Reports Index
+
+`/reports` currently links to:
+
+- Team Event Trends
+- Fitness Progress
+
+Access is role-aware. Parent/spectator users are guided to My Player instead of coaching reports.
 
 ## Fitness Reporting
 
@@ -8,38 +17,25 @@ Reporting currently focuses on simple, useful outputs coaches can review or shar
 
 Completed fitness sessions are locked/read-only and show:
 
-- Test type.
-- Team.
-- Date.
-- Status.
-- Started/completed timestamps.
-- Saved result count.
-- Top performer.
-- Bottom performer.
-- Links to rankings and progress.
+- test type
+- team
+- date
+- status
+- started/completed timestamps
+- saved result count
+- top performer
+- bottom performer
+- links to rankings and progress
 
-Completed sessions also keep CSV export available when saved results exist and include a Reopen for Correction action for controlled result corrections.
+Completed sessions keep CSV export available when saved results exist and include Reopen for Correction.
 
 ### Rankings
 
-The rankings page shows:
-
-- Rank.
-- Player.
-- Squad number.
-- Result.
-- Status.
-- Notes.
-
-Ranking rules:
-
-- Numeric `resultValue` is required for ranking.
-- `higherIsBetter` on the test type controls sort direction.
-- Missing or invalid numeric results are shown separately.
+The rankings page shows ranked numeric results using the test type's `higherIsBetter` rule. Missing or invalid numeric results are shown separately.
 
 ### Progress
 
-Fitness progress reporting uses historical results and simple charts to show improvement over time.
+Fitness progress reporting uses historical results and charts to show improvement over time by team, player, and test type.
 
 ### Fitness CSV Export
 
@@ -49,25 +45,7 @@ Button:
 
 - `Download results CSV`
 
-Columns:
-
-- Session
-- Date
-- Team
-- Club
-- Test Type
-- Status
-- Player
-- Squad Number
-- Result
-- Result Value
-- Result Status
-- Rank
-- Notes
-
-Example filename:
-
-- `fitness-results-gacon-test-brereton-social-2026-06-09.csv`
+Key columns include session, date, team, club, test type, player, squad number, result, result value, status, rank, and notes.
 
 ## Match Day Reporting
 
@@ -84,29 +62,32 @@ Completed matches show a read-only report.
 - Player event counts.
 - Most involved players.
 - Match timeline.
+- Location maps where location data exists.
+- Parent submission review history where relevant.
 
 ### Minutes Reporting
 
-Minutes are based on `MatchPlayerStint` records.
-
-Important rule:
-
-- Minutes include all involved players, not just players tracked for events.
+Minutes are based on `MatchPlayerStint` records and include all involved players, not only players tracked for events.
 
 ### Event Reporting
 
-Event counts come from `MatchEvent` records.
+Event counts come from `MatchEvent` records and can be backed by either legacy enum event types or `EventDefinition` records.
 
-Current event types:
+Current event library includes legacy events, DB-only seeded global events, and optional club custom events.
 
-- Goal
-- Assist
-- Shot on target
-- Shot off target
-- Pass complete
-- Pass incomplete
-- 1v1 success
-- 1v1 unsuccessful
+### Team Event Trends
+
+`/reports/team-trends` compares one selected match event across completed matches over time.
+
+Filters include:
+
+- team
+- date from
+- date to
+- event
+- match type
+
+The report uses both selected match event types and recorded match events so trends can include global and club-defined event definitions.
 
 ### Match Summary CSV Export
 
@@ -116,33 +97,7 @@ Button:
 
 - `Download summary CSV`
 
-Columns:
-
-- Match
-- Date
-- Team
-- Opposition
-- Venue
-- Match Type
-- Final Score
-- Player
-- Squad Number
-- Squad Status
-- Tracked For Events
-- Minutes Played
-- Total Events
-- Goals
-- Assists
-- Shots On Target
-- Shots Off Target
-- Pass Complete
-- Pass Incomplete
-- 1v1 Success
-- 1v1 Unsuccessful
-
-Example filename:
-
-- `match-summary-brereton-social-vs-uttoxeter-2026-06-09.csv`
+Columns include match metadata, player, squad status, tracked-for-events flag, minutes played, total events, and legacy event summary counts.
 
 ### Match Events CSV Export
 
@@ -152,31 +107,13 @@ Button:
 
 - `Download events CSV`
 
-Columns:
-
-- Match
-- Date
-- Team
-- Opposition
-- Venue
-- Match Type
-- Final Score
-- Half
-- Match Time
-- Player
-- Event
-- Score At Time
-
-Example filename:
-
-- `match-events-brereton-social-vs-uttoxeter-2026-06-09.csv`
+Columns include match metadata, half, match time, player, event label, and score at time.
 
 ## Not Yet Built
 
-- Season-long match trends.
-- Position comparisons.
-- Benchmark reporting.
-- Team average improvement reports.
 - PDF export.
 - XLSX export.
-- Automated insights or recommendations.
+- Automated insight generation.
+- Season-plan reporting.
+- Position comparison reports.
+- Benchmark datasets.

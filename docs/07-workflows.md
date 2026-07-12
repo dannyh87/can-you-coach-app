@@ -1,154 +1,116 @@
 # Can You Coach - Current Workflows
 
-This document describes the workflows currently supported by the built MVP.
+This document describes the workflows currently supported by the app.
 
-## Workflow 1: Set Up A Club, Team, And Players
+## Workflow 1: Sign Up, Onboard, Or Accept An Invite
+
+1. Open `/sign-up`, `/sign-in`, or an invite link.
+2. Complete onboarding as a club official, coach, or parent/spectator.
+3. If invited, accept the invite with the invited email.
+4. Navigation and empty states update based on access.
+
+## Workflow 2: Set Up A Club, Team, And Access
 
 1. Open `/club-setup`.
 2. Create or update club details.
-3. Create a team with age group, season, league, and pyramid step if needed.
-4. Open `/players`.
-5. Add active players with squad number and preferred position.
+3. Create teams with age group, season, league, and pyramid step.
+4. Use `/club-setup/access` to invite coaches, assistants, parents, and spectators.
+5. Add club custom events if the global library does not cover a club-specific coaching focus.
 
-Notes:
+## Workflow 3: Manage Players
 
-- Players belong to one team in the MVP.
-- Archived players are excluded from active recording lists.
+1. Open `/players`.
+2. Add players manually or import a CSV from `/players/import`.
+3. Edit player details as needed.
+4. Archive players rather than deleting history.
 
-## Workflow 2: Create A Fitness Session
+## Workflow 4: Create And Record A Fitness Session
 
 1. Open `/fitness`.
-2. Create a fitness session for a team and test type.
-3. Choose from test types whose allowed recording modes are configured in `/fitness/test-types`.
-4. Add date and optional notes.
-5. Start the session when ready.
+2. Create a session for a team and fitness test type.
+3. Use the configured recording mode: manual, live dropout, or live timed finish.
+4. Save results and complete the session.
+5. Reopen for correction only when needed.
 
-Supported lifecycle:
+## Workflow 5: Review Fitness Data
 
-- Draft
-- In progress
-- Completed
+1. Open a session rankings page to compare player results.
+2. Open `/fitness/progress` to review historical progress.
+3. Download results CSV from a session with saved results.
 
-## Workflow 3: Record Fitness Results
+## Workflow 6: Create A Match With Recommendations
 
-The app supports multiple recording modes depending on the test type.
+1. Open `/match-day/new`.
+2. Enter match details.
+3. Select the team.
+4. Pick the squad.
+5. Review curriculum recommendations in event setup.
+6. Use recommended events, default event set, or manual event selection.
+7. Create the match.
 
-Manual entry:
+Recommendation notes:
 
-1. Open the session detail page.
-2. Enter numeric result, display result, status, and notes for players.
-3. Save results.
+- Match format is inferred from team age group.
+- Recommendations match against global and club-scoped event definitions.
+- Missing recommended events are shown but not created automatically.
+- Coaches can override all recommendations.
 
-Dropout tests:
+## Workflow 7: Set Up A Draft Match
 
-1. Open the live dropout page.
-2. Track the current level/stage.
-3. Mark players as dropped out at their final level.
+Draft setup includes:
 
-Timed finish tests:
+1. Match details.
+2. Squad setup.
+3. Tracking focus.
+4. Event setup.
+5. Start match.
 
-1. Open the timer page.
-2. Start timing.
-3. Record each player's finish result.
+Rules:
 
-Completed sessions:
+- Squad setup is locked after kick-off.
+- Event setup is locked after kick-off.
+- Tracking focus affects event recording only.
 
-- Hide recording controls.
-- Show read-only summaries/results.
-- Link to rankings and progress.
-- Allow CSV download when results exist.
-- Allow Reopen for Correction to return a completed session to in-progress while preserving saved results.
+## Workflow 8: Run A Live Match
 
-## Workflow 3A: Manage Fitness Test Types
-
-1. Open `/fitness/test-types`.
-2. Create a custom test type or tap an existing row to edit it.
-3. Set name, unit, ranking direction, allowed recording modes, and preferred recording mode.
-4. Save the modal form.
-
-Supported recording modes:
-
-- `MANUAL` - manual result entry.
-- `LIVE_DROPOUT` - live dropout/level recording.
-- `LIVE_TIMED_FINISH` - live timer/finish recording.
-
-## Workflow 4: Review Fitness Data
-
-Rankings:
-
-1. Open a session's rankings page.
-2. Numeric results are ranked by the test type's `higherIsBetter` rule.
-3. Missing or invalid numeric results are shown separately.
-
-Progress:
-
-1. Open `/fitness/progress`.
-2. Review historical results and charts.
-
-Exports:
-
-- Use `Download results CSV` on a session with saved results.
-
-## Workflow 5: Create A Match
-
-1. Open `/match-day`.
-2. Create a match with team, opposition, kickoff, venue, and match type.
-3. Open the match detail page.
-
-Matches start as draft records.
-
-## Workflow 6: Set Up A Draft Match
-
-Draft setup order:
-
-1. Squad setup.
-2. Tracking focus.
-3. Event setup.
-4. Start match.
-
-Squad setup:
-
-- Pull active team players into the match.
-- Mark each player as starter, substitute, or not involved.
-
-Tracking focus:
-
-- Choose all on-pitch players or selected players only for event recording.
-- This does not affect squad involvement, substitutions, or minutes.
-
-Event setup:
-
-- Choose from the standard event types available for the match.
-
-## Workflow 7: Run A Live Match
-
-1. Start the match.
-2. Starters are put on the pitch for first-half minutes.
-3. Add or undo goals for either team during live play.
+1. Start the first half.
+2. Add/undo goals through score controls.
+3. Sub players on/off to track stints and minutes.
 4. Record selected events for tracked players currently on the pitch.
-5. Sub players on/off to track stints and minutes.
-6. End first half.
-7. Start second half.
-8. Complete the match.
+5. Use compact mobile player chips and event buttons for faster recording.
+6. Undo the latest event from the persistent bottom row if needed.
+7. End first half, start second half, and complete the match.
 
 Important rules:
 
 - Score changes are separate from event recording.
 - Events do not update score automatically.
-- Goal recording and event recording are paused at half-time.
+- Goal and event recording pause at half-time.
+- Location events open the pitch picker only when required.
 - Completed matches become read-only.
 
-## Workflow 8: Review A Completed Match
+## Workflow 9: Parent/Spectator Match Observations
+
+1. Parent/spectator users open `/my-player/matches`.
+2. They can submit observations for linked players during live matches.
+3. Coaches review pending submissions on the match page.
+4. Accepted submissions become match events.
+
+Current limitation:
+
+- Parent submissions use legacy enum-backed event types only.
+
+## Workflow 10: Review A Completed Match
 
 Completed match report includes:
 
-- Final score.
-- Match metadata.
+- Final score and metadata.
 - Minutes played.
 - Team event totals.
 - Player event counts.
 - Most involved players.
-- Match timeline.
+- Timeline.
+- Location maps where available.
 
 CSV exports:
 
@@ -157,4 +119,4 @@ CSV exports:
 
 ## Legacy Workflow
 
-`/track` remains a legacy localStorage prototype. It is not connected to the Prisma Match Day MVP and should not be used as the source of truth for new features.
+`/track` remains a legacy localStorage prototype. It is not connected to the Prisma Match Day workflow and should not be used as the source of truth for new features.

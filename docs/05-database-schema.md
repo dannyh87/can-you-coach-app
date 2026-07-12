@@ -1,8 +1,8 @@
 # Can You Coach - Current Database Schema
 
-The app uses Prisma with PostgreSQL. The schema is defined in `prisma/schema.prisma` and current migrations are stored in `prisma/migrations`.
+The app uses Prisma with PostgreSQL. The schema is defined in `prisma/schema.prisma`, with migrations in `prisma/migrations`.
 
-Previous SQLite migrations are preserved in `prisma/migrations_sqlite_archive` for reference. Current development and deployment use PostgreSQL migrations in `prisma/migrations`.
+Previous SQLite migrations are preserved in `prisma/migrations_sqlite_archive` for reference.
 
 Expected local `DATABASE_URL` format:
 
@@ -10,51 +10,61 @@ Expected local `DATABASE_URL` format:
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/can_you_coach?schema=public"
 ```
 
-Postgres compatibility notes:
-
-- The current schema uses `String @id @default(cuid())`, Prisma enums, booleans, `DateTime`, `Float`, and referential actions that are compatible with Postgres.
-- The fresh Postgres baseline migration creates native Postgres enum types.
-- Vercel deployment uses a managed Postgres `DATABASE_URL`. `DIRECT_URL` is not currently required because the Prisma schema only uses `env("DATABASE_URL")`.
+`DIRECT_URL` is not currently required because the Prisma schema only uses `env("DATABASE_URL")`.
 
 ## Core Hierarchy
 
 ```text
 User
-  └── Club
-        └── Team
-              └── Player
+  ├── ClubMembership -> Club -> Team -> Player
+  └── SpectatorAccess -> Player
 ```
 
 ## User
 
-Purpose: local MVP owner account.
+Purpose: app account, Clerk-linked in production or local fallback in development.
 
-Key fields:
+Key fields include:
 
 - `id`
+- `clerkUserId`
 - `email`
 - `passwordHash`
-- `createdAt`
-- `updatedAt`
+- `onboardingCompletedAt`
+- `onboardingRole`
 
-Current note: production authentication is not built. The local MVP uses `getLocalUser()`.
+Relations include clubs, memberships, spectator access, invitations, fitness test types, and submitted/accepted parent match events.
 
-## Club
+## Club, Memberships, And Access
 
-Purpose: club or organisation.
+`Club` stores club details, report email preferences, teams, memberships, invitations, and spectator links.
 
-Key fields:
+`ClubMembership` stores user role per club:
 
-- `id`
-- `userId`
-- `name`
-- `location`
-- `notes`
+- `OWNER`
+- `COACH`
+- `ASSISTANT_COACH`
+- `VIEWER`
 
-Relations:
+`TeamAssignment` links memberships to teams for scoped coach/assistant access.
 
-- belongs to `User`
-- has many `Team`
+`SpectatorAccess` links a user to a specific player and club without creating club membership.
+
+## Invitations
+
+`Invitation` supports invite links for:
+
+- `TEAM_COACH`
+- `TEAM_ASSISTANT`
+- `PLAYER_PARENT`
+- `PLAYER_SPECTATOR`
+
+Statuses:
+
+- `PENDING`
+- `ACCEPTED`
+- `EXPIRED`
+- `REVOKED`
 
 ## Team
 
@@ -62,7 +72,6 @@ Purpose: squad within a club.
 
 Key fields:
 
-- `id`
 - `clubId`
 - `name`
 - `ageGroup`
@@ -70,10 +79,7 @@ Key fields:
 - `league`
 - `footballPyramidStep`
 
-Relations:
-
-- belongs to `Club`
-- has many `Player`, `FitnessTestSession`, and `MatchDay`
+There is no persisted match-format field. Match Day curriculum recommendations infer match format from `ageGroup`.
 
 ## Player
 
@@ -81,7 +87,6 @@ Purpose: individual player.
 
 Key fields:
 
-- `id`
 - `teamId`
 - `firstName`
 - `surname`
@@ -91,82 +96,22 @@ Key fields:
 - `joinedClubDate`
 - `isActive`
 
-Relations:
+## Fitness Models
 
-- belongs to `Team`
-- has fitness results, match squad records, match stints, and match events
+`FitnessTestType` stores test configuration, recording modes, and guidance fields:
 
-## FitnessTestType
+- result unit and ranking direction
+- allowed/preferred recording modes
+- setup instructions
+- equipment needed
+- scoring notes
+- coach notes
+- video URL
+- target scores
 
-Purpose: defines a standard or user-owned fitness test.
+`FitnessTestSession` stores one test session for a team with `DRAFT`, `IN_PROGRESS`, or `COMPLETED` status.
 
-Key fields:
-
-- `id`
-- `userId`
-- `name`
-- `description`
-- `resultUnit`
-- `higherIsBetter`
-- `allowedRecordingModes`
-- `preferredRecordingMode`
-- `isDefault`
-
-Ranking uses `higherIsBetter`.
-
-Recording-mode configuration:
-
-- `allowedRecordingModes` stores comma-separated modes.
-- `preferredRecordingMode` stores the preferred mode.
-- Valid modes are `MANUAL`, `LIVE_DROPOUT`, and `LIVE_TIMED_FINISH`.
-- Helper logic in `src/lib/fitnessRecordingModes.ts` safely falls back to `MANUAL` when stored allowed modes are missing, empty, or invalid.
-
-## FitnessTestSession
-
-Purpose: one instance of a fitness test for a team.
-
-Key fields:
-
-- `id`
-- `teamId`
-- `fitnessTestTypeId`
-- `date`
-- `notes`
-- `status`
-- `startedAt`
-- `completedAt`
-
-Statuses:
-
-- `DRAFT`
-- `IN_PROGRESS`
-- `COMPLETED`
-
-## FitnessTestResult
-
-Purpose: one player's result in one fitness session.
-
-Key fields:
-
-- `id`
-- `fitnessTestSessionId`
-- `playerId`
-- `resultValue`
-- `resultText`
-- `status`
-- `notes`
-
-Statuses:
-
-- `COMPLETED`
-- `DID_NOT_START`
-- `INJURED`
-- `ABSENT`
-- `DROPPED_OUT`
-
-Unique rule:
-
-- one result per player per fitness session
+`FitnessTestResult` stores one player's result in a session with status, numeric value, display text, and notes.
 
 ## MatchDay
 
@@ -174,7 +119,6 @@ Purpose: one football match record.
 
 Key fields:
 
-- `id`
 - `teamId`
 - `kickoffAt`
 - `opposition`
@@ -205,18 +149,13 @@ Statuses:
 - `HALF_TIME`
 - `COMPLETED`
 
-## MatchDayPlayer
+## MatchDayPlayer And Stints
 
-Purpose: a player's involvement in a specific match.
+`MatchDayPlayer` stores player involvement in a match:
 
-Key fields:
-
-- `id`
-- `matchDayId`
-- `playerId`
-- `squadStatus`
-- `startingPosition`
-- `shirtNumberSnapshot`
+- squad status
+- starting position
+- shirt number snapshot
 - `isTracked`
 
 Squad statuses:
@@ -225,46 +164,49 @@ Squad statuses:
 - `SUBSTITUTE`
 - `NOT_INVOLVED`
 
-Important rule: `isTracked` affects event recording only. It does not affect squad involvement, substitutions, or minutes.
+`isTracked` affects event recording only. It does not affect squad involvement, substitutions, or minutes.
 
-## MatchPlayerStint
+`MatchPlayerStint` tracks when a match squad player is on the pitch and stores timing for minutes reporting.
 
-Purpose: tracks when a match squad player is on the pitch.
+## EventDefinition
 
-Key fields:
+Purpose: global and club-specific match event library.
 
-- `id`
-- `matchDayId`
-- `matchDayPlayerId`
-- `playerId`
-- `half`
-- `startedAt`
-- `endedAt`
-- `startMatchSecond`
-- `endMatchSecond`
+Important fields:
 
-Halves:
+- `scope` (`GLOBAL` or `CLUB`)
+- `clubId`
+- `legacyEventType`
+- `name`
+- `slug`
+- `normalizedName`
+- `description`
+- `matchPhase`
+- `category`
+- `subcategory`
+- `matchDayGroup`
+- `agePhases`
+- `fourCorner`
+- `positionRelevance`
+- `enabledByDefault`
+- `benchmarkable`
+- `requiresLocation`
+- `isActive`
 
-- `FIRST_HALF`
-- `SECOND_HALF`
+Legacy enum-backed events keep compatibility with older event paths and parent submissions. DB-only events support coach recording and reporting through `eventDefinitionId`.
 
 ## MatchDayEventType
 
-Purpose: selected standard event types for a specific match.
+Purpose: selected event definitions for a match.
 
 Key fields:
 
-- `id`
 - `matchDayId`
-- `eventType`
+- `eventType` legacy fallback
 - `category`
+- `eventDefinitionId`
 
-Categories:
-
-- `ATTACKING`
-- `IN_POSSESSION`
-- `OUT_OF_POSSESSION`
-- `TRANSITION`
+Unique rules prevent duplicate event selections per match.
 
 ## MatchEvent
 
@@ -272,24 +214,25 @@ Purpose: one recorded event during a match.
 
 Key fields:
 
-- `id`
 - `matchDayId`
 - `playerId`
-- `eventType`
+- `eventType` legacy fallback
+- `eventDefinitionId`
 - `half`
 - `matchSecond`
-- `ownScoreAtTime`
-- `oppositionScoreAtTime`
+- score at time
+- optional pitch location `x` / `y`
 
-Current event types:
+Rule: events require an involved, tracked player who is currently on the pitch.
 
-- `GOAL`
-- `ASSIST`
-- `SHOT_ON_TARGET`
-- `SHOT_OFF_TARGET`
-- `PASS_COMPLETE`
-- `PASS_INCOMPLETE`
-- `ONE_V_ONE_SUCCESS`
-- `ONE_V_ONE_UNSUCCESSFUL`
+## SubmittedMatchEvent
 
-Current rule: events require an involved, tracked player who is currently on the pitch.
+Purpose: parent/spectator submitted live observations.
+
+Current limitation: submitted events use legacy `MatchEventType` values, not arbitrary DB-only event definitions.
+
+Statuses:
+
+- `PENDING`
+- `ACCEPTED`
+- `IGNORED`
