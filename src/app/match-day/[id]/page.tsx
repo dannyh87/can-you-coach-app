@@ -1750,14 +1750,9 @@ export default async function MatchDayDetailPage({
       )}
 
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-4 rounded-2xl bg-gray-50 p-3 sm:mt-6 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-bold sm:text-2xl">Live match</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                Score, substitutions and event recording are separated so each tap does one job.
-              </p>
-            </div>
+        <section className="mt-3 rounded-2xl bg-gray-50 p-2 sm:mt-6 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-black sm:text-2xl">Live match</h2>
             <div className="flex flex-wrap gap-2">
               <a
                 href="#players-and-substitutions"
@@ -1773,7 +1768,7 @@ export default async function MatchDayDetailPage({
               </a>
             </div>
           </div>
-          <details className="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+          <details className="mt-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-sm text-blue-950">
             <summary className="cursor-pointer font-bold">Quick live tips</summary>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div>
@@ -1790,7 +1785,7 @@ export default async function MatchDayDetailPage({
             </div>
             </div>
           </details>
-          <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <div className="mt-2 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
               <MatchPitchClient
                 matchDayId={match.id}
@@ -1813,7 +1808,7 @@ export default async function MatchDayDetailPage({
               />
             </div>
           </div>
-          <section className="mt-4">
+          <section className="mt-3">
             <div className="mb-3">
               <h2 className="text-xl font-bold sm:text-2xl">Location Maps</h2>
               <p className="mt-1 text-sm text-gray-500">Recorded location events for this match</p>
