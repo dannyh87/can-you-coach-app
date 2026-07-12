@@ -129,7 +129,10 @@ export default async function NewMatchDayPage() {
     },
     orderBy: [{ club: { name: 'asc' } }, { name: 'asc' }],
   })
-  const recordableEventOptions = await getActiveRecordableEventDefinitions({ legacyOnly: false })
+  const recordableEventOptions = await getActiveRecordableEventDefinitions({
+    legacyOnly: false,
+    clubIds: Array.from(new Set(teams.map((team) => team.clubId))),
+  })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
 
   return (
@@ -141,6 +144,7 @@ export default async function NewMatchDayPage() {
       <MatchDayWizard
         teams={teams.map((team) => ({
           id: team.id,
+          clubId: team.clubId,
           name: team.name,
           clubName: team.club.name,
           ageGroup: team.ageGroup,
@@ -157,7 +161,11 @@ export default async function NewMatchDayPage() {
           label: group.label,
           events: group.events.map((event) => ({
             id: event.id,
+            scope: event.scope,
+            clubId: event.clubId,
             label: event.label,
+            slug: event.slug,
+            normalizedName: event.normalizedName,
             category: event.category,
             categoryLabel: event.categoryLabel,
             subcategory: event.subcategory,

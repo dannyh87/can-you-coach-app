@@ -5,12 +5,20 @@ import { useMemo, useState, useTransition } from 'react'
 import Button from '@/components/ui/Button'
 import { fieldClassName } from '@/components/ui/formStyles'
 import { WizardActions, WizardOptionCard, WizardShell } from '@/components/ui/Wizard'
+import {
+  curriculumFocusOptions,
+  getCurriculumRecommendation,
+  getDefaultCurriculumFocus,
+  inferMatchFormat,
+  type CurriculumFocus,
+} from '@/lib/curriculumRecommendations'
 import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 
 type TeamOption = {
   id: string
+  clubId: string
   name: string
   clubName: string
   ageGroup: string
@@ -25,7 +33,11 @@ type TeamOption = {
 
 type TaxonomyEvent = {
   id: string
+  scope: string
+  clubId: string | null
   label: string
+  slug: string
+  normalizedName: string
   category: string
   categoryLabel: string
   subcategory: string | null
@@ -47,6 +59,7 @@ type MatchPhaseGroup = {
 }
 
 type WizardResult = { ok: false; reason: string } | void
+type CurriculumRecommendation = ReturnType<typeof getCurriculumRecommendation>
 
 const today = () => new Date().toISOString().split('T')[0]
 
@@ -74,6 +87,8 @@ export default function MatchDayWizard({
   const [matchType, setMatchType] = useState('FRIENDLY')
   const [venue, setVenue] = useState('HOME')
   const [teamId, setTeamId] = useState(teams[0]?.id ?? '')
+  const [curriculumFocus, setCurriculumFocus] = useState<CurriculumFocus>(getDefaultCurriculumFocus(teams[0]?.ageGroup))
+  const [curriculumWeekNumber, setCurriculumWeekNumber] = useState(1)
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, SquadStatus>>({})
   const [eventSearchTerm, setEventSearchTerm] = useState('')
   const [eventMatchPhaseFilter, setEventMatchPhaseFilter] = useState('ALL')
@@ -90,9 +105,31 @@ export default function MatchDayWizard({
     () => matchPhaseGroups.flatMap((group) => group.events),
     [matchPhaseGroups]
   )
+  const scopedEvents = useMemo(
+    () => allEvents.filter((event) => event.scope === 'GLOBAL' || event.clubId === selectedTeam?.clubId),
+    [allEvents, selectedTeam?.clubId]
+  )
+  const curriculumRecommendation = useMemo(
+    () => getCurriculumRecommendation({
+      ageGroup: selectedTeam?.ageGroup,
+      matchFormat: inferMatchFormat(selectedTeam?.ageGroup),
+      focus: curriculumFocus,
+      weekNumber: curriculumWeekNumber,
+      availableEvents: scopedEvents.map((event) => ({
+        id: event.id,
+        name: event.label,
+        label: event.label,
+        slug: event.slug,
+        normalizedName: event.normalizedName,
+        scope: event.scope,
+        clubId: event.clubId,
+      })),
+    }),
+    [curriculumFocus, curriculumWeekNumber, scopedEvents, selectedTeam?.ageGroup]
+  )
   const recommendedEventDefinitionIds = useMemo(
-    () => getRecommendedEventDefinitionIds(allEvents, locationTrackingEnabled),
-    [allEvents, locationTrackingEnabled]
+    () => getRecommendedEventDefinitionIds(scopedEvents, locationTrackingEnabled),
+    [scopedEvents, locationTrackingEnabled]
   )
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const totalSteps = 6
@@ -121,6 +158,13 @@ export default function MatchDayWizard({
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
   }
   const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const selectCurriculumRecommendation = () => {
+    const nextEventDefinitionIds = curriculumRecommendation.matchedEventDefinitionIds.filter((eventDefinitionId) => {
+      const event = scopedEvents.find((scopedEvent) => scopedEvent.id === eventDefinitionId)
+      return event && (locationTrackingEnabled || !event.requiresLocation)
+    })
+    setSelectedEventDefinitionIds(nextEventDefinitionIds)
+  }
   const setLocationTracking = (enabled: boolean) => {
     setLocationTrackingEnabled(enabled)
     setLocationTrackingWarning(null)
@@ -236,6 +280,15 @@ export default function MatchDayWizard({
               selected={team.id === teamId}
               onClick={() => {
                 setTeamId(team.id)
+                setCurriculumFocus(getDefaultCurriculumFocus(team.ageGroup))
+                const validEventIds = new Set(
+                  allEvents
+                    .filter((event) => event.scope === 'GLOBAL' || event.clubId === team.clubId)
+                    .map((event) => event.id)
+                )
+                setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
+                  currentEventDefinitionIds.filter((eventDefinitionId) => validEventIds.has(eventDefinitionId))
+                )
               }}
             />
           ))}
@@ -292,7 +345,13 @@ export default function MatchDayWizard({
       {step === 5 && (
         <EventPicker
           agePhase={selectedTeam?.inferredAgePhase ?? 'ALL'}
-          events={allEvents}
+          teamAgeGroup={selectedTeam?.ageGroup ?? 'Unknown age group'}
+          recommendation={curriculumRecommendation}
+          curriculumFocus={curriculumFocus}
+          setCurriculumFocus={setCurriculumFocus}
+          curriculumWeekNumber={curriculumWeekNumber}
+          setCurriculumWeekNumber={setCurriculumWeekNumber}
+          events={scopedEvents}
           eventSearchTerm={eventSearchTerm}
           setEventSearchTerm={setEventSearchTerm}
           eventMatchPhaseFilter={eventMatchPhaseFilter}
@@ -311,6 +370,7 @@ export default function MatchDayWizard({
           selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
           selectedEventCount={selectedEventDefinitionIds.length}
           onToggleEvent={toggleEventDefinition}
+          onUseCurriculumRecommendation={selectCurriculumRecommendation}
           onSelectRecommendedDefaults={selectRecommendedDefaults}
           onSelectVisibleEvents={selectVisibleEvents}
           onClearAll={clearSelectedEvents}
@@ -358,6 +418,12 @@ function getStepTitle(step: number) {
 
 function EventPicker({
   agePhase,
+  teamAgeGroup,
+  recommendation,
+  curriculumFocus,
+  setCurriculumFocus,
+  curriculumWeekNumber,
+  setCurriculumWeekNumber,
   events,
   eventSearchTerm,
   setEventSearchTerm,
@@ -377,11 +443,18 @@ function EventPicker({
   selectedEventDefinitionIdSet,
   selectedEventCount,
   onToggleEvent,
+  onUseCurriculumRecommendation,
   onSelectRecommendedDefaults,
   onSelectVisibleEvents,
   onClearAll,
 }: {
   agePhase: AgePhase
+  teamAgeGroup: string
+  recommendation: CurriculumRecommendation
+  curriculumFocus: CurriculumFocus
+  setCurriculumFocus: (value: CurriculumFocus) => void
+  curriculumWeekNumber: number
+  setCurriculumWeekNumber: (value: number) => void
   events: TaxonomyEvent[]
   eventSearchTerm: string
   setEventSearchTerm: (value: string) => void
@@ -401,6 +474,7 @@ function EventPicker({
   selectedEventDefinitionIdSet: Set<string>
   selectedEventCount: number
   onToggleEvent: (eventType: string) => void
+  onUseCurriculumRecommendation: () => void
   onSelectRecommendedDefaults: () => void
   onSelectVisibleEvents: (visibleEventDefinitionIds: string[]) => void
   onClearAll: () => void
@@ -432,6 +506,16 @@ function EventPicker({
         locationTrackingEnabled={locationTrackingEnabled}
         setLocationTrackingEnabled={setLocationTrackingEnabled}
         locationTrackingWarning={locationTrackingWarning}
+      />
+
+      <CurriculumRecommendationPanel
+        teamAgeGroup={teamAgeGroup}
+        recommendation={recommendation}
+        curriculumFocus={curriculumFocus}
+        setCurriculumFocus={setCurriculumFocus}
+        curriculumWeekNumber={curriculumWeekNumber}
+        setCurriculumWeekNumber={setCurriculumWeekNumber}
+        onUseCurriculumRecommendation={onUseCurriculumRecommendation}
       />
 
       <EventSetupHeader
@@ -552,6 +636,108 @@ function EventPicker({
   )
 }
 
+function CurriculumRecommendationPanel({
+  teamAgeGroup,
+  recommendation,
+  curriculumFocus,
+  setCurriculumFocus,
+  curriculumWeekNumber,
+  setCurriculumWeekNumber,
+  onUseCurriculumRecommendation,
+}: {
+  teamAgeGroup: string
+  recommendation: CurriculumRecommendation
+  curriculumFocus: CurriculumFocus
+  setCurriculumFocus: (value: CurriculumFocus) => void
+  curriculumWeekNumber: number
+  setCurriculumWeekNumber: (value: number) => void
+  onUseCurriculumRecommendation: () => void
+}) {
+  return (
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Curriculum recommendation</p>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight">
+            Recommended for {teamAgeGroup} / {recommendation.inferredMatchFormat}: {recommendation.curriculumTitle}
+          </h2>
+          <p className="mt-2 text-sm font-semibold text-emerald-900">{recommendation.weekFocus}</p>
+          <p className="mt-2 text-sm leading-6 text-emerald-950">{recommendation.explanation}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onUseCurriculumRecommendation}
+          className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={recommendation.matchedEventDefinitionIds.length === 0}
+        >
+          Use recommended events
+        </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-bold text-emerald-950">
+          Theme
+          <select
+            value={curriculumFocus}
+            onChange={(event) => setCurriculumFocus(event.target.value as CurriculumFocus)}
+            className="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-950"
+          >
+            {curriculumFocusOptions.map((focus) => (
+              <option key={focus} value={focus}>{focus}</option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-bold text-emerald-950">
+          Week
+          <select
+            value={curriculumWeekNumber}
+            onChange={(event) => setCurriculumWeekNumber(Number(event.target.value))}
+            className="mt-1 w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-slate-950"
+          >
+            <option value={1}>Week 1 - introduce theme</option>
+            <option value={2}>Week 2 - repeat and reinforce</option>
+            <option value={3}>Week 3 - add challenge</option>
+            <option value={4}>Week 4 - review and compare</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-xl border border-emerald-200 bg-white/80 p-3">
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Matched in event library</p>
+          {recommendation.matchedEvents.length === 0 ? (
+            <p className="mt-2 text-sm font-semibold text-amber-800">No matching events found yet.</p>
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {recommendation.matchedEvents.map((event) => (
+                <span key={event.id} className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">
+                  {event.name}{event.scope === 'CLUB' ? ' · Club' : ''}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {recommendation.missingEventNames.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950">
+            <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Not in your event library yet</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {recommendation.missingEventNames.map((eventName) => (
+                <span key={eventName} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-900">
+                  {eventName}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-xs font-semibold text-amber-900">
+              Club admins can add missing ideas as custom events in Club Setup. This does not block match creation.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 function OptionalTrackingExtras({
   locationTrackingEnabled,
   setLocationTrackingEnabled,
@@ -616,7 +802,7 @@ function EventSetupHeader({
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onSelectRecommendedDefaults} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white">
-            Select recommended defaults
+            Use default event set
           </button>
           <button type="button" onClick={onSelectAllVisible} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white" disabled={visibleEventCount === 0}>
             Select all visible

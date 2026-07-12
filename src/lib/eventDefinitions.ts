@@ -53,8 +53,12 @@ export function getMatchDayGroupLabel(matchDayGroup: EventDefinitionMatchDayGrou
 
 export type RecordableEventOption = {
   id: string
+  scope: EventDefinition['scope']
+  clubId: string | null
   legacyEventType: MatchEventType | null
   label: string
+  slug: string
+  normalizedName: string
   category: string
   categoryLabel: string
   subcategory: string | null
@@ -84,8 +88,12 @@ export function mapEventDefinitionToRecordableOption(
 
   return {
     id: eventDefinition.id,
+    scope: eventDefinition.scope,
+    clubId: eventDefinition.clubId,
     legacyEventType: getLegacyEventType(eventDefinition),
     label: eventDefinition.name,
+    slug: eventDefinition.slug,
+    normalizedName: eventDefinition.normalizedName,
     category: eventDefinition.category,
     categoryLabel: eventDefinitionCategoryLabels[eventDefinition.category] ?? eventDefinition.category,
     subcategory: eventDefinition.subcategory,
@@ -141,15 +149,18 @@ export function getMatchDayEventCategoryFallback(
 export async function getActiveRecordableEventDefinitions({
   legacyOnly = false,
   clubId,
+  clubIds,
 }: {
   legacyOnly?: boolean
   clubId?: string
+  clubIds?: string[]
 } = {}) {
+  const scopedClubIds = Array.from(new Set([...(clubIds ?? []), ...(clubId ? [clubId] : [])]))
   const eventDefinitions = await prisma.eventDefinition.findMany({
     where: {
       OR: [
         { scope: 'GLOBAL' },
-        ...(clubId ? [{ scope: 'CLUB' as const, clubId }] : []),
+        ...(scopedClubIds.length > 0 ? [{ scope: 'CLUB' as const, clubId: { in: scopedClubIds } }] : []),
       ],
       isActive: true,
       ...(legacyOnly ? { legacyEventType: { not: null } } : {}),
