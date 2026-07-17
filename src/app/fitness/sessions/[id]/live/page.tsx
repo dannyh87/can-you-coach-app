@@ -13,6 +13,15 @@ import {
   formatFitnessSessionStatus,
   getFitnessSessionStatusClasses,
 } from '@/lib/fitnessSessionStatus'
+import {
+  GACON_COUNTDOWN_SECONDS,
+  GACON_DISTANCE_INCREMENT_METRES,
+  GACON_PROTOCOL_NAME,
+  GACON_REST_SECONDS,
+  GACON_STARTING_LEVEL,
+  GACON_START_DISTANCE_METRES,
+  GACON_WORK_SECONDS,
+} from '@/lib/gaconProtocol'
 import { getCurrentUser } from '@/lib/auth'
 import { canRecordFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -167,6 +176,27 @@ const formatDateTime = (date: Date | null) =>
       }).format(date)
     : 'Not started'
 
+const normalizeFitnessTestName = (name: string) =>
+  name.trim().toLowerCase().replace(/\s+/g, ' ')
+
+const getGaconProtocolConfig = (fitnessTestType: {
+  name: string
+  isDefault: boolean
+}) => {
+  if (!fitnessTestType.isDefault) return null
+  if (normalizeFitnessTestName(fitnessTestType.name) !== 'gacon test') return null
+
+  return {
+    name: GACON_PROTOCOL_NAME,
+    startingLevel: GACON_STARTING_LEVEL,
+    startDistanceMetres: GACON_START_DISTANCE_METRES,
+    distanceIncrementMetres: GACON_DISTANCE_INCREMENT_METRES,
+    countdownSeconds: GACON_COUNTDOWN_SECONDS,
+    workSeconds: GACON_WORK_SECONDS,
+    restSeconds: GACON_REST_SECONDS,
+  }
+}
+
 export default async function FitnessLiveDropoutPage({
   params,
   searchParams,
@@ -313,7 +343,9 @@ export default async function FitnessLiveDropoutPage({
         )}
 
         <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-          Set the current level, then tap each player as they drop out.
+          {getGaconProtocolConfig(session.fitnessTestType)
+            ? 'Use the automatic 45/15 Gacon timer, then tap each player as they drop out.'
+            : 'Set the current level, then tap each player as they drop out.'}
           Archived players are excluded.
         </p>
 
@@ -349,6 +381,7 @@ export default async function FitnessLiveDropoutPage({
           isCompleted={session.status === 'COMPLETED'}
           startedAt={session.startedAt?.toISOString() ?? null}
           completedAt={session.completedAt?.toISOString() ?? null}
+          gaconProtocol={getGaconProtocolConfig(session.fitnessTestType)}
           players={players}
           startSessionAction={startFitnessTestSession}
           endSessionAction={endFitnessTestSession}

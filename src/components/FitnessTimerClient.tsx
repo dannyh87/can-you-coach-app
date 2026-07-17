@@ -73,8 +73,8 @@ const formatSavedResult = (result: TimerPlayer['result']) => {
   return 'Finished'
 }
 
-const formatSquadNumber = (squadNumber: number | null) =>
-  squadNumber === null ? 'No squad number' : `#${squadNumber}`
+const hasRecordedResult = (player: TimerPlayer) => player.result !== null
+const formatPlayerName = (player: TimerPlayer) => `${player.firstName} ${player.surname}`
 
 export default function FitnessTimerClient(props: FitnessTimerClientProps) {
   return <FitnessTimerInner key={props.sessionId} {...props} />
@@ -147,7 +147,8 @@ function FitnessTimerInner({
   const roundedElapsed = Math.round(elapsedSeconds * 10) / 10
   const formattedElapsed = formatElapsed(roundedElapsed)
   const canRecordFinish = roundedElapsed > 0
-  const completedPlayers = timerPlayers.filter((player) => player.result)
+  const activePlayers = timerPlayers.filter((player) => !hasRecordedResult(player))
+  const completedPlayers = timerPlayers.filter(hasRecordedResult)
   const allPlayersFinished =
     timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
 
@@ -305,16 +306,23 @@ function FitnessTimerInner({
   }
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="mt-4 space-y-3 sm:mt-6 sm:space-y-6">
       {!isSessionCompleted && (
-        <section className="rounded-xl border bg-gray-950 p-6 text-white">
-          <p className="text-sm uppercase tracking-wide text-gray-300">Elapsed time</p>
-          <div className="mt-3 text-6xl font-bold tabular-nums">{formattedElapsed}</div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <section className="sticky top-16 z-20 rounded-xl border bg-gray-950/95 p-3 text-white shadow-sm backdrop-blur sm:static sm:p-6 sm:shadow-none">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-gray-300">Elapsed</p>
+              <div className="text-4xl font-black tabular-nums sm:text-6xl">{formattedElapsed}</div>
+            </div>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white">
+              {isRunning ? 'Running' : isSessionLive ? 'Paused' : 'Ready'}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
             <button
               type="button"
               onClick={startTimer}
-              className="rounded bg-green-600 px-4 py-3 font-medium text-white disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-green-600 px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
               disabled={isRunning || isStarting}
             >
               {isStarting ? 'Starting...' : 'Start'}
@@ -322,7 +330,7 @@ function FitnessTimerInner({
             <button
               type="button"
               onClick={stopTimer}
-              className="rounded bg-amber-500 px-4 py-3 font-medium text-gray-950 disabled:opacity-50"
+              className="min-h-11 rounded-lg bg-amber-500 px-3 py-2 text-sm font-bold text-gray-950 disabled:opacity-50"
               disabled={!isRunning}
             >
               Stop
@@ -330,7 +338,7 @@ function FitnessTimerInner({
             <button
               type="button"
               onClick={resetTimer}
-              className="rounded border border-white/30 px-4 py-3 font-medium text-white disabled:opacity-50"
+              className="min-h-11 rounded-lg border border-white/30 px-3 py-2 text-sm font-bold text-white disabled:opacity-50"
             >
               Reset
             </button>
@@ -340,23 +348,19 @@ function FitnessTimerInner({
             <button
               type="button"
               onClick={endFitnessTest}
-              className="mt-3 w-full rounded bg-red-700 px-4 py-3 font-medium text-white disabled:opacity-50"
+              className="mt-3 w-full rounded-lg bg-red-700 px-4 py-3 font-bold text-white disabled:opacity-50"
               disabled={isEnding}
             >
               {isEnding ? 'Ending...' : 'Finish test'}
             </button>
           )}
-          <p className="mt-4 text-sm text-gray-300">
-            Resetting the timer does not delete already saved player finish results.
-            Use Undo / Reinstate on a player card to remove a saved finish.
-          </p>
           {!isSessionLive && (
-            <p className="mt-3 rounded-lg bg-amber-100 p-3 text-sm text-amber-950">
+            <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-950">
               Start the fitness test before recording finish times.
             </p>
           )}
           {isSessionLive && (
-            <p className="mt-3 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-950">
+            <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs font-bold text-green-950">
               LIVE{startedAtText ? `: started ${startedAtText}` : ''}
             </p>
           )}
@@ -364,7 +368,7 @@ function FitnessTimerInner({
       )}
 
       {!isSessionCompleted && message && (
-        <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
+        <p className="min-h-10 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-800">
           {message}
         </p>
       )}
@@ -397,71 +401,64 @@ function FitnessTimerInner({
       )}
 
       {!isSessionCompleted && (
-        <section className="grid gap-4 md:grid-cols-2">
-          {timerPlayers.map((player) => {
-            const hasResult = Boolean(player.result)
-
-            return (
-              <article
-                key={player.id}
-                className={`rounded-lg border p-4 ${
-                  hasResult ? 'border-gray-200 bg-gray-50' : 'border-blue-200 bg-blue-50'
-                }`}
-              >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold">
-                      {player.firstName} {player.surname}
-                    </h2>
-                    <p className="text-sm text-gray-500">
-                      {formatSquadNumber(player.squadNumber)} -{' '}
-                      {player.preferredPosition ?? 'No position'}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700">
-                    {formatSavedResult(player.result)}
-                  </span>
-                </div>
-
-                {hasResult ? (
-                  <button
-                    type="button"
-                    onClick={() => undoFinish(player.id)}
-                    className="w-full rounded border border-red-300 bg-white px-4 py-3 font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
-                  >
-                    {isSessionCompleted
-                      ? 'Results locked'
-                      : pendingPlayerId === player.id
-                        ? 'Saving...'
-                        : 'Undo / Reinstate'}
-                  </button>
-                ) : (
+        <section className="space-y-3">
+          <div className="overflow-hidden rounded-xl border border-blue-200 bg-white">
+            <div className="flex items-center justify-between bg-blue-50 px-3 py-2">
+              <h2 className="text-sm font-black uppercase tracking-wide text-blue-900">Active players</h2>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-black text-blue-900">{activePlayers.length}</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {activePlayers.length === 0 ? (
+                <p className="px-3 py-3 text-sm font-semibold text-slate-600">No active players remaining.</p>
+              ) : activePlayers.map((player) => (
+                <div key={player.id} className="flex min-h-12 items-center justify-between gap-3 px-3 py-1.5">
+                  <p className="min-w-0 flex-1 truncate text-base font-black text-slate-950">{formatPlayerName(player)}</p>
                   <button
                     type="button"
                     onClick={() => recordFinish(player.id)}
-                    className="w-full rounded bg-blue-700 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="min-h-11 shrink-0 rounded-lg bg-blue-700 px-4 py-2 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={
                       isSessionCompleted ||
                       !isSessionLive ||
                       !canRecordFinish ||
                       pendingPlayerId === player.id
                     }
+                    aria-label={`Record finish for ${formatPlayerName(player)} at ${formattedElapsed}`}
                   >
-                    {isSessionCompleted
-                      ? 'Results locked'
-                      : !isSessionLive
-                        ? 'Start test first'
-                        : pendingPlayerId === player.id
-                          ? 'Saving...'
-                          : canRecordFinish
-                            ? `Record Finish at ${formattedElapsed}`
-                            : 'Start timer first'}
+                    {pendingPlayerId === player.id ? 'Saving...' : canRecordFinish ? 'Finish' : 'Start'}
                   </button>
-                )}
-              </article>
-            )
-          })}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <details className="rounded-xl border border-slate-200 bg-slate-50">
+            <summary className="flex cursor-pointer items-center justify-between px-3 py-3 text-sm font-black text-slate-900">
+              <span>Finished</span>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs">{completedPlayers.length}</span>
+            </summary>
+            <div className="divide-y divide-slate-200 border-t border-slate-200 bg-white">
+              {completedPlayers.length === 0 ? (
+                <p className="px-3 py-3 text-sm font-semibold text-slate-600">No finish times yet.</p>
+              ) : completedPlayers.map((player) => (
+                <div key={player.id} className="flex min-h-12 items-center justify-between gap-3 px-3 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-black text-slate-950">{formatPlayerName(player)}</p>
+                    <p className="text-xs font-semibold text-slate-500">{formatSavedResult(player.result)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => undoFinish(player.id)}
+                    className="min-h-11 shrink-0 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-black text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isSessionCompleted || !isSessionLive || pendingPlayerId === player.id}
+                    aria-label={`Undo finish for ${formatPlayerName(player)}`}
+                  >
+                    {pendingPlayerId === player.id ? 'Saving...' : 'Undo'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
         </section>
       )}
     </div>

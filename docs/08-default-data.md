@@ -20,7 +20,7 @@ Production should only be seeded deliberately.
 Seeded default tests:
 
 - Yo-Yo Test
-- Gacon Test
+- Gacon Test: fixed 45/15 protocol, Level 1 starts at 125m, target distance increases by 6.25m per level
 - Bleep Test
 - Bronco Test
 
