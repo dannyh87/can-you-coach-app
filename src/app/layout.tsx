@@ -164,7 +164,6 @@ export default async function RootLayout({
               showAccount={isClerkEnabled()}
               accessSummary={accessSummary}
               className="shrink-0"
-              buttonLabel="Menu"
               ariaLabel="Open menu"
             />
           </div>
