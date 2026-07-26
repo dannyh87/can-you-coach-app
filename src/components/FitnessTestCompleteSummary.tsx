@@ -4,7 +4,6 @@ type SummaryPlayer = {
   id: string
   firstName: string
   surname: string
-  squadNumber: number | null
   result: {
     resultValue: number | null
     resultText: string | null
@@ -29,9 +28,6 @@ type FitnessTestCompleteSummaryProps = {
   rankingsHref: string
   progressHref: string
 }
-
-const formatSquadNumber = (squadNumber: number | null) =>
-  squadNumber === null ? 'No squad number' : `#${squadNumber}`
 
 const formatResult = (
   result: SummaryPlayer['result'],
@@ -60,7 +56,6 @@ export default function FitnessTestCompleteSummary({
   resultUnit,
   higherIsBetter,
   targetScores,
-  statusLabel,
   rankingsHref,
   progressHref,
 }: FitnessTestCompleteSummaryProps) {
@@ -167,27 +162,28 @@ export default function FitnessTestCompleteSummary({
           No player results were saved for this completed test.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border bg-white">
-          <table className="w-full border-collapse text-sm">
+        <div className="rounded-lg border bg-white">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-12 sm:w-16" />
+              <col />
+              <col className="w-24 sm:w-36" />
+            </colgroup>
             <thead>
               <tr className="border-b bg-gray-50">
-                <th className="p-3 text-left">Rank</th>
-                <th className="p-3 text-left">Player</th>
-                <th className="p-3 text-left">Squad number</th>
-                <th className="p-3 text-left">Result</th>
-                <th className="p-3 text-left">Status</th>
+                <th className="px-2 py-2 text-left sm:px-3">Rank</th>
+                <th className="px-2 py-2 text-left sm:px-3">Player</th>
+                <th className="px-2 py-2 text-right sm:px-3">Result</th>
               </tr>
             </thead>
             <tbody>
               {rankedPlayers.map((player, index) => (
                 <tr key={player.id} className="border-b last:border-b-0">
-                  <td className="p-3 font-bold">{index + 1}</td>
-                  <td className="p-3">{getPlayerName(player)}</td>
-                  <td className="p-3">{formatSquadNumber(player.squadNumber)}</td>
-                  <td className="p-3 font-medium">
+                  <td className="px-2 py-2 align-top font-bold sm:px-3">{index + 1}</td>
+                  <td className="break-words px-2 py-2 align-top sm:px-3">{getPlayerName(player)}</td>
+                  <td className="px-2 py-2 text-right align-top font-medium sm:px-3">
                     {formatResult(player.result, resultUnit)}
                   </td>
-                  <td className="p-3">{statusLabel}</td>
                 </tr>
               ))}
             </tbody>

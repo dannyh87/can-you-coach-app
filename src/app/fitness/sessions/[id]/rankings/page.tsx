@@ -34,9 +34,6 @@ const formatResult = ({
   unit: string
 }) => resultText || `${resultValue ?? 0} ${unit}`
 
-const formatSquadNumber = (squadNumber: number | null) =>
-  squadNumber === null ? 'No squad number' : squadNumber
-
 export default async function FitnessSessionRankingsPage({
   params,
 }: {
@@ -189,37 +186,34 @@ export default async function FitnessSessionRankingsPage({
             )}
           />
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full border-collapse text-sm">
+          <div className="rounded-lg border">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col className="w-12 sm:w-16" />
+                <col />
+                <col className="w-24 sm:w-36" />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left">Rank</th>
-                  <th className="p-3 text-left">Player</th>
-                  <th className="p-3 text-left">Squad No.</th>
-                  <th className="p-3 text-left">Result</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-left">Notes</th>
+                  <th className="px-2 py-2 text-left sm:px-3">Rank</th>
+                  <th className="px-2 py-2 text-left sm:px-3">Player</th>
+                  <th className="px-2 py-2 text-right sm:px-3">Result</th>
                 </tr>
               </thead>
               <tbody>
                 {rankedResults.map((result, index) => (
                   <tr key={result.id} className="border-b last:border-b-0">
-                    <td className="p-3 font-bold">{index + 1}</td>
-                    <td className="p-3">
+                    <td className="px-2 py-2 align-top font-bold sm:px-3">{index + 1}</td>
+                    <td className="break-words px-2 py-2 align-top sm:px-3">
                       {result.player.firstName} {result.player.surname}
                     </td>
-                    <td className="p-3">
-                      {formatSquadNumber(result.player.squadNumber)}
-                    </td>
-                    <td className="p-3 font-medium">
+                    <td className="px-2 py-2 text-right align-top font-medium sm:px-3">
                       {formatResult({
                         resultText: result.resultText,
                         resultValue: result.resultValue,
                         unit: session.fitnessTestType.resultUnit,
                       })}
                     </td>
-                    <td className="p-3">{formatStatus(result.status)}</td>
-                    <td className="p-3">{result.notes ?? 'None'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -242,32 +236,33 @@ export default async function FitnessSessionRankingsPage({
             description="All active players have a valid numeric result for this session. Use this table as the complete squad ranking."
           />
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full border-collapse text-sm">
+          <div className="rounded-lg border">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col className="w-[44%]" />
+                <col />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="p-3 text-left">Player</th>
-                  <th className="p-3 text-left">Squad No.</th>
-                  <th className="p-3 text-left">Result Text</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-left">Notes</th>
+                  <th className="px-2 py-2 text-left sm:px-3">Player</th>
+                  <th className="px-2 py-2 text-left sm:px-3">Issue / Reason</th>
                 </tr>
               </thead>
               <tbody>
                 {missingResults.map((player) => {
                   const result = resultsByPlayerId.get(player.id)
+                  const issue = result
+                    ? result.resultText
+                      ? `Result text only: ${result.resultText}`
+                      : `No numeric result (${formatStatus(result.status)})`
+                    : 'No result saved'
 
                   return (
                     <tr key={player.id} className="border-b last:border-b-0">
-                      <td className="p-3">
+                      <td className="break-words px-2 py-2 align-top sm:px-3">
                         {player.firstName} {player.surname}
                       </td>
-                      <td className="p-3">{formatSquadNumber(player.squadNumber)}</td>
-                      <td className="p-3">{result?.resultText ?? 'Missing'}</td>
-                      <td className="p-3">
-                        {result ? formatStatus(result.status) : 'No result'}
-                      </td>
-                      <td className="p-3">{result?.notes ?? 'None'}</td>
+                      <td className="break-words px-2 py-2 align-top sm:px-3">{issue}</td>
                     </tr>
                   )
                 })}

@@ -331,12 +331,35 @@ function FitnessTimerInner({
 
   return (
     <div className="mt-4 space-y-3 sm:mt-6 sm:space-y-6">
-      {!isSessionCompleted && (
+      {!isSessionCompleted && isSessionLive && (
+        <div className="flex min-h-11 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-black text-slate-950 sm:text-lg">
+              {testTypeName}
+            </h1>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-800">
+              Live
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsDetailsOpen(true)}
+              className="min-h-10 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100"
+              aria-label={`Open details for ${testTypeName}`}
+            >
+              Details
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isSessionCompleted && !isSessionLive && (
         <section className="rounded-xl border bg-white p-3 shadow-sm sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
-                {isSessionLive ? 'Live timed finish' : 'Setup'}
+                Setup
               </p>
               <h1 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
                 {testTypeName}
@@ -444,11 +467,6 @@ function FitnessTimerInner({
           {!isSessionLive && (
             <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-950">
               Start the fitness test before recording finish times.
-            </p>
-          )}
-          {isSessionLive && (
-            <p className="mt-3 rounded-lg bg-green-100 px-3 py-2 text-xs font-bold text-green-950">
-              LIVE{startedAtText ? `: started ${startedAtText}` : ''}
             </p>
           )}
         </section>
