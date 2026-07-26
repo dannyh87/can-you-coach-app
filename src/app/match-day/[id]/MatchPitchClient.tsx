@@ -92,15 +92,12 @@ export default function MatchPitchClient({
   }
 
   return (
-    <section className="rounded-xl bg-white p-3 shadow-sm sm:p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <section className="rounded-xl bg-white p-2 shadow-sm sm:p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-bold sm:text-xl">Players and substitutions</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Tap Sub on or Sub off to track minutes from the touchline.
-          </p>
+          <h2 className="text-base font-black sm:text-lg">Substitutions</h2>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm">
+        <div className="rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs sm:text-sm">
           <span className="font-bold">{onPitchCount}</span> on pitch
         </div>
       </div>
@@ -146,38 +143,24 @@ export default function MatchPitchClient({
             Sub players on to make them available for Event recording.
           </p>
         )}
-        <div className="mt-4 grid gap-2 md:grid-cols-2 lg:gap-3">
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
           {players.map((player) => {
             const displayedMilliseconds = getDisplayedMilliseconds(player)
             const targetState = player.isOnPitch ? 'OFF' : 'ON'
 
             return (
-              <article key={player.matchDayPlayerId} className="rounded-xl bg-gray-50 p-3 sm:p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-base font-bold sm:text-lg">{getPlayerName(player)}</h3>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      player.isOnPitch
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {player.isOnPitch ? 'On pitch' : 'Off pitch'}
-                  </span>
+              <article key={player.matchDayPlayerId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-lg bg-gray-50 p-2">
+                <div className="min-w-0">
+                  <h3 className="break-words text-sm font-black leading-tight text-slate-950 sm:text-base">{getPlayerName(player)}</h3>
+                  <p className="mt-0.5 text-xs font-bold text-gray-500">
+                    {player.isOnPitch ? 'On' : 'Off'} · {formatMinutes(displayedMilliseconds)}
+                  </p>
                 </div>
-
-                <div className="mt-3 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
-                  <p className="text-gray-500">Minutes</p>
-                  <p className="font-bold tabular-nums">{formatMinutes(displayedMilliseconds)}</p>
-                </div>
-
                 {!isReadOnly && (
                   <button
                     type="button"
                     onClick={() => togglePlayer(player, targetState)}
-                    className={`mt-3 w-full rounded-lg px-4 py-3 text-base font-bold text-white disabled:opacity-50 sm:py-4 sm:text-lg ${
+                    className={`min-h-10 rounded-lg px-3 py-2 text-sm font-black text-white disabled:opacity-50 ${
                       player.isOnPitch ? 'bg-red-700' : 'bg-green-700'
                     }`}
                     disabled={!canToggle || pendingPlayerId === player.matchDayPlayerId}

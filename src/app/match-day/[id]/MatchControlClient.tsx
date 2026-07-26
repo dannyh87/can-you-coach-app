@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
@@ -28,6 +29,7 @@ type MatchControlClientProps = {
   startSecondHalfAction: (formData: FormData) => Promise<MatchActionResult>
   completeMatchAction: (formData: FormData) => Promise<MatchActionResult>
   updateMatchScoreAction: (formData: FormData) => Promise<MatchActionResult>
+  liveDetailsControl?: ReactNode
 }
 
 const formatDuration = (milliseconds: number | null) => {
@@ -38,11 +40,6 @@ const formatDuration = (milliseconds: number | null) => {
   const seconds = totalSeconds % 60
 
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
-
-const getTimeDifference = (start: string | null, end: string | null) => {
-  if (!start || !end) return null
-  return new Date(end).getTime() - new Date(start).getTime()
 }
 
 const getCurrentHalfLabel = ({
@@ -66,8 +63,6 @@ const getCurrentHalfLabel = ({
 
 export default function MatchControlClient({
   matchDayId,
-  teamName,
-  opposition,
   venue,
   status,
   ownScore,
@@ -82,6 +77,7 @@ export default function MatchControlClient({
   startSecondHalfAction,
   completeMatchAction,
   updateMatchScoreAction,
+  liveDetailsControl,
 }: MatchControlClientProps) {
   const router = useRouter()
   const [now, setNow] = useState(0)
@@ -104,20 +100,12 @@ export default function MatchControlClient({
       ? 0
       : now - new Date(activeHalfStartedAt).getTime()
     : null
-  const firstHalfDuration = firstHalfEndedAt
-    ? getTimeDifference(firstHalfStartedAt, firstHalfEndedAt)
-    : null
-  const secondHalfDuration = secondHalfEndedAt
-    ? getTimeDifference(secondHalfStartedAt, secondHalfEndedAt)
-    : null
   const currentHalfLabel = getCurrentHalfLabel({
     status,
     firstHalfStartedAt,
     firstHalfEndedAt,
     secondHalfStartedAt,
   })
-  const homeLabel = venue === 'AWAY' ? opposition : teamName
-  const awayLabel = venue === 'AWAY' ? teamName : opposition
   const homeScore = venue === 'AWAY' ? oppositionScore : ownScore
   const awayScore = venue === 'AWAY' ? ownScore : oppositionScore
   useEffect(() => {
@@ -243,41 +231,25 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className="mt-3 space-y-3 rounded-2xl bg-gray-50 p-3 shadow-sm sm:mt-4 sm:p-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Live match</p>
-          <h2 className="mt-1 text-xl font-bold sm:text-2xl">Score and clock</h2>
-        </div>
-        <p className={`rounded-full px-3 py-1 text-xs font-semibold ${canUpdateScore ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}>
-          {canUpdateScore ? 'Score live' : 'Score paused'}
-        </p>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
-        <div className="rounded-xl bg-white p-3 text-center shadow-sm sm:p-5">
-          <p className="text-sm font-medium text-gray-500">Score</p>
-          <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
-            <p className="break-words text-xs font-bold sm:text-lg">{homeLabel}</p>
-            <p className="text-4xl font-bold tabular-nums sm:text-6xl">
-              {homeScore}-{awayScore}
-            </p>
-            <p className="break-words text-xs font-bold sm:text-lg">{awayLabel}</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-1">
-          <TimerCard label="Current half" value={currentHalfLabel} highlight />
-          <TimerCard label="Elapsed time" value={formatDuration(currentElapsed)} highlight />
+    <section className="mt-2 space-y-2 rounded-xl bg-gray-50 p-2 shadow-sm sm:mt-4 sm:p-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <CompactStat label="Score" value={`${homeScore}-${awayScore}`} strong />
+        <CompactStat label="Timer" value={formatDuration(currentElapsed)} strong />
+        <CompactStat label="Period" value={currentHalfLabel} />
+        <div className="grid gap-2">
+          {lifecycleButton && !isCompleted && (
+            <button
+              type="button"
+              onClick={() => runLifecycleAction(lifecycleButton)}
+              className="min-h-11 rounded-lg bg-green-700 px-2 py-2 text-sm font-black leading-tight text-white disabled:opacity-50"
+              disabled={Boolean(pendingAction)}
+            >
+              {pendingAction === lifecycleButton.label ? 'Saving...' : lifecycleButton.label}
+            </button>
+          )}
+          {liveDetailsControl}
         </div>
       </div>
-
-      <details className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm">
-        <summary className="cursor-pointer font-bold text-gray-900">Half durations</summary>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
-          <TimerCard label="First half" value={formatDuration(firstHalfDuration)} />
-          <TimerCard label="Second half" value={formatDuration(secondHalfDuration)} />
-        </div>
-      </details>
 
       {completedAt && (
         <p className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-medium text-green-800">
@@ -297,84 +269,48 @@ export default function MatchControlClient({
         </p>
       )}
 
-      {!isCompleted && (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-bold">Match controls</h2>
-            {lifecycleButton ? (
-              <button
-                type="button"
-                onClick={() => runLifecycleAction(lifecycleButton)}
-                className="mt-3 w-full rounded-lg bg-green-700 px-4 py-3 text-base font-bold text-white disabled:opacity-50 sm:py-4 sm:text-lg"
-                disabled={Boolean(pendingAction)}
-              >
-                {pendingAction === lifecycleButton.label
-                  ? 'Saving...'
-                  : lifecycleButton.label}
-              </button>
-            ) : (
-              <p className="mt-4 rounded-lg border p-3 text-sm text-gray-500">
-                No lifecycle action is available for this state.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-xl bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-bold">Goal controls</h2>
-
-            {status === 'HALF_TIME' ? (
-              <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                Goal recording is paused at half-time. Start the second half to continue.
-              </p>
-            ) : (
-              <div className="mt-3 space-y-2 sm:space-y-3">
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <GoalButton
-                    label={`${teamName} GOAL!`}
-                    disabled={Boolean(pendingAction) || !canUpdateScore}
-                    onClick={() =>
-                      updateScore({
-                        nextOwnScore: ownScore + 1,
-                        nextOppositionScore: oppositionScore,
-                      })
-                    }
-                  />
-                  <GoalButton
-                    label={`${opposition} GOAL!`}
-                    disabled={Boolean(pendingAction) || !canUpdateScore}
-                    onClick={() =>
-                      updateScore({
-                        nextOwnScore: ownScore,
-                        nextOppositionScore: oppositionScore + 1,
-                      })
-                    }
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <UndoGoalButton
-                    label={`Undo ${teamName} goal`}
-                    disabled={Boolean(pendingAction) || !canUpdateScore || ownScore <= 0}
-                    onClick={() =>
-                      updateScore({
-                        nextOwnScore: ownScore - 1,
-                        nextOppositionScore: oppositionScore,
-                      })
-                    }
-                  />
-                  <UndoGoalButton
-                    label={`Undo ${opposition} goal`}
-                    disabled={Boolean(pendingAction) || !canUpdateScore || oppositionScore <= 0}
-                    onClick={() =>
-                      updateScore({
-                        nextOwnScore: ownScore,
-                        nextOppositionScore: oppositionScore - 1,
-                      })
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+      {!isCompleted && status !== 'HALF_TIME' && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <GoalButton
+            label="Our goal"
+            disabled={Boolean(pendingAction) || !canUpdateScore}
+            onClick={() =>
+              updateScore({
+                nextOwnScore: ownScore + 1,
+                nextOppositionScore: oppositionScore,
+              })
+            }
+          />
+          <GoalButton
+            label="Opp goal"
+            disabled={Boolean(pendingAction) || !canUpdateScore}
+            onClick={() =>
+              updateScore({
+                nextOwnScore: ownScore,
+                nextOppositionScore: oppositionScore + 1,
+              })
+            }
+          />
+          <UndoGoalButton
+            label="Undo ours"
+            disabled={Boolean(pendingAction) || !canUpdateScore || ownScore <= 0}
+            onClick={() =>
+              updateScore({
+                nextOwnScore: ownScore - 1,
+                nextOppositionScore: oppositionScore,
+              })
+            }
+          />
+          <UndoGoalButton
+            label="Undo opp"
+            disabled={Boolean(pendingAction) || !canUpdateScore || oppositionScore <= 0}
+            onClick={() =>
+              updateScore({
+                nextOwnScore: ownScore,
+                nextOppositionScore: oppositionScore - 1,
+              })
+            }
+          />
         </div>
       )}
 
@@ -387,19 +323,19 @@ export default function MatchControlClient({
   )
 }
 
-function TimerCard({
+function CompactStat({
   label,
   value,
-  highlight = false,
+  strong = false,
 }: {
   label: string
   value: string
-  highlight?: boolean
+  strong?: boolean
 }) {
   return (
-    <div className="rounded-xl bg-white p-3 shadow-sm sm:p-4">
-      <p className="text-xs text-gray-500 sm:text-sm">{label}</p>
-      <p className={`mt-1 font-bold tabular-nums ${highlight ? 'text-2xl sm:text-3xl' : 'text-base sm:text-xl'}`}>
+    <div className="min-w-0 rounded-lg bg-white p-2 shadow-sm">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className={`mt-0.5 break-words font-black tabular-nums leading-tight ${strong ? 'text-2xl' : 'text-sm'}`}>
         {value}
       </p>
     </div>

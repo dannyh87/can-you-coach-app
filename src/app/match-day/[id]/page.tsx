@@ -1722,45 +1722,27 @@ export default async function MatchDayDetailPage({
           startSecondHalfAction={startSecondHalf}
           completeMatchAction={completeMatch}
           updateMatchScoreAction={updateMatchScore}
+          liveDetailsControl={(
+            <MatchLiveDetailsButton
+              headline={headline}
+              dateLabel={formatDate(match.kickoffAt)}
+              matchTypeLabel={matchTypeLabel}
+              venueLabel={venueLabel}
+              statusLabel={statusLabel}
+              teamName={match.team.name}
+              opposition={match.opposition}
+              starterCount={trackingPlayers.filter((player) => player.squadStatus === 'STARTER').length}
+              substituteCount={trackingPlayers.filter((player) => player.squadStatus === 'SUBSTITUTE').length}
+              trackedCount={trackingPlayers.filter((player) => player.isTracked).length}
+              selectedEventLabels={selectedEventLabels}
+            />
+          )}
         />
       )}
 
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-3 rounded-2xl bg-gray-50 p-2 sm:mt-6 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Live match</p>
-              <h2 className="truncate text-lg font-black text-slate-950 sm:text-2xl">{headline}</h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <a
-                href="#players-and-substitutions"
-                className="inline-flex rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-100"
-              >
-                Substitutions
-              </a>
-              <a
-                href="#event-recording"
-                className="inline-flex rounded-lg bg-blue-800 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-900"
-              >
-                Events
-              </a>
-              <MatchLiveDetailsButton
-                headline={headline}
-                dateLabel={formatDate(match.kickoffAt)}
-                matchTypeLabel={matchTypeLabel}
-                venueLabel={venueLabel}
-                statusLabel={statusLabel}
-                teamName={match.team.name}
-                opposition={match.opposition}
-                starterCount={trackingPlayers.filter((player) => player.squadStatus === 'STARTER').length}
-                substituteCount={trackingPlayers.filter((player) => player.squadStatus === 'SUBSTITUTE').length}
-                trackedCount={trackingPlayers.filter((player) => player.isTracked).length}
-                selectedEventLabels={selectedEventLabels}
-              />
-            </div>
-          </div>
-          <div className="mt-2 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        <section className="mt-2 rounded-xl bg-gray-50 p-1 sm:mt-4 sm:p-3">
+          <div className="grid gap-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
               <MatchPitchClient
                 matchDayId={match.id}
@@ -1783,13 +1765,6 @@ export default async function MatchDayDetailPage({
               />
             </div>
           </div>
-          <section className="mt-3">
-            <div className="mb-3">
-              <h2 className="text-xl font-bold sm:text-2xl">Location Maps</h2>
-              <p className="mt-1 text-sm text-gray-500">Recorded location events for this match</p>
-            </div>
-            <TouchMap events={touchMapEvents} />
-          </section>
           <div className="mt-4">
             <ParentSubmissionsPanel
               matchDayId={match.id}

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 import PitchLocationPicker, { type PitchLocation } from '@/components/PitchLocationPicker'
+import ModalShell from '@/components/ui/ModalShell'
 
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
@@ -110,6 +111,7 @@ export default function MatchEventsClient({
   const [selectedEventKey, setSelectedEventKey] = useState(
     eventOptions[0] ? getEventOptionKey(eventOptions[0]) : ''
   )
+  const [isPlayerPickerOpen, setIsPlayerPickerOpen] = useState(false)
   const [pendingLocationEvent, setPendingLocationEvent] = useState<{
     eventOption: EventOption
     player: EventPlayer
@@ -151,6 +153,11 @@ export default function MatchEventsClient({
     (eventOption) => eventOption.category === effectiveSelectedCategory
   )
   const latestEvent = events[0] ?? null
+
+  const selectPlayer = (matchDayPlayerId: string) => {
+    setSelectedPlayerId(matchDayPlayerId)
+    setIsPlayerPickerOpen(false)
+  }
 
   const appendEventFields = (formData: FormData, eventOption: EventOption) => {
     if (eventOption.eventDefinitionId) {
@@ -246,16 +253,25 @@ export default function MatchEventsClient({
 
   return (
     <section className="rounded-xl bg-white p-2 shadow-sm sm:p-4">
-      <div className="sticky top-16 z-20 -mx-2 border-b border-slate-200 bg-white/95 px-2 pb-2 pt-1 backdrop-blur sm:static sm:mx-0 sm:border-b-0 sm:bg-transparent sm:p-0">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-wide text-blue-700">Events</p>
-            <p className="truncate text-sm font-extrabold text-slate-950">
-              {selectedPlayer ? formatPlayerName(selectedPlayer) : 'Select player'}
-              {selectedEvent && recordingMode === 'EVENT_FIRST' ? ` · ${selectedEvent.label}` : ''}
-            </p>
+      <div className="sticky top-16 z-20 border-b border-slate-200 bg-white/95 pb-2 pt-1 backdrop-blur sm:static sm:border-b-0 sm:bg-transparent sm:p-0">
+        <div className="grid gap-2">
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Events</p>
+              <p className="break-words text-sm font-extrabold leading-tight text-slate-950">
+                {selectedPlayer ? formatPlayerName(selectedPlayer) : 'Select player'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPlayerPickerOpen(true)}
+              className="min-h-10 shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 disabled:opacity-50"
+              disabled={players.length === 0 || Boolean(pendingAction)}
+            >
+              Change player
+            </button>
           </div>
-          <div className="flex shrink-0 rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
+          <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
             <button
               type="button"
               onClick={() => setRecordingMode('PLAYER_FIRST')}
@@ -332,8 +348,7 @@ export default function MatchEventsClient({
                   Event types were selected, but none match the available event categories. Check event setup before starting future matches.
                 </p>
               ) : (
-                <div className="-mx-2 overflow-x-auto px-2">
-                  <div className="flex gap-2 pb-1">
+                <div className="grid grid-cols-2 gap-2 min-[390px]:grid-cols-3">
                     {visibleCategories.map((category) => {
                       const isSelected = effectiveSelectedCategory === category.value
 
@@ -348,7 +363,7 @@ export default function MatchEventsClient({
                             )
                             if (firstCategoryEvent) setSelectedEventKey(getEventOptionKey(firstCategoryEvent))
                           }}
-                          className={`min-h-10 shrink-0 rounded-full border px-3 py-2 text-xs font-bold disabled:opacity-40 sm:text-sm ${
+                          className={`min-h-10 min-w-0 rounded-lg border px-2 py-2 text-xs font-bold leading-tight disabled:opacity-40 sm:text-sm ${
                             isSelected
                               ? 'border-blue-700 bg-blue-700 text-white'
                               : 'border-slate-200 bg-white text-gray-900'
@@ -359,7 +374,6 @@ export default function MatchEventsClient({
                         </button>
                       )
                     })}
-                  </div>
                 </div>
               )}
             </>
@@ -367,31 +381,8 @@ export default function MatchEventsClient({
 
           {eventOptions.length > 0 && recordingMode === 'PLAYER_FIRST' ? (
             <>
-              <div className="sticky top-[6.8rem] z-10 -mx-2 border-b border-slate-100 bg-white/95 px-2 py-2 backdrop-blur sm:static sm:border-b-0 sm:bg-transparent sm:p-0">
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {players.map((player) => {
-                    const isSelected = effectiveSelectedPlayerId === player.matchDayPlayerId
-
-                    return (
-                      <button
-                        key={player.matchDayPlayerId}
-                        type="button"
-                        onClick={() => setSelectedPlayerId(player.matchDayPlayerId)}
-                        className={`min-h-11 min-w-[7.25rem] shrink-0 rounded-xl border px-3 py-2 text-left font-medium ${
-                          isSelected
-                            ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
-                            : 'border-slate-200 bg-white text-gray-900'
-                        }`}
-                      >
-                        <span className="block truncate text-xs font-black sm:text-sm">{formatPlayerName(player)}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
               <div>
-                <div className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 min-[430px]:grid-cols-3">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
@@ -407,10 +398,10 @@ export default function MatchEventsClient({
                         key={eventOptionKey}
                         type="button"
                         onClick={() => recordEvent(eventOption, selectedPlayer)}
-                        className="min-h-14 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center text-sm font-black text-slate-950 shadow-sm disabled:opacity-50"
+                        className="min-h-14 min-w-0 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center text-xs font-black leading-tight text-slate-950 shadow-sm disabled:opacity-50 sm:text-sm"
                         disabled={!selectedPlayer || Boolean(pendingAction)}
                       >
-                        <span className="block truncate">{pendingAction === pendingKey ? 'Saving...' : eventOption.label}</span>
+                        <span className="block break-words">{pendingAction === pendingKey ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className="mt-1 block text-[10px] font-bold uppercase text-emerald-700">Location</span>}
                       </button>
                     )
@@ -421,7 +412,7 @@ export default function MatchEventsClient({
           ) : eventOptions.length > 0 ? (
             <>
               <div>
-                <div className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 min-[430px]:grid-cols-3">
                   {categoryEvents.length === 0 ? (
                     <p className="col-span-full rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       No selected event buttons are available in this category. Choose another category above.
@@ -434,14 +425,18 @@ export default function MatchEventsClient({
                       <button
                         key={eventOptionKey}
                         type="button"
-                        onClick={() => setSelectedEventKey(eventOptionKey)}
-                        className={`min-h-14 rounded-xl border px-2 py-2 text-center text-sm font-black ${
+                        onClick={() => {
+                          setSelectedEventKey(eventOptionKey)
+                          void recordEvent(eventOption, selectedPlayer)
+                        }}
+                        className={`min-h-14 min-w-0 rounded-xl border px-2 py-2 text-center text-xs font-black leading-tight sm:text-sm ${
                           isSelected
                             ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
                             : 'border-slate-200 bg-white text-gray-900 shadow-sm'
                         }`}
+                        disabled={!selectedPlayer || Boolean(pendingAction)}
                       >
-                        <span className="block truncate">{eventOption.label}</span>
+                        <span className="block break-words">{pendingAction === (selectedPlayer ? getPendingEventKey(eventOption, selectedPlayer.matchDayPlayerId) : eventOptionKey) ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className={`mt-1 block text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}>Location</span>}
                       </button>
                     )
@@ -449,29 +444,11 @@ export default function MatchEventsClient({
                 </div>
               </div>
 
-              <div>
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {players.map((player) => {
-                    const pendingKey = selectedEvent
-                      ? getPendingEventKey(selectedEvent, player.matchDayPlayerId)
-                      : ''
-
-                    return (
-                      <button
-                        key={player.matchDayPlayerId}
-                        type="button"
-                        onClick={() => recordEvent(selectedEvent, player)}
-                        className="min-h-11 min-w-[7.25rem] shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left font-medium text-gray-900 disabled:opacity-50"
-                        disabled={!selectedEvent || Boolean(pendingAction)}
-                      >
-                        <span className="block truncate text-xs font-black sm:text-sm">
-                          {pendingAction === pendingKey ? 'Saving...' : formatPlayerName(player)}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
+              {selectedEvent && selectedPlayer && (
+                <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900">
+                  {selectedEvent.label} selected for {formatPlayerName(selectedPlayer)}.
+                </p>
+              )}
             </>
           ) : null}
         </div>
@@ -480,7 +457,7 @@ export default function MatchEventsClient({
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur sm:static sm:mt-4 sm:rounded-xl sm:border sm:bg-gray-50 sm:shadow-none">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2">
           <div className="min-w-0 text-xs">
-            <p className="font-black text-slate-950">
+            <p className="break-words font-black leading-tight text-slate-950">
               {latestEvent ? `${latestEvent.label} · ${latestEvent.playerName}` : 'No events yet'}
             </p>
             <p className="text-slate-500">
@@ -545,6 +522,42 @@ export default function MatchEventsClient({
           if (!pendingAction) setPendingLocationEvent(null)
         }}
       />
+
+      {isPlayerPickerOpen && (
+        <ModalShell
+          title="Change player"
+          description="Choose the tracked player for the next event."
+          onClose={() => setIsPlayerPickerOpen(false)}
+          maxWidthClassName="max-w-lg"
+        >
+          {players.length === 0 ? (
+            <p className="rounded-lg border p-4 text-sm text-slate-600">
+              No tracked on-pitch players are available.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {players.map((player) => {
+                const isSelected = effectiveSelectedPlayerId === player.matchDayPlayerId
+
+                return (
+                  <button
+                    key={player.matchDayPlayerId}
+                    type="button"
+                    onClick={() => selectPlayer(player.matchDayPlayerId)}
+                    className={`min-h-11 min-w-0 rounded-lg border px-2 py-2 text-left text-sm font-black leading-tight ${
+                      isSelected
+                        ? 'border-blue-700 bg-blue-700 text-white'
+                        : 'border-slate-200 bg-white text-slate-950'
+                    }`}
+                  >
+                    <span className="break-words">{formatPlayerName(player)}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </ModalShell>
+      )}
 
     </section>
   )
