@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 
 import FitnessTestCompleteSummary from '@/components/FitnessTestCompleteSummary'
+import FitnessTestGuidance from '@/components/FitnessTestGuidance'
+import ModalShell from '@/components/ui/ModalShell'
 
 type TimerPlayer = {
   id: string
@@ -25,6 +27,12 @@ type FitnessTimerClientProps = {
   resultUnit: string
   higherIsBetter: boolean
   targetScores?: string | null
+  setupInstructions?: string | null
+  equipmentNeeded?: string | null
+  scoringNotes?: string | null
+  spaceRequired?: string | null
+  coachNotes?: string | null
+  videoUrl?: string | null
   rankingsHref: string
   progressHref: string
   isLive: boolean
@@ -89,6 +97,12 @@ function FitnessTimerInner({
   resultUnit,
   higherIsBetter,
   targetScores,
+  setupInstructions,
+  equipmentNeeded,
+  scoringNotes,
+  spaceRequired,
+  coachNotes,
+  videoUrl,
   rankingsHref,
   progressHref,
   isLive,
@@ -112,6 +126,7 @@ function FitnessTimerInner({
   const [isStarting, setIsStarting] = useState(false)
   const [isEnding, setIsEnding] = useState(false)
   const [pendingPlayerId, setPendingPlayerId] = useState<string | null>(null)
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const isSessionCompleted = isCompleted || Boolean(localCompletedAt)
   const isSessionLive = !isSessionCompleted && (isLive || Boolean(localStartedAtText))
   const startedAtText =
@@ -151,6 +166,15 @@ function FitnessTimerInner({
   const completedPlayers = timerPlayers.filter(hasRecordedResult)
   const allPlayersFinished =
     timerPlayers.length > 0 && completedPlayers.length === timerPlayers.length
+  const guidance = {
+    setupInstructions,
+    equipmentNeeded,
+    scoringNotes,
+    spaceRequired,
+    coachNotes,
+    videoUrl,
+    targetScores,
+  }
 
   const startTimer = async () => {
     if (isSessionCompleted || isRunning || isStarting) return
@@ -308,6 +332,69 @@ function FitnessTimerInner({
   return (
     <div className="mt-4 space-y-3 sm:mt-6 sm:space-y-6">
       {!isSessionCompleted && (
+        <section className="rounded-xl border bg-white p-3 shadow-sm sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                {isSessionLive ? 'Live timed finish' : 'Setup'}
+              </p>
+              <h1 className="truncate text-xl font-black text-slate-950 sm:text-2xl">
+                {testTypeName}
+              </h1>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsDetailsOpen(true)}
+              className="min-h-10 shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100"
+              aria-label={`Open details for ${testTypeName}`}
+            >
+              Details
+            </button>
+          </div>
+        </section>
+      )}
+
+      {!isSessionCompleted && !isSessionLive && (
+        <section className="rounded-xl border p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Ready to record</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {dateLabel} · {teamName} · {sessionStatusLabel}
+              </p>
+              <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                Recording mode: Live timed finish
+              </p>
+            </div>
+          </div>
+          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="font-medium text-gray-500">Result unit</dt>
+              <dd>{resultUnit}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-gray-500">Finished</dt>
+              <dd>{completedPlayers.length}</dd>
+            </div>
+            <div>
+              <dt className="font-medium text-gray-500">Unfinished</dt>
+              <dd>{activePlayers.length}</dd>
+            </div>
+          </dl>
+          <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+            Start the timer, then tap each player as they finish.
+          </p>
+          <FitnessTestGuidance
+            guidance={guidance}
+            title="Setup guidance"
+            compact
+            collapsible
+            className="mt-4"
+          />
+        </section>
+      )}
+
+      {!isSessionCompleted && (
         <section className="sticky top-16 z-20 rounded-xl border bg-gray-950/95 p-3 text-white shadow-sm backdrop-blur sm:static sm:p-6 sm:shadow-none">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -365,6 +452,37 @@ function FitnessTimerInner({
             </p>
           )}
         </section>
+      )}
+
+      {!isSessionCompleted && isDetailsOpen && (
+        <ModalShell
+          title={`${testTypeName} details`}
+          description="Reference only. The live timer and recordings continue unchanged."
+          onClose={() => setIsDetailsOpen(false)}
+          maxWidthClassName="max-w-xl"
+        >
+          <div className="space-y-4 text-sm">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <dt className="font-bold text-slate-900">Team</dt>
+                <dd className="mt-1 text-slate-600">{teamName}</dd>
+              </div>
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <dt className="font-bold text-slate-900">Date</dt>
+                <dd className="mt-1 text-slate-600">{dateLabel}</dd>
+              </div>
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <dt className="font-bold text-slate-900">Result unit</dt>
+                <dd className="mt-1 text-slate-600">{resultUnit}</dd>
+              </div>
+              <div className="rounded-lg border bg-gray-50 p-3">
+                <dt className="font-bold text-slate-900">Started</dt>
+                <dd className="mt-1 text-slate-600">{startedAtText ?? 'Not started'}</dd>
+              </div>
+            </dl>
+            <FitnessTestGuidance guidance={guidance} title="Reference guidance" compact />
+          </div>
+        </ModalShell>
       )}
 
       {!isSessionCompleted && message && (

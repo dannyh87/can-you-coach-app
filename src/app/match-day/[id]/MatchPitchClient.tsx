@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
-type SquadStatus = 'STARTER' | 'SUBSTITUTE'
 type TargetState = 'ON' | 'OFF'
 
 type MatchActionResult =
@@ -16,8 +15,6 @@ type PitchPlayer = {
   playerId: string
   firstName: string
   surname: string
-  squadNumber: number | null
-  squadStatus: SquadStatus
   isOnPitch: boolean
   openStintStartedAt: string | null
   totalMilliseconds: number
@@ -31,14 +28,8 @@ type MatchPitchClientProps = {
   togglePlayerOnPitchAction: (formData: FormData) => Promise<MatchActionResult>
 }
 
-const formatSquadNumber = (squadNumber: number | null) =>
-  squadNumber === null ? 'No squad number' : `#${squadNumber}`
-
 const getPlayerName = (player: PitchPlayer) =>
   `${player.firstName} ${player.surname}`
-
-const formatSquadStatus = (status: SquadStatus) =>
-  status === 'STARTER' ? 'Starter' : 'Substitute'
 
 const formatMinutes = (milliseconds: number) => {
   const minutes = Math.round(Math.max(0, milliseconds) / 60000)
@@ -152,7 +143,7 @@ export default function MatchPitchClient({
         <>
         {canToggle && onPitchCount === 0 && (
           <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">
-            Sub players on to make them available for Event recording. Only tracked players currently on the pitch can have events recorded.
+            Sub players on to make them available for Event recording.
           </p>
         )}
         <div className="mt-4 grid gap-2 md:grid-cols-2 lg:gap-3">
@@ -165,9 +156,6 @@ export default function MatchPitchClient({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-base font-bold sm:text-lg">{getPlayerName(player)}</h3>
-                    <p className="mt-1 text-xs text-gray-500 sm:text-sm">
-                      {formatSquadNumber(player.squadNumber)} · {formatSquadStatus(player.squadStatus)}
-                    </p>
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${

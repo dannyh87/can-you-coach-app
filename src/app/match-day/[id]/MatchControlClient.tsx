@@ -120,12 +120,6 @@ export default function MatchControlClient({
   const awayLabel = venue === 'AWAY' ? teamName : opposition
   const homeScore = venue === 'AWAY' ? oppositionScore : ownScore
   const awayScore = venue === 'AWAY' ? ownScore : oppositionScore
-  const scoreStatusMessage = canUpdateScore
-    ? 'Score controls are live while the match clock is running.'
-    : status === 'HALF_TIME'
-      ? 'Score changes are paused at half-time.'
-      : 'Score controls are locked because the match is not live.'
-
   useEffect(() => {
     if (!activeHalfStartedAt) return
 
@@ -249,7 +243,7 @@ export default function MatchControlClient({
   }
 
   return (
-    <section className="mt-4 space-y-3 rounded-2xl bg-gray-50 p-3 shadow-sm sm:mt-6 sm:p-5">
+    <section className="mt-3 space-y-3 rounded-2xl bg-gray-50 p-3 shadow-sm sm:mt-4 sm:p-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Live match</p>
@@ -269,9 +263,6 @@ export default function MatchControlClient({
             </p>
             <p className="break-words text-xs font-bold sm:text-lg">{awayLabel}</p>
           </div>
-          <p className={`mt-3 rounded-lg px-3 py-2 text-xs font-medium ${canUpdateScore ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-900'}`}>
-            {scoreStatusMessage}
-          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-1">
@@ -330,12 +321,6 @@ export default function MatchControlClient({
 
           <div className="rounded-xl bg-white p-4 shadow-sm">
             <h2 className="text-lg font-bold">Goal controls</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Add goals during live play. These buttons update the score only and do not record player events.
-            </p>
-            <p className="mt-2 text-xs font-medium text-blue-800 sm:text-sm">
-              To record who had a shot, assist, pass or goal event, use Event recording below.
-            </p>
 
             {status === 'HALF_TIME' ? (
               <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

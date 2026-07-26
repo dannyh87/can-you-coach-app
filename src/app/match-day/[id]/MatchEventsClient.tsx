@@ -29,7 +29,6 @@ type EventPlayer = {
   playerId: string
   firstName: string
   surname: string
-  squadNumber: number | null
 }
 
 type RecentEvent = {
@@ -73,9 +72,6 @@ type MatchEventsClientProps = {
 
 const formatPlayerName = (player: EventPlayer) =>
   `${player.firstName} ${player.surname}`
-
-const formatSquadNumber = (squadNumber: number | null) =>
-  squadNumber === null ? 'No squad number' : `#${squadNumber}`
 
 const formatHalf = (half: MatchHalf) =>
   half === 'FIRST_HALF' ? '1H' : '2H'
@@ -388,9 +384,6 @@ export default function MatchEventsClient({
                         }`}
                       >
                         <span className="block truncate text-xs font-black sm:text-sm">{formatPlayerName(player)}</span>
-                        <span className={`block text-[11px] font-bold ${isSelected ? 'text-blue-100' : 'text-gray-500'}`}>
-                          {formatSquadNumber(player.squadNumber)}
-                        </span>
                       </button>
                     )
                   })}
@@ -473,9 +466,6 @@ export default function MatchEventsClient({
                       >
                         <span className="block truncate text-xs font-black sm:text-sm">
                           {pendingAction === pendingKey ? 'Saving...' : formatPlayerName(player)}
-                        </span>
-                        <span className="block text-[11px] font-bold text-gray-500">
-                          {formatSquadNumber(player.squadNumber)}
                         </span>
                       </button>
                     )

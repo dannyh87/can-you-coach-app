@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation'
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
 import MatchEventSetupClient from '@/app/match-day/[id]/MatchEventSetupClient'
 import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
+import MatchLiveDetailsButton from '@/app/match-day/[id]/MatchLiveDetailsButton'
 import MatchPitchClient from '@/app/match-day/[id]/MatchPitchClient'
 import ParentSubmissionsPanel from '@/app/match-day/[id]/ParentSubmissionsPanel'
 import MatchSummaryReport from '@/app/match-day/[id]/MatchSummaryReport'
@@ -1418,6 +1419,9 @@ export default async function MatchDayDetailPage({
       return categoryMap
     }, new Map<string, string>())
   ).map(([value, label]) => ({ value, label }))
+  const selectedEventLabels = Array.from(
+    new Set(selectedEventOptions.map((eventOption) => eventOption.label))
+  ).sort((firstLabel, secondLabel) => firstLabel.localeCompare(secondLabel))
   const eventLabelsByKey = new Map<string, string>()
   for (const event of match.matchEvents) {
     eventLabelsByKey.set(getMatchEventIdentity(event), getMatchEventLabel(event))
@@ -1598,39 +1602,41 @@ export default async function MatchDayDetailPage({
         </Link>
       </div>
 
-      <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">{headline}</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {formatDate(match.kickoffAt)} · {matchTypeLabel} · {venueLabel} ·{' '}
-              {statusLabel}
-            </p>
+      {(match.status === 'DRAFT' || match.status === 'COMPLETED') && (
+        <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">{headline}</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {formatDate(match.kickoffAt)} · {matchTypeLabel} · {venueLabel} ·{' '}
+                {statusLabel}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {showHeaderScore && (
+                <div className="rounded-lg border bg-gray-50 px-4 py-2 text-center">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Score</p>
+                  <p className="text-2xl font-bold tabular-nums">{finalScore}</p>
+                </div>
+              )}
+              <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(match.status)}`}>
+                {statusLabel}
+              </span>
+              {canManageThisMatch && (
+                <form action={duplicateMatchDaySetup}>
+                  <input type="hidden" name="matchDayId" value={match.id} />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-50"
+                  >
+                    Copy setup
+                  </button>
+                </form>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            {showHeaderScore && (
-              <div className="rounded-lg border bg-gray-50 px-4 py-2 text-center">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Score</p>
-                <p className="text-2xl font-bold tabular-nums">{finalScore}</p>
-              </div>
-            )}
-            <span className={`rounded-full px-3 py-1 text-xs font-medium ${getStatusClasses(match.status)}`}>
-              {statusLabel}
-            </span>
-            {canManageThisMatch && (
-              <form action={duplicateMatchDaySetup}>
-                <input type="hidden" name="matchDayId" value={match.id} />
-                <button
-                  type="submit"
-                  className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-50"
-                >
-                  Copy setup
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {copiedSetupNotice && (
         <p className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
@@ -1719,40 +1725,13 @@ export default async function MatchDayDetailPage({
         />
       )}
 
-      {match.status !== 'DRAFT' && match.status !== 'COMPLETED' && (
-        <details className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:mt-6 sm:p-4">
-          <summary className="cursor-pointer font-bold text-slate-950">
-            Match setup
-          </summary>
-          <div className="mt-3 grid gap-2 text-slate-700 md:grid-cols-3">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <h2 className="font-bold text-amber-950">Squad setup locked</h2>
-              <p className="mt-1 text-amber-900">
-                Starters, substitutes and not involved players are locked after kick-off to protect minutes and substitution history.
-              </p>
-              {/* TODO: Add safe mid-game squad edits that preserve existing stints and events. */}
-            </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <h2 className="font-bold text-amber-950">Event setup locked</h2>
-              <p className="mt-1 text-amber-900">
-                Tracked event categories are locked after kick-off so existing event records stay consistent.
-              </p>
-              {/* TODO: Add safe mid-game event category edits without removing existing recorded events. */}
-            </div>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <h2 className="font-bold text-blue-950">Safe setup view</h2>
-              <p className="mt-1 text-blue-900">
-                Use players/substitutions and event recording below for live coaching observations. Setup edits can be expanded in a future version.
-              </p>
-            </div>
-          </div>
-        </details>
-      )}
-
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
-        <section className="mt-3 rounded-2xl bg-gray-50 p-2 sm:mt-6 sm:p-5">
+        <section className="mt-3 rounded-2xl bg-gray-50 p-2 sm:mt-6 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-black sm:text-2xl">Live match</h2>
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-blue-700">Live match</p>
+              <h2 className="truncate text-lg font-black text-slate-950 sm:text-2xl">{headline}</h2>
+            </div>
             <div className="flex flex-wrap gap-2">
               <a
                 href="#players-and-substitutions"
@@ -1766,25 +1745,21 @@ export default async function MatchDayDetailPage({
               >
                 Events
               </a>
+              <MatchLiveDetailsButton
+                headline={headline}
+                dateLabel={formatDate(match.kickoffAt)}
+                matchTypeLabel={matchTypeLabel}
+                venueLabel={venueLabel}
+                statusLabel={statusLabel}
+                teamName={match.team.name}
+                opposition={match.opposition}
+                starterCount={trackingPlayers.filter((player) => player.squadStatus === 'STARTER').length}
+                substituteCount={trackingPlayers.filter((player) => player.squadStatus === 'SUBSTITUTE').length}
+                trackedCount={trackingPlayers.filter((player) => player.isTracked).length}
+                selectedEventLabels={selectedEventLabels}
+              />
             </div>
           </div>
-          <details className="mt-2 rounded-xl border border-blue-100 bg-blue-50 p-2 text-sm text-blue-950">
-            <summary className="cursor-pointer font-bold">Quick live tips</summary>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <div>
-              <p className="font-bold">1. Put players on</p>
-              <p className="mt-1 text-blue-900">Sub players on before recording events.</p>
-            </div>
-            <div>
-              <p className="font-bold">2. Record player events</p>
-              <p className="mt-1 text-blue-900">Only tracked, on-pitch players appear.</p>
-            </div>
-            <div>
-              <p className="font-bold">3. Update score separately</p>
-              <p className="mt-1 text-blue-900">Goal buttons update score only.</p>
-            </div>
-            </div>
-          </details>
           <div className="mt-2 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
               <MatchPitchClient

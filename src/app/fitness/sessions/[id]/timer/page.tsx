@@ -2,17 +2,13 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
-import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessTimerClient from '@/components/FitnessTimerClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
   endFitnessTestSession,
   startFitnessTestSession,
 } from '@/lib/fitnessSessionActions'
-import {
-  formatFitnessSessionStatus,
-  getFitnessSessionStatusClasses,
-} from '@/lib/fitnessSessionStatus'
+import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
 import { getCurrentUser } from '@/lib/auth'
 import { canRecordFitnessSession } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -158,14 +154,6 @@ async function undoTimedFinish(formData: FormData): Promise<
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
-const formatDateTime = (date: Date | null) =>
-  date
-    ? new Intl.DateTimeFormat('en-GB', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      }).format(date)
-    : 'Not started'
-
 export default async function FitnessTimerPage({
   params,
   searchParams,
@@ -250,75 +238,6 @@ export default async function FitnessTimerPage({
         </p>
       )}
 
-      {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold">{session.fitnessTestType.name}</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {formatDate(session.date)} · {session.team.club.name} ·{' '}
-              {session.team.name} · {formatFitnessSessionStatus(session.status)}
-            </p>
-            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-              Recording mode: Live timed finish
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-              {formatDate(session.date)}
-            </span>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
-                session.status
-              )}`}
-            >
-              {formatFitnessSessionStatus(session.status)}
-            </span>
-          </div>
-        </div>
-
-        <dl className="grid gap-3 text-sm sm:grid-cols-4">
-          <div>
-            <dt className="font-medium text-gray-500">Result unit</dt>
-            <dd>{session.fitnessTestType.resultUnit}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Finished</dt>
-            <dd>{players.filter((player) => player.result).length}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Unfinished</dt>
-            <dd>{players.filter((player) => !player.result).length}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Started</dt>
-            <dd>{formatDateTime(session.startedAt)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Completed</dt>
-            <dd>{formatDateTime(session.completedAt)}</dd>
-          </div>
-        </dl>
-
-        {session.status === 'IN_PROGRESS' && (
-          <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
-            LIVE: record each player as they finish.
-          </p>
-        )}
-
-        <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          Start the timer, then tap each player as they finish.
-        </p>
-
-        <FitnessTestGuidance
-          guidance={session.fitnessTestType}
-          title="Setup guidance"
-          compact
-          collapsible
-          className="mt-4"
-        />
-      </section>}
-
       {session.status !== 'COMPLETED' && players.length === 0 ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">No active players</h2>
@@ -336,6 +255,12 @@ export default async function FitnessTimerPage({
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           targetScores={session.fitnessTestType.targetScores}
+          setupInstructions={session.fitnessTestType.setupInstructions}
+          equipmentNeeded={session.fitnessTestType.equipmentNeeded}
+          scoringNotes={session.fitnessTestType.scoringNotes}
+          spaceRequired={session.fitnessTestType.spaceRequired}
+          coachNotes={session.fitnessTestType.coachNotes}
+          videoUrl={session.fitnessTestType.videoUrl}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}

@@ -2,17 +2,13 @@ import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
 
-import FitnessTestGuidance from '@/components/FitnessTestGuidance'
 import FitnessLiveDropoutClient from '@/components/FitnessLiveDropoutClient'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
 import {
   endFitnessTestSession,
   startFitnessTestSession,
 } from '@/lib/fitnessSessionActions'
-import {
-  formatFitnessSessionStatus,
-  getFitnessSessionStatusClasses,
-} from '@/lib/fitnessSessionStatus'
+import { formatFitnessSessionStatus } from '@/lib/fitnessSessionStatus'
 import {
   GACON_COUNTDOWN_SECONDS,
   GACON_DISTANCE_INCREMENT_METRES,
@@ -168,14 +164,6 @@ async function undoDropoutResult(formData: FormData): Promise<
 }
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
-const formatDateTime = (date: Date | null) =>
-  date
-    ? new Intl.DateTimeFormat('en-GB', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      }).format(date)
-    : 'Not started'
-
 const normalizeFitnessTestName = (name: string) =>
   name.trim().toLowerCase().replace(/\s+/g, ' ')
 
@@ -227,9 +215,6 @@ export default async function FitnessLiveDropoutPage({
     existingResults.map((result) => [result.playerId, result])
   )
 
-  const recordedCount = activePlayers.filter((player) =>
-    resultsByPlayerId.has(player.id)
-  ).length
   const players = activePlayers.map((player) => {
     const result = resultsByPlayerId.get(player.id)
 
@@ -286,78 +271,6 @@ export default async function FitnessLiveDropoutPage({
         </p>
       )}
 
-      {session.status !== 'COMPLETED' && <section className="mt-6 rounded-xl border p-6">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold">{session.fitnessTestType.name}</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              {formatDate(session.date)} · {session.team.club.name} ·{' '}
-              {session.team.name} · {formatFitnessSessionStatus(session.status)}
-            </p>
-            <p className="mt-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-              Recording mode: Live dropout
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-              {formatDate(session.date)}
-            </span>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${getFitnessSessionStatusClasses(
-                session.status
-              )}`}
-            >
-              {formatFitnessSessionStatus(session.status)}
-            </span>
-          </div>
-        </div>
-
-        <dl className="grid gap-3 text-sm sm:grid-cols-4">
-          <div>
-            <dt className="font-medium text-gray-500">Result unit</dt>
-            <dd>{session.fitnessTestType.resultUnit}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Still active</dt>
-            <dd>{activePlayers.length - recordedCount}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Dropped out</dt>
-            <dd>{recordedCount}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Started</dt>
-            <dd>{formatDateTime(session.startedAt)}</dd>
-          </div>
-          <div>
-            <dt className="font-medium text-gray-500">Completed</dt>
-            <dd>{formatDateTime(session.completedAt)}</dd>
-          </div>
-        </dl>
-
-        {session.status === 'IN_PROGRESS' && (
-          <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm font-medium text-green-800">
-            LIVE: record each player when they drop out.
-          </p>
-        )}
-
-        <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
-          {getGaconProtocolConfig(session.fitnessTestType)
-            ? 'Use the automatic 45/15 Gacon timer, then tap each player as they drop out.'
-            : 'Set the current level, then tap each player as they drop out.'}
-          Archived players are excluded.
-        </p>
-
-        <FitnessTestGuidance
-          guidance={session.fitnessTestType}
-          title="Setup guidance"
-          compact
-          collapsible
-          className="mt-4"
-        />
-      </section>}
-
       {session.status !== 'COMPLETED' && activePlayers.length === 0 ? (
         <section className="mt-6 rounded-lg border p-4">
           <h2 className="text-xl font-bold">No active players</h2>
@@ -375,6 +288,12 @@ export default async function FitnessLiveDropoutPage({
           resultUnit={session.fitnessTestType.resultUnit}
           higherIsBetter={session.fitnessTestType.higherIsBetter}
           targetScores={session.fitnessTestType.targetScores}
+          setupInstructions={session.fitnessTestType.setupInstructions}
+          equipmentNeeded={session.fitnessTestType.equipmentNeeded}
+          scoringNotes={session.fitnessTestType.scoringNotes}
+          spaceRequired={session.fitnessTestType.spaceRequired}
+          coachNotes={session.fitnessTestType.coachNotes}
+          videoUrl={session.fitnessTestType.videoUrl}
           rankingsHref={`/fitness/sessions/${session.id}/rankings`}
           progressHref="/fitness/progress"
           isLive={session.status === 'IN_PROGRESS'}
