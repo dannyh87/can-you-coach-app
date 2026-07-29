@@ -1,6 +1,7 @@
-import type { MatchEventType } from '@prisma/client'
-
-import { isMatchEventType } from '@/lib/matchEventTaxonomy'
+import {
+  resolveSelectedParentSubmissionEvent,
+  type ResolvedParentSubmissionEvent,
+} from '@/lib/parentSubmissionEvents'
 import { prisma } from '@/lib/prisma'
 
 export type ParentActionResult =
@@ -76,18 +77,16 @@ export async function validateParentSubmission({
   userId,
   matchDayId,
   playerId,
-  eventType,
+  eventKey,
 }: {
   userId: string
   matchDayId: string
   playerId: string
-  eventType: string
+  eventKey: string
 }): Promise<
-  | { ok: true; eventType: MatchEventType; match: NonNullable<Awaited<ReturnType<typeof getSubmissionMatch>>>; activeHalf: NonNullable<ReturnType<typeof getActiveHalf>> }
+  | { ok: true; event: ResolvedParentSubmissionEvent; match: NonNullable<Awaited<ReturnType<typeof getSubmissionMatch>>>; activeHalf: NonNullable<ReturnType<typeof getActiveHalf>> }
   | { ok: false; reason: string }
 > {
-  if (!isMatchEventType(eventType)) return { ok: false, reason: 'Event type is invalid.' }
-
   const match = await getSubmissionMatch(matchDayId)
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'IN_PROGRESS') return { ok: false, reason: 'Parent observations can only be submitted while the match is live.' }
@@ -95,8 +94,14 @@ export async function validateParentSubmission({
   const activeHalf = getActiveHalf(match)
   if (!activeHalf) return { ok: false, reason: 'No half timer is currently running.' }
 
-  const selectedEvent = match.matchDayEventTypes.some((selectedType) => selectedType.eventType === eventType)
-  if (!selectedEvent) return { ok: false, reason: 'This event type was not selected for this match.' }
+  const selectedEvent = resolveSelectedParentSubmissionEvent({
+    eventKey,
+    selectedEvents: match.matchDayEventTypes,
+  })
+  if (!selectedEvent) return { ok: false, reason: 'This event was not selected for this match.' }
+  if (selectedEvent.requiresLocation) {
+    return { ok: false, reason: 'This event requires pitch location, which parent observations do not support yet.' }
+  }
 
   const spectatorAccess = await prisma.spectatorAccess.findFirst({
     where: {
@@ -125,7 +130,7 @@ export async function validateParentSubmission({
   })
   if (!openStint) return { ok: false, reason: 'This player is not currently recorded as on pitch.' }
 
-  return { ok: true, eventType, match, activeHalf }
+  return { ok: true, event: selectedEvent, match, activeHalf }
 }
 
 async function getSubmissionMatch(matchDayId: string) {
@@ -133,7 +138,22 @@ async function getSubmissionMatch(matchDayId: string) {
     where: { id: matchDayId },
     include: {
       team: { select: { clubId: true } },
-      matchDayEventTypes: { select: { eventType: true } },
+      matchDayEventTypes: {
+        select: {
+          id: true,
+          eventType: true,
+          eventDefinitionId: true,
+          eventDefinition: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              legacyEventType: true,
+              requiresLocation: true,
+            },
+          },
+        },
+      },
     },
   })
 }

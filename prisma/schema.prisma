@@ -8,22 +8,26 @@ datasource db {
 }
 
 model User {
-  id                           String                @id @default(cuid())
-  clerkUserId                  String?               @unique
-  email                        String                @unique
+  id                           String                                @id @default(cuid())
+  clerkUserId                  String?                               @unique
+  email                        String                                @unique
   passwordHash                 String?
   onboardingCompletedAt        DateTime?
   onboardingRole               OnboardingRole?
-  createdAt                    DateTime              @default(now())
-  updatedAt                    DateTime              @updatedAt
+  createdAt                    DateTime                              @default(now())
+  updatedAt                    DateTime                              @updatedAt
   clubs                        Club[]
   fitnessTestTypes             FitnessTestType[]
-  invitationsSent              Invitation[]          @relation("InvitationsSent")
-  invitationsAccepted          Invitation[]          @relation("InvitationsAccepted")
+  invitationsSent              Invitation[]                          @relation("InvitationsSent")
+  invitationsAccepted          Invitation[]                          @relation("InvitationsAccepted")
   memberships                  ClubMembership[]
   spectatorAccess              SpectatorAccess[]
-  submittedMatchEvents         SubmittedMatchEvent[] @relation("SubmittedMatchEvents")
-  acceptedSubmittedMatchEvents SubmittedMatchEvent[] @relation("AcceptedSubmittedMatchEvents")
+  submittedMatchEvents         SubmittedMatchEvent[]                 @relation("SubmittedMatchEvents")
+  acceptedSubmittedMatchEvents SubmittedMatchEvent[]                 @relation("AcceptedSubmittedMatchEvents")
+  matchTrackingTasksCreated    MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
+  assignmentsAssigned          MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
+  assignmentsAssignedBy        MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
+  assignmentRecipients         MatchContributorAssignmentRecipient[]
 }
 
 enum OnboardingRole {
@@ -114,31 +118,31 @@ enum InvitationStatus {
 }
 
 model Invitation {
-  id               String           @id @default(cuid())
-  token            String           @unique
-  email            String
-  normalizedEmail  String
-  type             InvitationType
-  status           InvitationStatus @default(PENDING)
+  id              String           @id @default(cuid())
+  token           String           @unique
+  email           String
+  normalizedEmail String
+  type            InvitationType
+  status          InvitationStatus @default(PENDING)
 
-  clubId           String?
-  teamId           String?
-  playerId         String?
+  clubId   String?
+  teamId   String?
+  playerId String?
 
   invitedByUserId  String
   acceptedByUserId String?
 
-  expiresAt        DateTime
-  acceptedAt       DateTime?
-  revokedAt        DateTime?
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  club             Club?            @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  team             Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  player           Player?          @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  invitedBy        User             @relation("InvitationsSent", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  acceptedBy       User?            @relation("InvitationsAccepted", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  club       Club?   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  team       Team?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  player     Player? @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  invitedBy  User    @relation("InvitationsSent", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy User?   @relation("InvitationsAccepted", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@index([normalizedEmail])
   @@index([status])
@@ -170,22 +174,114 @@ model MatchDay {
   matchEvents          MatchEvent[]
   matchDayEventTypes   MatchDayEventType[]
   submittedMatchEvents SubmittedMatchEvent[]
+  matchTrackingTasks   MatchTrackingTask[]
 }
 
 model MatchDayEventType {
-  id                String             @id @default(cuid())
-  matchDayId        String
-  eventType         MatchEventType?
-  category          MatchEventCategory
-  eventDefinitionId String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  matchDay          MatchDay           @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  eventDefinition   EventDefinition?   @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  id                 String                   @id @default(cuid())
+  matchDayId         String
+  eventType          MatchEventType?
+  category           MatchEventCategory
+  eventDefinitionId  String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  matchDay           MatchDay                 @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  eventDefinition    EventDefinition?         @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  trackingTaskEvents MatchTrackingTaskEvent[]
 
   @@unique([matchDayId, eventType])
   @@unique([matchDayId, eventDefinitionId])
   @@index([eventDefinitionId])
+}
+
+model MatchTrackingTask {
+  id              String                  @id @default(cuid())
+  matchDayId      String
+  createdByUserId String
+  scopeType       MatchTrackingScope
+  playerId        String?
+  unitKey         String?
+  unitLabel       String?
+  title           String
+  instructions    String?
+  sourceTaskId    String?
+  status          MatchTrackingTaskStatus @default(DRAFT)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  matchDay    MatchDay                     @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  createdBy   User                         @relation("MatchTrackingTasksCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  player      Player?                      @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  sourceTask  MatchTrackingTask?           @relation("CopiedMatchTrackingTasks", fields: [sourceTaskId], references: [id], onDelete: SetNull)
+  copiedTasks MatchTrackingTask[]          @relation("CopiedMatchTrackingTasks")
+  events      MatchTrackingTaskEvent[]
+  assignments MatchContributorAssignment[]
+
+  @@index([matchDayId])
+  @@index([createdByUserId])
+  @@index([playerId])
+  @@index([sourceTaskId])
+  @@index([status])
+}
+
+model MatchTrackingTaskEvent {
+  id                  String   @id @default(cuid())
+  trackingTaskId      String
+  matchDayEventTypeId String
+  displayOrder        Int
+  createdAt           DateTime @default(now())
+
+  trackingTask      MatchTrackingTask @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
+  matchDayEventType MatchDayEventType @relation(fields: [matchDayEventTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([trackingTaskId, matchDayEventTypeId])
+  @@index([trackingTaskId])
+  @@index([matchDayEventTypeId])
+}
+
+model MatchContributorAssignment {
+  id               String                           @id @default(cuid())
+  trackingTaskId   String
+  assignmentMode   MatchContributorAssignmentMode
+  status           MatchContributorAssignmentStatus
+  assignedUserId   String?
+  assignedByUserId String
+  acceptedAt       DateTime?
+  declinedAt       DateTime?
+  startedAt        DateTime?
+  submittedAt      DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime                         @default(now())
+  updatedAt        DateTime                         @updatedAt
+
+  trackingTask         MatchTrackingTask                     @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
+  assignedUser         User?                                 @relation("MatchAssignmentsAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  assignedBy           User                                  @relation("MatchAssignmentsAssignedBy", fields: [assignedByUserId], references: [id], onDelete: Cascade)
+  recipients           MatchContributorAssignmentRecipient[]
+  submittedMatchEvents SubmittedMatchEvent[]
+
+  @@index([trackingTaskId])
+  @@index([assignedUserId])
+  @@index([assignedByUserId])
+  @@index([status])
+  @@index([assignmentMode])
+}
+
+model MatchContributorAssignmentRecipient {
+  id           String    @id @default(cuid())
+  assignmentId String
+  userId       String
+  viewedAt     DateTime?
+  declinedAt   DateTime?
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  assignment MatchContributorAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  user       User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, userId])
+  @@index([assignmentId])
+  @@index([userId])
 }
 
 model MatchDayPlayer {
@@ -244,59 +340,68 @@ model MatchEvent {
 }
 
 model SubmittedMatchEvent {
-  id                    String                    @id @default(cuid())
+  id                    String                      @id @default(cuid())
   matchDayId            String
   playerId              String
   submittedByUserId     String
-  eventType             MatchEventType
+  eventType             MatchEventType?
+  eventDefinitionId     String?
+  assignmentId          String?
   half                  MatchHalf
   matchSecond           Int
   ownScoreAtTime        Int
   oppositionScoreAtTime Int
   note                  String?
-  status                SubmittedMatchEventStatus @default(PENDING)
+  status                SubmittedMatchEventStatus   @default(PENDING)
   acceptedAt            DateTime?
   acceptedByUserId      String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  matchDay              MatchDay                  @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player                Player                    @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  submittedBy           User                      @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
-  acceptedBy            User?                     @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  matchDay              MatchDay                    @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                Player                      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  eventDefinition       EventDefinition?            @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  assignment            MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  submittedBy           User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy            User?                       @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@index([matchDayId, playerId])
+  @@index([eventDefinitionId])
+  @@index([assignmentId])
   @@index([submittedByUserId])
   @@index([status])
 }
 
 model EventDefinition {
-  id                 String                    @id @default(cuid())
-  scope              EventDefinitionScope      @default(GLOBAL)
-  clubId             String?
-  createdByUserId    String?
-  legacyEventType    MatchEventType?           @unique
-  name               String
-  slug               String
-  normalizedName     String
-  description        String?
-  videoUrl           String?
-  matchPhase         EventDefinitionMatchPhase
-  category           EventDefinitionCategory
-  subcategory        String?
-  matchDayGroup      EventDefinitionMatchDayGroup?
-  agePhases          EventDefinitionAgePhase[]
-  fourCorner         EventDefinitionFourCorner
-  positionRelevance  EventDefinitionPosition[]
-  enabledByDefault   Boolean                   @default(false)
-  benchmarkable      Boolean                   @default(false)
-  requiresLocation   Boolean                   @default(false)
-  isActive           Boolean                   @default(true)
-  archivedAt         DateTime?
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
-  matchEvents        MatchEvent[]
-  matchDayEventTypes MatchDayEventType[]
+  id                   String                        @id @default(cuid())
+  scope                EventDefinitionScope          @default(GLOBAL)
+  clubId               String?
+  createdByUserId      String?
+  legacyEventType      MatchEventType?               @unique
+  name                 String
+  slug                 String
+  normalizedName       String
+  description          String?
+  videoUrl             String?
+  matchPhase           EventDefinitionMatchPhase
+  category             EventDefinitionCategory
+  subcategory          String?
+  matchDayGroup        EventDefinitionMatchDayGroup?
+  agePhases            EventDefinitionAgePhase[]
+  fourCorner           EventDefinitionFourCorner
+  positionRelevance    EventDefinitionPosition[]
+  enabledByDefault     Boolean                       @default(false)
+  benchmarkable        Boolean                       @default(false)
+  requiresLocation     Boolean                       @default(false)
+  isActive             Boolean                       @default(true)
+  archivedAt           DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
+  matchEvents          MatchEvent[]
+  matchDayEventTypes   MatchDayEventType[]
+  submittedMatchEvents SubmittedMatchEvent[]
 
+  @@unique([scope, clubId, normalizedName])
+  @@unique([scope, clubId, slug])
   @@index([scope])
   @@index([clubId])
   @@index([slug])
@@ -310,8 +415,6 @@ model EventDefinition {
   @@index([createdByUserId])
   @@index([enabledByDefault])
   @@index([benchmarkable])
-  @@unique([scope, clubId, normalizedName])
-  @@unique([scope, clubId, slug])
 }
 
 enum MatchType {
@@ -367,6 +470,34 @@ enum SubmittedMatchEventStatus {
   PENDING
   ACCEPTED
   IGNORED
+}
+
+enum MatchTrackingScope {
+  PLAYER
+  UNIT
+  TEAM
+}
+
+enum MatchTrackingTaskStatus {
+  DRAFT
+  READY
+  ARCHIVED
+}
+
+enum MatchContributorAssignmentMode {
+  SELF
+  DIRECT
+  GROUP_OFFER
+}
+
+enum MatchContributorAssignmentStatus {
+  PENDING
+  OFFERED
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  SUBMITTED
+  CANCELLED
 }
 
 enum EventDefinitionScope {
@@ -448,6 +579,7 @@ model Player {
   matchEvents          MatchEvent[]
   spectatorAccess      SpectatorAccess[]
   submittedMatchEvents SubmittedMatchEvent[]
+  matchTrackingTasks   MatchTrackingTask[]
 }
 
 model SpectatorAccess {

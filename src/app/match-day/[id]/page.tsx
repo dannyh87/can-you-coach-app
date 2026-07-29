@@ -23,6 +23,10 @@ import {
   isMatchEventType,
   matchEventTypes,
 } from '@/lib/matchEventTaxonomy'
+import {
+  buildAcceptedSubmissionMatchEventData,
+  getParentSubmissionEventDisplayName,
+} from '@/lib/parentSubmissionEvents'
 import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
@@ -1056,6 +1060,7 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
         matchDayId,
       },
       include: {
+        eventDefinition: true,
         matchDay: {
           select: {
             id: true,
@@ -1072,6 +1077,9 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
     if (submission.matchDay.status === 'DRAFT') {
       return { ok: false, reason: 'Draft matches cannot review parent submissions.' } satisfies MatchActionResult
     }
+    if (!submission.eventDefinitionId && !submission.eventType) {
+      return { ok: false, reason: 'This submission does not have a valid event.' } satisfies MatchActionResult
+    }
 
     const matchPlayer = await tx.matchDayPlayer.findFirst({
       where: {
@@ -1087,15 +1095,20 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
     }
 
     const selectedEventType = await tx.matchDayEventType.findFirst({
-      where: {
-        matchDayId,
-        eventType: submission.eventType,
-      },
+      where: submission.eventDefinitionId
+        ? {
+            matchDayId,
+            OR: [
+              { eventDefinitionId: submission.eventDefinitionId },
+              ...(submission.eventType ? [{ eventType: submission.eventType }] : []),
+            ],
+          }
+        : { matchDayId, eventType: submission.eventType },
       select: { id: true },
     })
 
     if (!selectedEventType) {
-      return { ok: false, reason: 'This event type is no longer selected for this match.' } satisfies MatchActionResult
+      return { ok: false, reason: 'This event is no longer selected for this match.' } satisfies MatchActionResult
     }
 
     const reviewedAt = new Date()
@@ -1115,17 +1128,7 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
       return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
     }
 
-    await tx.matchEvent.create({
-      data: {
-        matchDayId: submission.matchDayId,
-        playerId: submission.playerId,
-        eventType: submission.eventType,
-        half: submission.half,
-        matchSecond: submission.matchSecond,
-        ownScoreAtTime: submission.ownScoreAtTime,
-        oppositionScoreAtTime: submission.oppositionScoreAtTime,
-      },
-    })
+    await tx.matchEvent.create({ data: buildAcceptedSubmissionMatchEventData(submission) })
 
     return { ok: true } satisfies MatchActionResult
   })
@@ -1265,6 +1268,7 @@ export default async function MatchDayDetailPage({
               email: true,
             },
           },
+          eventDefinition: true,
         },
         orderBy: { createdAt: 'desc' },
       },
@@ -1574,7 +1578,7 @@ export default async function MatchDayDetailPage({
     id: submission.id,
     playerName: `${submission.player.firstName} ${submission.player.surname}`,
     squadNumber: submission.player.squadNumber,
-    eventLabel: formatMatchEventType(submission.eventType),
+    eventLabel: getParentSubmissionEventDisplayName(submission),
     submitterLabel: submission.submittedBy.email,
     halfLabel: formatHalfLabel(submission.half),
     matchTime: formatMatchTime(submission.matchSecond),

@@ -5,12 +5,15 @@ import { notFound, redirect } from 'next/navigation'
 import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
 import { getCurrentUser } from '@/lib/auth'
-import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
 import {
   getParentLinkedPlayersForMatch,
   getSecondsBetween,
   validateParentSubmission,
 } from '@/lib/parentMatchAccess'
+import {
+  getParentSubmissionEventDisplayName,
+  getParentSubmissionEventOptions,
+} from '@/lib/parentSubmissionEvents'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -59,45 +62,51 @@ async function submitParentMatchEvent(formData: FormData) {
   const user = await getCurrentUser()
   const matchDayId = getTextValue(formData, 'matchDayId')
   const playerId = getTextValue(formData, 'playerId')
-  const eventType = getTextValue(formData, 'eventType')
+  const eventKey = getTextValue(formData, 'eventKey')
   const note = getTextValue(formData, 'note').slice(0, 280)
 
   const targetPath = `/my-player/matches/${matchDayId}${playerId ? `?playerId=${encodeURIComponent(playerId)}` : ''}`
-  const validation = await validateParentSubmission({ userId: user.id, matchDayId, playerId, eventType })
+  const validation = await validateParentSubmission({ userId: user.id, matchDayId, playerId, eventKey })
   if (!validation.ok) {
     redirect(`${targetPath}&error=${encodeURIComponent(validation.reason)}`)
   }
 
   const duplicateSince = new Date(Date.now() - 5000)
-  const duplicate = await prisma.submittedMatchEvent.findFirst({
-    where: {
-      matchDayId,
-      playerId,
-      submittedByUserId: user.id,
-      eventType: validation.eventType,
-      createdAt: { gte: duplicateSince },
-    },
-    select: { id: true },
-  })
-  if (duplicate) {
-    redirect(`${targetPath}&error=${encodeURIComponent('That observation was already submitted a moment ago.')}`)
-  }
-
   const now = new Date()
-  await prisma.submittedMatchEvent.create({
-    data: {
-      matchDayId,
-      playerId,
-      submittedByUserId: user.id,
-      eventType: validation.eventType,
-      half: validation.activeHalf.half,
-      matchSecond: getSecondsBetween(validation.activeHalf.startedAt, now),
-      ownScoreAtTime: validation.match.ownScore,
-      oppositionScoreAtTime: validation.match.oppositionScore,
-      note: note || null,
-      status: 'PENDING',
-    },
+  const result = await prisma.$transaction(async (tx) => {
+    const duplicate = await tx.submittedMatchEvent.findFirst({
+      where: {
+        matchDayId,
+        playerId,
+        submittedByUserId: user.id,
+        createdAt: { gte: duplicateSince },
+        ...(validation.event.eventDefinitionId
+          ? { eventDefinitionId: validation.event.eventDefinitionId }
+          : { eventDefinitionId: null, eventType: validation.event.eventType }),
+      },
+      select: { id: true },
+    })
+    if (duplicate) return { ok: false as const }
+
+    await tx.submittedMatchEvent.create({
+      data: {
+        matchDayId,
+        playerId,
+        submittedByUserId: user.id,
+        eventDefinitionId: validation.event.eventDefinitionId,
+        eventType: validation.event.eventType,
+        half: validation.activeHalf.half,
+        matchSecond: getSecondsBetween(validation.activeHalf.startedAt, now),
+        ownScoreAtTime: validation.match.ownScore,
+        oppositionScoreAtTime: validation.match.oppositionScore,
+        note: note || null,
+        status: 'PENDING',
+      },
+    })
+
+    return { ok: true as const }
   })
+  if (!result.ok) redirect(`${targetPath}&error=${encodeURIComponent('That observation was already submitted a moment ago.')}`)
 
   revalidatePath(`/my-player/matches/${matchDayId}`)
   redirect(`${targetPath}&success=${encodeURIComponent('Observation submitted.')}`)
@@ -107,11 +116,13 @@ async function undoParentMatchEvent(formData: FormData) {
   'use server'
 
   const user = await getCurrentUser()
+  const matchDayId = getTextValue(formData, 'matchDayId')
   const submittedEventId = getTextValue(formData, 'submittedEventId')
 
   const submittedEvent = await prisma.submittedMatchEvent.findFirst({
     where: {
       id: submittedEventId,
+      matchDayId,
       submittedByUserId: user.id,
       status: 'PENDING',
     },
@@ -147,10 +158,23 @@ export default async function ParentMatchPage({
     },
     include: {
       team: { include: { club: true } },
-      matchDayEventTypes: { orderBy: { createdAt: 'asc' } },
+      matchDayEventTypes: {
+        include: {
+          eventDefinition: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              legacyEventType: true,
+              requiresLocation: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
       submittedMatchEvents: {
         where: { submittedByUserId: user.id },
-        include: { player: true },
+        include: { player: true, eventDefinition: true },
         orderBy: { createdAt: 'desc' },
         take: 20,
       },
@@ -160,10 +184,7 @@ export default async function ParentMatchPage({
   if (!match) notFound()
 
   const canSubmit = match.status === 'IN_PROGRESS' && selectedPlayer.isOnPitch
-  const parentRecordableEventTypes = match.matchDayEventTypes.flatMap((eventType) => {
-    if (!eventType.eventType) return []
-    return [{ ...eventType, eventType: eventType.eventType }]
-  })
+  const parentRecordableEvents = getParentSubmissionEventOptions(match.matchDayEventTypes)
   const readOnlyMessage = match.status === 'HALF_TIME'
     ? 'The match is at half-time. Parent observations are paused until play resumes.'
     : match.status === 'COMPLETED'
@@ -235,39 +256,51 @@ export default async function ParentMatchPage({
           </p>
         )}
 
-        {parentRecordableEventTypes.length === 0 ? (
+        {parentRecordableEvents.length === 0 ? (
           <EmptyState
             title="No event buttons selected"
             description="The coach has not selected any recordable event types for this match."
           />
         ) : (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {parentRecordableEventTypes.map((eventType) => (
-              <form key={eventType.id} action={submitParentMatchEvent} className="rounded-xl border border-slate-200 p-3">
-                <input type="hidden" name="matchDayId" value={match.id} />
-                <input type="hidden" name="playerId" value={selectedPlayer.playerId} />
-                <input type="hidden" name="eventType" value={eventType.eventType} />
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor={`note-${eventType.id}`}>
-                  Optional note
-                </label>
-                <textarea
-                  id={`note-${eventType.id}`}
-                  name="note"
-                  rows={2}
-                  maxLength={280}
-                  className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="Add context for the coach"
-                  disabled={!canSubmit}
-                />
-                <button
-                  type="submit"
-                  disabled={!canSubmit}
-                  className="mt-3 w-full rounded-lg bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-                >
-                  {formatMatchEventType(eventType.eventType)}
-                </button>
-              </form>
-            ))}
+            {parentRecordableEvents.map((event) => {
+              const eventCanSubmit = canSubmit && !event.requiresLocation
+
+              return (
+                <form key={event.eventKey} action={submitParentMatchEvent} className="rounded-xl border border-slate-200 p-3">
+                  <input type="hidden" name="matchDayId" value={match.id} />
+                  <input type="hidden" name="playerId" value={selectedPlayer.playerId} />
+                  <input type="hidden" name="eventKey" value={event.eventKey} />
+                  <label className="block text-xs font-bold uppercase tracking-wide text-slate-500" htmlFor={`note-${event.eventKey}`}>
+                    Optional note
+                  </label>
+                  <textarea
+                    id={`note-${event.eventKey}`}
+                    name="note"
+                    rows={2}
+                    maxLength={280}
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    placeholder="Add context for the coach"
+                    disabled={!eventCanSubmit}
+                  />
+                  {event.description && (
+                    <p className="mt-2 text-xs font-medium text-slate-500">{event.description}</p>
+                  )}
+                  {event.requiresLocation && (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs font-semibold text-amber-900">
+                      This event needs a pitch location, so parent observations cannot record it yet.
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={!eventCanSubmit}
+                    className="mt-3 w-full rounded-lg bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {event.label}
+                  </button>
+                </form>
+              )
+            })}
           </div>
         )}
       </section>
@@ -284,7 +317,7 @@ export default async function ParentMatchPage({
               <div key={submittedEvent.id} className="rounded-xl border border-slate-200 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="font-bold text-slate-950">{formatMatchEventType(submittedEvent.eventType)}</p>
+                    <p className="font-bold text-slate-950">{getParentSubmissionEventDisplayName(submittedEvent)}</p>
                     <p className="text-sm text-slate-600">
                       {submittedEvent.player.firstName} {submittedEvent.player.surname} / {formatHalf(submittedEvent.half)} {formatMatchTime(submittedEvent.matchSecond)}
                     </p>
@@ -296,6 +329,7 @@ export default async function ParentMatchPage({
                 </div>
                 {submittedEvent.status === 'PENDING' && (
                   <form action={undoParentMatchEvent} className="mt-3">
+                    <input type="hidden" name="matchDayId" value={match.id} />
                     <input type="hidden" name="submittedEventId" value={submittedEvent.id} />
                     <button type="submit" className="text-sm font-bold text-red-700 hover:underline">
                       Undo pending submission
