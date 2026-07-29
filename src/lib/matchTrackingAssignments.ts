@@ -102,7 +102,7 @@ async function validatePlayerForReady(db: Db, matchDayId: string, playerId: stri
   return { ok: true, value: true }
 }
 
-async function validateTaskCanBeReady(db: Db, task: TaskRecord): Promise<Result> {
+export async function validateTaskCanBeReady(db: Db, task: TaskRecord): Promise<Result> {
   const scope = validateTrackingTaskScope(task, { requireCompletePlayer: true })
   if (!scope.ok) return scope
   if (task.scopeType === 'PLAYER' && task.playerId) {
@@ -137,6 +137,33 @@ export async function createMatchTrackingTask(input: TaskScopeInput & { matchDay
   const title = input.title.trim()
   if (!title) return { ok: false, reason: 'Tracking task title is required.' }
   const task = await db.matchTrackingTask.create({ data: { matchDayId: input.matchDayId, createdByUserId: input.createdByUserId, scopeType: input.scopeType, playerId: input.playerId ?? null, unitKey: normalizeOptionalText(input.unitKey), unitLabel: normalizeOptionalText(input.unitLabel), title, instructions: normalizeOptionalText(input.instructions), status: 'DRAFT' }, select: { id: true } })
+  return { ok: true, value: task }
+}
+
+export async function updateMatchTrackingTask(input: TaskScopeInput & { db?: Db; actorUserId: string; trackingTaskId: string; title: string; instructions?: string | null }): Promise<Result<{ id: string }>> {
+  const db = input.db ?? prisma
+  const existingTask = await db.matchTrackingTask.findUnique({ where: { id: input.trackingTaskId }, select: { id: true, matchDayId: true, status: true } })
+  if (!existingTask) return { ok: false, reason: 'Tracking task was not found.' }
+  const permission = await assertCanManageTask(db, input.actorUserId, existingTask.matchDayId)
+  if (!permission.ok) return permission
+  if (existingTask.status === 'ARCHIVED') return { ok: false, reason: 'Archived tasks cannot be changed.' }
+  const scope = validateTrackingTaskScope(input)
+  if (!scope.ok) return scope
+  const title = input.title.trim()
+  if (!title) return { ok: false, reason: 'Tracking task title is required.' }
+  const task = await db.matchTrackingTask.update({
+    where: { id: existingTask.id },
+    data: {
+      scopeType: input.scopeType,
+      playerId: input.playerId ?? null,
+      unitKey: normalizeOptionalText(input.unitKey),
+      unitLabel: normalizeOptionalText(input.unitLabel),
+      title,
+      instructions: normalizeOptionalText(input.instructions),
+      status: 'DRAFT',
+    },
+    select: { id: true },
+  })
   return { ok: true, value: task }
 }
 

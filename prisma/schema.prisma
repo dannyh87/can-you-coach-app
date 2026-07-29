@@ -351,6 +351,8 @@ model SubmittedMatchEvent {
   matchSecond           Int
   ownScoreAtTime        Int
   oppositionScoreAtTime Int
+  x                     Float?
+  y                     Float?
   note                  String?
   status                SubmittedMatchEventStatus   @default(PENDING)
   acceptedAt            DateTime?

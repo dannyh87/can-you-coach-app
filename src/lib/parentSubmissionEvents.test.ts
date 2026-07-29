@@ -206,6 +206,8 @@ describe('parent submission display and acceptance mapping', () => {
       matchSecond: 123,
       ownScoreAtTime: 1,
       oppositionScoreAtTime: 0,
+      x: null,
+      y: null,
     })
   })
 

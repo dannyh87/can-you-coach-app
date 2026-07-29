@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
+    "test:integration": "vitest run src/lib/matchTrackingGroupClaim.integration.test.ts",
     "test:watch": "vitest",
     "lint": "eslint",
     "prestart": "prisma generate",

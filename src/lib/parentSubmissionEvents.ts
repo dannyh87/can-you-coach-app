@@ -48,6 +48,8 @@ export type AcceptedParentSubmissionSource = {
   matchSecond: number
   ownScoreAtTime: number
   oppositionScoreAtTime: number
+  x?: number | null
+  y?: number | null
 }
 
 export function createDefinitionEventKey(eventDefinitionId: string) {
@@ -165,5 +167,7 @@ export function buildAcceptedSubmissionMatchEventData(submission: AcceptedParent
     matchSecond: submission.matchSecond,
     ownScoreAtTime: submission.ownScoreAtTime,
     oppositionScoreAtTime: submission.oppositionScoreAtTime,
+    x: submission.x ?? null,
+    y: submission.y ?? null,
   }
 }
