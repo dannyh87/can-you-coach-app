@@ -373,7 +373,7 @@ model MatchEvent {
 model SubmittedMatchEvent {
   id                    String                      @id @default(cuid())
   matchDayId            String
-  playerId              String
+  playerId              String?
   submittedByUserId     String
   eventType             MatchEventType?
   eventDefinitionId     String?
@@ -391,7 +391,7 @@ model SubmittedMatchEvent {
   createdAt             DateTime                    @default(now())
   updatedAt             DateTime                    @updatedAt
   matchDay              MatchDay                    @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player                Player                      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player                Player?                     @relation(fields: [playerId], references: [id], onDelete: Cascade)
   eventDefinition       EventDefinition?            @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
   assignment            MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   submittedBy           User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)

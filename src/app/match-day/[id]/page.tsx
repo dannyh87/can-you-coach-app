@@ -165,6 +165,16 @@ const getMatchEventIdentity = (event: {
 const getMatchEventLabel = (event: Parameters<typeof getEventDisplayName>[0]) =>
   getEventDisplayName(event)
 
+const getSubmissionTargetLabel = (submission: {
+  assignment?: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
+}) => {
+  const task = submission.assignment?.trackingTask
+  if (!task) return 'Whole team'
+  if (task.scopeType === 'PLAYER') return task.player ? `${task.player.firstName} ${task.player.surname}` : 'Selected player'
+  if (task.scopeType === 'UNIT') return task.unitLabel ?? 'Selected unit'
+  return 'Whole team'
+}
+
 const getStintDuration = (stint: { startedAt: Date; endedAt: Date | null }) => {
   const endedAt = stint.endedAt ?? new Date()
   return Math.max(0, endedAt.getTime() - stint.startedAt.getTime())
@@ -1064,6 +1074,7 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
       },
       include: {
         eventDefinition: true,
+        assignment: { select: { trackingTask: { select: { scopeType: true } } } },
         matchDay: {
           select: {
             id: true,
@@ -1084,17 +1095,22 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
       return { ok: false, reason: 'This submission does not have a valid event.' } satisfies MatchActionResult
     }
 
-    const matchPlayer = await tx.matchDayPlayer.findFirst({
-      where: {
-        matchDayId,
-        playerId: submission.playerId,
-        squadStatus: { not: 'NOT_INVOLVED' },
-      },
-      select: { id: true },
-    })
+    const canBePlayerlessAssignment = submission.assignment?.trackingTask.scopeType === 'UNIT' || submission.assignment?.trackingTask.scopeType === 'TEAM'
+    if (submission.playerId) {
+      const matchPlayer = await tx.matchDayPlayer.findFirst({
+        where: {
+          matchDayId,
+          playerId: submission.playerId,
+          squadStatus: { not: 'NOT_INVOLVED' },
+        },
+        select: { id: true },
+      })
 
-    if (!matchPlayer) {
-      return { ok: false, reason: 'This player is no longer available in the match squad.' } satisfies MatchActionResult
+      if (!matchPlayer) {
+        return { ok: false, reason: 'This player is no longer available in the match squad.' } satisfies MatchActionResult
+      }
+    } else if (!canBePlayerlessAssignment) {
+      return { ok: false, reason: 'This submission is missing a player.' } satisfies MatchActionResult
     }
 
     const selectedEventType = await tx.matchDayEventType.findFirst({
@@ -1275,6 +1291,13 @@ export default async function MatchDayDetailPage({
             },
           },
           eventDefinition: true,
+          assignment: {
+            select: {
+              trackingTask: {
+                select: { scopeType: true, unitLabel: true, player: { select: { firstName: true, surname: true } } },
+              },
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
       },
@@ -1380,7 +1403,7 @@ export default async function MatchDayDetailPage({
       oppositionScoreAtTime: event.oppositionScoreAtTime,
       playerName: event.player
         ? `${event.player.firstName} ${event.player.surname}`
-        : 'Unknown player',
+        : 'Whole team',
     }))
   const recentEventsForRecording = [...recentEvents]
     .sort((firstEvent, secondEvent) => secondEvent.matchSecond - firstEvent.matchSecond)
@@ -1474,7 +1497,8 @@ export default async function MatchDayDetailPage({
   >()
 
   for (const event of match.matchEvents) {
-    const playerId = event.playerId ?? 'unknown-player'
+    if (!event.playerId) continue
+    const playerId = event.playerId
     const playerName = event.player
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player'
@@ -1544,7 +1568,7 @@ export default async function MatchDayDetailPage({
     matchSecond: event.matchSecond,
     playerName: event.player
       ? `${event.player.firstName} ${event.player.surname}`
-      : 'Unknown player',
+      : 'Whole team',
     score: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
   const finalScore = `${match.ownScore}-${match.oppositionScore}`
@@ -1563,7 +1587,7 @@ export default async function MatchDayDetailPage({
     matchTime: formatMatchTime(event.matchSecond),
     playerName: event.player
       ? `${event.player.firstName} ${event.player.surname}`
-      : 'Unknown player',
+      : 'Whole team',
     event: getMatchEventLabel(event),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
@@ -1575,15 +1599,15 @@ export default async function MatchDayDetailPage({
       y: event.y,
       playerName: event.player
         ? `${event.player.firstName} ${event.player.surname}`
-        : 'Unknown player',
+      : 'Whole team',
       half: formatHalfLabel(event.half),
       minute: Math.floor(event.matchSecond / 60),
       label: getMatchEventLabel(event),
     }))
   const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
     id: submission.id,
-    playerName: `${submission.player.firstName} ${submission.player.surname}`,
-    squadNumber: submission.player.squadNumber,
+    playerName: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : getSubmissionTargetLabel(submission),
+    squadNumber: submission.player?.squadNumber ?? null,
     eventLabel: getParentSubmissionEventDisplayName(submission),
     submitterLabel: submission.submittedBy.email,
     halfLabel: formatHalfLabel(submission.half),
@@ -1886,9 +1910,13 @@ function TrackingAssignmentsPanel({ tasks }: { tasks: Awaited<ReturnType<typeof 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {task.assignments.map((assignment) => (
                     <div key={assignment.id} className="rounded-lg bg-slate-50 p-3">
-                      <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open offer' : 'Assigned contributor'}</p>
+                      <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open offer' : assignment.assignedUser?.email ?? 'Assigned contributor'}</p>
                       <p className="mt-1 text-sm text-slate-700">{formatAssignmentStatus(assignment.status)}</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">Submissions {assignment.submittedMatchEvents.length} · Recipients {assignment.recipients.length}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Observations {assignment.submittedMatchEvents.length} ({assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length} pending) · Recipients {assignment.recipients.length}</p>
+                      <div className="mt-2 space-y-1 text-xs font-semibold text-slate-500">
+                        {assignment.startedAt && <p>Started {formatDateTime(assignment.startedAt)}</p>}
+                        {assignment.submittedAt && <p>Submitted {formatDateTime(assignment.submittedAt)}</p>}
+                      </div>
                     </div>
                   ))}
                 </div>

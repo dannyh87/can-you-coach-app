@@ -206,7 +206,7 @@ export async function sendCompletedMatchReportEmail(matchDayId: string): Promise
       matchTime: formatMatchTime(event.matchSecond),
       playerName: event.player
         ? `${event.player.firstName} ${event.player.surname}`
-        : 'Unknown player',
+        : 'Whole team',
       event: getEventDisplayName(event),
       scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
     }))

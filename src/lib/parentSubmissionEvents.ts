@@ -40,7 +40,7 @@ export type ParentSubmissionDisplayEvent = {
 
 export type AcceptedParentSubmissionSource = {
   matchDayId: string
-  playerId: string
+  playerId: string | null
   eventType: MatchEventType | null
   eventDefinitionId: string | null
   eventDefinition?: { legacyEventType: MatchEventType | null } | null

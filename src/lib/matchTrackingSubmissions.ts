@@ -27,12 +27,12 @@ export async function validateAssignmentSubmissionContext({
   assignmentId: string
   actorUserId: string
   matchDayId: string
-  playerId: string
+  playerId?: string | null
   matchDayEventTypeId: string
 } & CoordinateInput): Promise<Result<{
   assignmentId: string
   matchDayId: string
-  playerId: string
+  playerId: string | null
   submittedByUserId: string
   eventDefinitionId: string | null
   eventType: MatchEventType | null
@@ -66,12 +66,17 @@ export async function validateAssignmentSubmissionContext({
   const activeHalf = getActiveHalf(match)
   if (!activeHalf) return { ok: false, reason: 'Match is not currently recordable.' }
 
-  if (assignment.trackingTask.scopeType === 'PLAYER' && assignment.trackingTask.playerId !== playerId) {
-    return { ok: false, reason: 'Observation player does not match the assignment player.' }
-  }
+  const submittedPlayerId = assignment.trackingTask.scopeType === 'PLAYER' ? playerId?.trim() || null : null
+  if (assignment.trackingTask.scopeType === 'PLAYER') {
+    if (!submittedPlayerId) return { ok: false, reason: 'Player assignments require a player.' }
+    if (assignment.trackingTask.playerId !== submittedPlayerId) return { ok: false, reason: 'Observation player does not match the assignment player.' }
 
-  const openStint = await db.matchPlayerStint.findFirst({ where: { matchDayId, playerId, endedAt: null }, select: { id: true } })
-  if (!openStint) return { ok: false, reason: 'Player is not currently on the pitch.' }
+    const squadPlayer = await db.matchDayPlayer.findFirst({ where: { matchDayId, playerId: submittedPlayerId, squadStatus: { not: 'NOT_INVOLVED' } }, select: { id: true } })
+    if (!squadPlayer) return { ok: false, reason: 'Player is not in the match squad.' }
+
+    const openStint = await db.matchPlayerStint.findFirst({ where: { matchDayId, playerId: submittedPlayerId, endedAt: null }, select: { id: true } })
+    if (!openStint) return { ok: false, reason: 'Player is not currently on the pitch.' }
+  }
 
   const requiresLocation = taskEvent.matchDayEventType.eventDefinition?.requiresLocation ?? false
   if (requiresLocation && (!validCoordinate(x) || !validCoordinate(y))) return { ok: false, reason: 'This event requires pitch coordinates.' }
@@ -81,7 +86,7 @@ export async function validateAssignmentSubmissionContext({
     value: {
       assignmentId,
       matchDayId,
-      playerId,
+      playerId: submittedPlayerId,
       submittedByUserId: actorUserId,
       eventDefinitionId: taskEvent.matchDayEventType.eventDefinitionId,
       eventType: getSelectedEventLegacyType(taskEvent.matchDayEventType),
@@ -108,7 +113,7 @@ export async function createAssignmentLinkedSubmission({
   assignmentId: string
   actorUserId: string
   matchDayId: string
-  playerId: string
+  playerId?: string | null
   matchDayEventTypeId: string
   note?: string | null
 } & CoordinateInput): Promise<Result<{ id: string }>> {

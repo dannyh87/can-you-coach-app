@@ -224,4 +224,18 @@ describe('parent submission display and acceptance mapping', () => {
       oppositionScoreAtTime: 1,
     }).eventType).toBe('GOAL')
   })
+
+  it('preserves playerless accepted submissions for unit and team assignments', () => {
+    expect(buildAcceptedSubmissionMatchEventData({
+      matchDayId: 'match-1',
+      playerId: null,
+      eventDefinitionId: 'definition-press',
+      eventDefinition: { legacyEventType: null },
+      eventType: null,
+      half: 'FIRST_HALF',
+      matchSecond: 42,
+      ownScoreAtTime: 0,
+      oppositionScoreAtTime: 0,
+    })).toMatchObject({ playerId: null })
+  })
 })

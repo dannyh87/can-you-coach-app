@@ -60,7 +60,7 @@ export default async function ParentMatchesPage() {
           orderBy: { player: { surname: 'asc' } },
         },
         submittedMatchEvents: {
-          where: { submittedByUserId: user.id },
+          where: { submittedByUserId: user.id, assignmentId: null },
           select: { id: true, status: true },
         },
       },

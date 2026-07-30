@@ -54,10 +54,51 @@ export async function getAssignmentStatusForMatch(matchDayId: string) {
       player: { select: { firstName: true, surname: true } },
       events: { select: { id: true } },
       assignments: {
-        include: { assignedUser: { select: { id: true } }, recipients: { select: { id: true, declinedAt: true, closedAt: true } }, submittedMatchEvents: { select: { id: true, status: true } } },
+        include: {
+          assignedUser: { select: { id: true, email: true } },
+          recipients: { select: { id: true, declinedAt: true, closedAt: true } },
+          submittedMatchEvents: { select: { id: true, status: true } },
+        },
         orderBy: { createdAt: 'desc' },
       },
     },
     orderBy: { createdAt: 'desc' },
   })
+}
+
+export async function getTrackableAssignmentForUser(userId: string, assignmentId: string) {
+  const assignment = await prisma.matchContributorAssignment.findFirst({
+    where: {
+      id: assignmentId,
+      assignedUserId: userId,
+      status: { in: ['ACCEPTED', 'IN_PROGRESS'] },
+      trackingTask: { status: 'READY' },
+    },
+    include: {
+      submittedMatchEvents: {
+        where: { submittedByUserId: userId },
+        include: { eventDefinition: true, player: { select: { firstName: true, surname: true, squadNumber: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      },
+      trackingTask: {
+        include: {
+          player: { select: { id: true, firstName: true, surname: true, squadNumber: true } },
+          events: { include: { matchDayEventType: { include: { eventDefinition: true } } }, orderBy: { displayOrder: 'asc' as const } },
+          matchDay: { include: { team: { include: { club: true } } } },
+        },
+      },
+    },
+  })
+  if (!assignment) return null
+
+  const playerOnPitch = assignment.trackingTask.scopeType === 'PLAYER' && assignment.trackingTask.playerId
+    ? Boolean(await prisma.matchPlayerStint.findFirst({ where: { matchDayId: assignment.trackingTask.matchDayId, playerId: assignment.trackingTask.playerId, endedAt: null }, select: { id: true } }))
+    : null
+  const playerInSquad = assignment.trackingTask.scopeType === 'PLAYER' && assignment.trackingTask.playerId
+    ? Boolean(await prisma.matchDayPlayer.findFirst({ where: { matchDayId: assignment.trackingTask.matchDayId, playerId: assignment.trackingTask.playerId, squadStatus: { not: 'NOT_INVOLVED' } }, select: { id: true } }))
+    : null
+  const pendingObservationCount = await prisma.submittedMatchEvent.count({ where: { assignmentId: assignment.id, submittedByUserId: userId, status: 'PENDING' } })
+
+  return { ...assignment, playerOnPitch, playerInSquad, pendingObservationCount }
 }

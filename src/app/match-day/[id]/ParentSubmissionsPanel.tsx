@@ -55,9 +55,9 @@ export default function ParentSubmissionsPanel({
       <summary className="cursor-pointer list-none">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-950">Parent submissions</h2>
+            <h2 className="text-lg font-bold text-slate-950">Submitted observations</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Read-only parent observations. Not included in official report or CSV yet.
+              Read-only parent and contributor observations. Not included in official report or CSV yet.
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">
               Accepted submissions become official match events and will be included in reports.

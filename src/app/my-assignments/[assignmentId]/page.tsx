@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import PageHeader from '@/components/ui/PageHeader'
@@ -64,7 +65,7 @@ export default async function AssignmentDetailPage({ params, searchParams }: { p
         {groupTakenByOther && <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-900">This tracking task has already been accepted by another contributor.</p>}
         {currentRecipient?.closedAt && !groupTakenByOther && <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-bold text-slate-700">This offer is no longer available.</p>}
         {assignment.status === 'SUBMITTED' && <p className="mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">Submitted to coaching team. This is not approved until coaches review observations.</p>}
-        {assignment.status === 'IN_PROGRESS' && <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-bold text-blue-900">The final live recording interface is coming in the next phase.</p>}
+        {assignment.status === 'IN_PROGRESS' && <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-bold text-blue-900">Live tracking is open for this assignment.</p>}
 
         <AssignmentActions assignmentId={assignment.id} primaryAction={primaryAction} />
       </section>
@@ -100,6 +101,9 @@ function AssignmentActions({ assignmentId, primaryAction }: { assignmentId: stri
   }
   if (primaryAction === 'start') {
     return <form action={startAssignmentForCurrentUserAction} className="mt-5"><input type="hidden" name="assignmentId" value={assignmentId} /><button className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white hover:bg-blue-800">Start tracking</button></form>
+  }
+  if (primaryAction === 'continue') {
+    return <Link href={`/my-assignments/${assignmentId}/track`} className="mt-5 inline-flex rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white hover:bg-blue-800">Continue tracking</Link>
   }
   return null
 }

@@ -133,7 +133,7 @@ async function undoParentMatchEvent(formData: FormData) {
 
   await prisma.submittedMatchEvent.delete({ where: { id: submittedEvent.id } })
   revalidatePath(`/my-player/matches/${submittedEvent.matchDayId}`)
-  redirect(`/my-player/matches/${submittedEvent.matchDayId}?playerId=${encodeURIComponent(submittedEvent.playerId)}&success=${encodeURIComponent('Pending observation removed.')}`)
+  redirect(`/my-player/matches/${submittedEvent.matchDayId}${submittedEvent.playerId ? `?playerId=${encodeURIComponent(submittedEvent.playerId)}&` : '?'}success=${encodeURIComponent('Pending observation removed.')}`)
 }
 
 export default async function ParentMatchPage({
@@ -173,7 +173,7 @@ export default async function ParentMatchPage({
         orderBy: { createdAt: 'asc' },
       },
       submittedMatchEvents: {
-        where: { submittedByUserId: user.id },
+        where: { submittedByUserId: user.id, assignmentId: null },
         include: { player: true, eventDefinition: true },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -319,7 +319,7 @@ export default async function ParentMatchPage({
                   <div>
                     <p className="font-bold text-slate-950">{getParentSubmissionEventDisplayName(submittedEvent)}</p>
                     <p className="text-sm text-slate-600">
-                      {submittedEvent.player.firstName} {submittedEvent.player.surname} / {formatHalf(submittedEvent.half)} {formatMatchTime(submittedEvent.matchSecond)}
+                      {submittedEvent.player ? `${submittedEvent.player.firstName} ${submittedEvent.player.surname}` : 'Linked player'} / {formatHalf(submittedEvent.half)} {formatMatchTime(submittedEvent.matchSecond)}
                     </p>
                     {submittedEvent.note && <p className="mt-2 text-sm text-slate-700">{submittedEvent.note}</p>}
                   </div>

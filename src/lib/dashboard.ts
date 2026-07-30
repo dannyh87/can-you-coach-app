@@ -146,6 +146,7 @@ async function getCoachDashboardData(userId: string, teamIds: string[], contextL
       },
       include: {
         player: true,
+        assignment: { select: { trackingTask: { select: { scopeType: true, unitLabel: true, player: { select: { firstName: true, surname: true } } } } } },
         matchDay: { include: { team: { include: { club: true } } } },
       },
       orderBy: { createdAt: 'desc' },
@@ -218,7 +219,7 @@ async function getCoachDashboardData(userId: string, teamIds: string[], contextL
       pendingParentSubmissions: pendingParentSubmissions.map((submission) => ({
         id: submission.id,
         href: `/match-day/${submission.matchDayId}`,
-        title: `${submission.player.firstName} ${submission.player.surname}`,
+        title: getSubmissionTargetLabel(submission),
         subtitle: `${submission.matchDay.team.name} vs ${submission.matchDay.opposition}`,
         status: 'Needs review',
         createdAt: submission.createdAt,
@@ -284,7 +285,7 @@ async function getParentDashboardData(userId: string, linkedPlayerIds: string[])
       select: { id: true },
     }),
     prisma.submittedMatchEvent.findMany({
-      where: { submittedByUserId: userId },
+      where: { submittedByUserId: userId, assignmentId: null },
       include: {
         player: true,
         matchDay: { include: { team: true } },
@@ -312,12 +313,24 @@ async function getParentDashboardData(userId: string, linkedPlayerIds: string[])
     recentSubmissions: recentSubmissions.map((submission) => ({
       id: submission.id,
       href: `/my-player/matches/${submission.matchDayId}`,
-      title: `${submission.player.firstName} ${submission.player.surname}`,
+      title: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : 'Linked player',
       subtitle: `${submission.matchDay.team.name} vs ${submission.matchDay.opposition}`,
       status: formatStatus(submission.status),
       createdAt: submission.createdAt,
     })),
   }
+}
+
+function getSubmissionTargetLabel(submission: {
+  player: { firstName: string; surname: string } | null
+  assignment: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
+}) {
+  if (submission.player) return `${submission.player.firstName} ${submission.player.surname}`
+  const task = submission.assignment?.trackingTask
+  if (!task) return 'Whole team'
+  if (task.scopeType === 'PLAYER') return task.player ? `${task.player.firstName} ${task.player.surname}` : 'Selected player'
+  if (task.scopeType === 'UNIT') return task.unitLabel ?? 'Selected unit'
+  return 'Whole team'
 }
 
 function getFitnessSessionHref(session: {
