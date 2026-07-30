@@ -19,7 +19,8 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
   const hasAttention =
     data.attention.pendingParentSubmissions.length > 0 ||
     data.attention.activeMatches.length > 0 ||
-    data.attention.activeFitnessSessions.length > 0
+    data.attention.activeFitnessSessions.length > 0 ||
+    data.attention.assignmentNotifications.length > 0
 
   return (
     <section className="rounded-3xl border border-slate-200/80 bg-white/95 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.055)] sm:p-5">
@@ -40,6 +41,12 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
             ))}
           </AttentionGroup>
 
+          <AttentionGroup title="Tracking assignment updates" emptyText="No assignment updates.">
+            {data.attention.assignmentNotifications.map((item) => (
+              <AssignmentNotificationItem key={item.id} item={item} />
+            ))}
+          </AttentionGroup>
+
           <AttentionGroup title="Active matches" emptyText="No matches live or at half-time.">
             {data.attention.activeMatches.map((item) => (
               <WorkItem key={item.id} item={item} />
@@ -54,6 +61,16 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
         </div>
       )}
     </section>
+  )
+}
+
+function AssignmentNotificationItem({ item }: { item: CoachDashboardData['attention']['assignmentNotifications'][number] }) {
+  return (
+    <Link href={item.href} className="block rounded-xl border border-emerald-100 bg-emerald-50 p-3 transition hover:border-emerald-300">
+      <p className="font-bold text-emerald-950">{item.title}</p>
+      <p className="mt-1 text-sm text-emerald-900">{item.subtitle}</p>
+      <p className="mt-2 text-xs font-semibold text-emerald-800">{formatDateTime(item.createdAt)}</p>
+    </Link>
   )
 }
 

@@ -28,6 +28,7 @@ model User {
   assignmentsAssigned          MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
   assignmentsAssignedBy        MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
   assignmentRecipients         MatchContributorAssignmentRecipient[]
+  notifications                Notification[]
 }
 
 enum OnboardingRole {
@@ -175,6 +176,7 @@ model MatchDay {
   matchDayEventTypes   MatchDayEventType[]
   submittedMatchEvents SubmittedMatchEvent[]
   matchTrackingTasks   MatchTrackingTask[]
+  notifications        Notification[]
 }
 
 model MatchDayEventType {
@@ -259,12 +261,41 @@ model MatchContributorAssignment {
   assignedBy           User                                  @relation("MatchAssignmentsAssignedBy", fields: [assignedByUserId], references: [id], onDelete: Cascade)
   recipients           MatchContributorAssignmentRecipient[]
   submittedMatchEvents SubmittedMatchEvent[]
+  notifications        Notification[]
 
   @@index([trackingTaskId])
   @@index([assignedUserId])
   @@index([assignedByUserId])
   @@index([status])
   @@index([assignmentMode])
+}
+
+model Notification {
+  id           String           @id @default(cuid())
+  userId       String
+  type         NotificationType
+  source       String           @default("SYSTEM")
+  title        String
+  body         String?
+  href         String?
+  matchDayId   String?
+  assignmentId String?
+  dedupeKey    String?
+  readAt       DateTime?
+  archivedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user       User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchDay   MatchDay?                   @relation(fields: [matchDayId], references: [id], onDelete: SetNull)
+  assignment MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+  @@index([assignmentId])
+  @@index([matchDayId])
+  @@index([type])
+  @@index([source])
 }
 
 model MatchContributorAssignmentRecipient {
@@ -500,6 +531,19 @@ enum MatchContributorAssignmentStatus {
   IN_PROGRESS
   SUBMITTED
   CANCELLED
+}
+
+enum NotificationType {
+  TRACKING_DIRECT_ASSIGNED
+  TRACKING_GROUP_OFFERED
+  TRACKING_ASSIGNMENT_ACCEPTED
+  TRACKING_ASSIGNMENT_DECLINED
+  TRACKING_OFFER_CLAIMED
+  TRACKING_ASSIGNMENT_CANCELLED
+  TRACKING_ASSIGNMENT_CHANGED
+  TRACKING_MATCH_STARTING
+  TRACKING_SUBMISSION_RECEIVED
+  TRACKING_SUBMISSION_REVIEWED
 }
 
 enum EventDefinitionScope {

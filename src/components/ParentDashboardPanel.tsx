@@ -26,6 +26,11 @@ export default function ParentDashboardPanel({ data }: ParentDashboardPanelProps
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {data.assignmentNeedsResponseCount > 0 && (
+            <Link href="/my-assignments" className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-amber-700">
+              {data.assignmentNeedsResponseCount} assignment{data.assignmentNeedsResponseCount === 1 ? '' : 's'} need response
+            </Link>
+          )}
           <Link href="/my-player" className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
             View linked player
           </Link>

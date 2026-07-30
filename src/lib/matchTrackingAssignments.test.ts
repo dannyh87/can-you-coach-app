@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   claimGroupOffer,
@@ -182,5 +182,88 @@ describe('copy tracking task', () => {
     const result = await copyMatchTrackingTask({ db: createDb({ matchTrackingTask: { findUnique: async () => ({ ...baseTask, events: [{ matchDayEventTypeId: 'missing-source', matchDayEventType: { eventDefinitionId: 'missing-definition', eventType: null } }] }) }, matchDayEventType: { findMany: async () => [] } }), actorUserId: 'coach-1', sourceTaskId: 'task-1', destinationMatchDayId: 'match-1' })
     expect(result.ok).toBe(false)
     expect(result).toMatchObject({ ok: false, missingEventIds: ['missing-source'] })
+  })
+})
+
+describe('assignment notification integration', () => {
+  const originalFlag = process.env.MATCH_DAY_TRACKING_V2
+
+  function createNotificationDb({ claimCount = 1 } = {}) {
+    const notifications: Array<{ userId?: string; type?: string; archived?: boolean }> = []
+    const assignmentRecord = {
+      id: 'assignment-1',
+      trackingTaskId: 'task-1',
+      assignmentMode: 'GROUP_OFFER' as 'GROUP_OFFER' | 'DIRECT',
+      status: 'OFFERED' as 'OFFERED' | 'PENDING',
+      assignedUserId: null as string | null,
+      assignedByUserId: 'coach-1',
+      assignedUser: null,
+      assignedBy: { id: 'coach-1' },
+      recipients: [{ userId: 'parent-1', declinedAt: null, closedAt: null }, { userId: 'parent-2', declinedAt: null, closedAt: null }],
+      trackingTask: {
+        ...baseTask,
+        matchDay: { id: 'match-1', teamId: 'team-1', opposition: 'Market Drayton', kickoffAt: new Date('2026-08-01T10:00:00Z'), team: { name: 'Brereton' } },
+        player: { firstName: 'Freddie', surname: 'Forward' },
+        events: [{ id: 'task-event-1', matchDayEventType: { eventDefinition: null } }],
+      },
+    }
+    const db = createDb({
+      matchContributorAssignment: {
+        findFirst: async () => null,
+        findUnique: async () => assignmentRecord,
+        create: async ({ data }: { data: { assignedUserId?: string } }) => {
+          assignmentRecord.assignedUserId = data.assignedUserId ?? null
+          assignmentRecord.assignmentMode = 'DIRECT'
+          assignmentRecord.status = 'PENDING'
+          return { id: assignmentRecord.id }
+        },
+        update: async () => ({ id: assignmentRecord.id }),
+        updateMany: async () => ({ count: claimCount }),
+      },
+      notification: {
+        upsert: async ({ create }: { create: { userId: string; type: string } }) => {
+          notifications.push(create)
+          return { id: `notification-${notifications.length}` }
+        },
+        updateMany: async () => {
+          notifications.push({ archived: true })
+          return { count: 1 }
+        },
+      },
+    })
+    return { db, notifications }
+  }
+
+  afterEach(() => {
+    process.env.MATCH_DAY_TRACKING_V2 = originalFlag
+  })
+
+  it('notifies a contributor when a direct assignment is created', async () => {
+    process.env.MATCH_DAY_TRACKING_V2 = 'true'
+    const { db, notifications } = createNotificationDb()
+    const result = await createDirectAssignment({ db, actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'parent-1' })
+
+    expect(result.ok).toBe(true)
+    expect(notifications).toContainEqual(expect.objectContaining({ userId: 'parent-1', type: 'TRACKING_DIRECT_ASSIGNED' }))
+  })
+
+  it('resolves other recipient notifications when a group offer is claimed', async () => {
+    process.env.MATCH_DAY_TRACKING_V2 = 'true'
+    const { db, notifications } = createNotificationDb()
+    const result = await claimGroupOffer({ db, assignmentId: 'assignment-1', actorUserId: 'parent-1' })
+
+    expect(result.ok).toBe(true)
+    expect(notifications).toContainEqual(expect.objectContaining({ archived: true }))
+    expect(notifications).toContainEqual(expect.objectContaining({ userId: 'coach-1', type: 'TRACKING_OFFER_CLAIMED' }))
+    expect(notifications).toContainEqual(expect.objectContaining({ userId: 'parent-2', type: 'TRACKING_OFFER_CLAIMED' }))
+  })
+
+  it('does not create claim notifications when a group claim fails', async () => {
+    process.env.MATCH_DAY_TRACKING_V2 = 'true'
+    const { db, notifications } = createNotificationDb({ claimCount: 0 })
+    const result = await claimGroupOffer({ db, assignmentId: 'assignment-1', actorUserId: 'parent-1' })
+
+    expect(result.ok).toBe(false)
+    expect(notifications).toEqual([])
   })
 })

@@ -30,6 +30,9 @@ import {
 import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { formatAssignmentStatus, getAssignmentStatusForMatch, getAssignmentTarget } from '@/lib/myAssignments'
+import { notifySubmissionReviewed } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -1129,6 +1132,7 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
     }
 
     await tx.matchEvent.create({ data: buildAcceptedSubmissionMatchEventData(submission) })
+    if (isMatchDayTrackingV2Enabled()) await notifySubmissionReviewed(tx, submission.id)
 
     return { ok: true } satisfies MatchActionResult
   })
@@ -1191,6 +1195,8 @@ async function ignoreParentSubmission(formData: FormData): Promise<MatchActionRe
     if (reviewedSubmission.count !== 1) {
       return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
     }
+
+    if (isMatchDayTrackingV2Enabled()) await notifySubmissionReviewed(tx, submission.id)
 
     return { ok: true } satisfies MatchActionResult
   })
@@ -1594,6 +1600,8 @@ export default async function MatchDayDetailPage({
   ).length
   const showHeaderScore = match.status !== 'DRAFT'
   const copiedSetupNotice = setupCopied === '1'
+  const showTrackingAssignmentStatus = isMatchDayTrackingV2Enabled() && canManageThisMatch
+  const trackingAssignmentStatus = showTrackingAssignmentStatus ? await getAssignmentStatusForMatch(match.id) : []
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -1780,6 +1788,11 @@ export default async function MatchDayDetailPage({
               ignoreParentSubmissionAction={ignoreParentSubmission}
             />
           </div>
+          {showTrackingAssignmentStatus && (
+            <div className="mt-4">
+              <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} />
+            </div>
+          )}
         </section>
       )}
 
@@ -1809,6 +1822,9 @@ export default async function MatchDayDetailPage({
             <TouchMap events={touchMapEvents} />
           </section>
           <section className="mt-4">
+            {showTrackingAssignmentStatus && <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} />}
+          </section>
+          <section className="mt-4">
             <ParentSubmissionsPanel
               matchDayId={match.id}
               matchStatus={match.status}
@@ -1836,6 +1852,52 @@ export default async function MatchDayDetailPage({
         </section>
       )}
     </main>
+  )
+}
+
+function TrackingAssignmentsPanel({ tasks }: { tasks: Awaited<ReturnType<typeof getAssignmentStatusForMatch>> }) {
+  return (
+    <details open className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:p-4">
+      <summary className="cursor-pointer list-none">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-950">Tracking assignments</h2>
+            <p className="mt-1 text-sm text-slate-500">Contributor assignment response status for this match.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+        </div>
+      </summary>
+      {tasks.length === 0 ? (
+        <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">No tracking assignments for this match yet.</p>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {tasks.map((task) => (
+            <article key={task.id} className="rounded-xl border border-slate-200 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-slate-950">{task.title}</p>
+                  <p className="mt-1 text-sm text-slate-600">{task.scopeType} · {getAssignmentTarget(task)} · {task.events.length} event{task.events.length === 1 ? '' : 's'}</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{task.status}</span>
+              </div>
+              {task.assignments.length === 0 ? (
+                <p className="mt-3 text-sm font-semibold text-slate-600">Unassigned</p>
+              ) : (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {task.assignments.map((assignment) => (
+                    <div key={assignment.id} className="rounded-lg bg-slate-50 p-3">
+                      <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open offer' : 'Assigned contributor'}</p>
+                      <p className="mt-1 text-sm text-slate-700">{formatAssignmentStatus(assignment.status)}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Submissions {assignment.submittedMatchEvents.length} · Recipients {assignment.recipients.length}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+    </details>
   )
 }
 

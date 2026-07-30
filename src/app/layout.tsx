@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
 import MobileNav from '@/components/MobileNav'
+import NotificationBell from '@/components/NotificationBell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import './globals.css'
 
@@ -158,14 +159,17 @@ export default async function RootLayout({
               <span className="whitespace-nowrap">Can You Coach</span>
             </Link>
 
-            <MobileNav
-              groups={navigationGroups}
-              showDevTools={isRoleTesterEnabled()}
-              showAccount={isClerkEnabled()}
-              accessSummary={accessSummary}
-              className="shrink-0"
-              ariaLabel="Open menu"
-            />
+            <div className="flex shrink-0 items-center gap-2">
+              <NotificationBell userId={user?.id ?? null} />
+              <MobileNav
+                groups={navigationGroups}
+                showDevTools={isRoleTesterEnabled()}
+                showAccount={isClerkEnabled()}
+                accessSummary={accessSummary}
+                className="shrink-0"
+                ariaLabel="Open menu"
+              />
+            </div>
           </div>
         </header>
 

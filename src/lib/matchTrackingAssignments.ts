@@ -7,6 +7,16 @@ import type {
 
 import { canManageMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import {
+  notifyAssignmentAccepted,
+  notifyAssignmentCancelled,
+  notifyAssignmentDeclined,
+  notifyAssignmentSubmitted,
+  notifyDirectAssignmentCreated,
+  notifyGroupOfferClaimed,
+  notifyGroupOfferCreated,
+} from '@/lib/notifications'
 
 type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; missingEventIds?: string[] }
 
@@ -235,6 +245,10 @@ async function hasActiveDuplicate(db: Db, trackingTaskId: string, assignedUserId
   return db.matchContributorAssignment.findFirst({ where: { trackingTaskId, assignedUserId, status: { in: activeAssignmentStatuses } }, select: { id: true } })
 }
 
+async function requireNotification(result: { ok: true } | { ok: false; reason: string }) {
+  if (!result.ok) throw new Error(result.reason)
+}
+
 export async function createSelfAssignment({ db = prisma, actorUserId, trackingTaskId }: { db?: Db; actorUserId: string; trackingTaskId: string }): Promise<Result<{ id: string }>> {
   const task = await getReadyTaskForAssignment(db, trackingTaskId)
   if (!task.ok) return task
@@ -256,8 +270,17 @@ export async function createDirectAssignment({ db = prisma, actorUserId, trackin
   const eligible = await ensureEligible(db, task.value, [assignedUserId])
   if (!eligible.ok) return eligible
   if (await hasActiveDuplicate(db, trackingTaskId, assignedUserId)) return { ok: false, reason: 'This contributor already has an active assignment for this task.' }
-  const assignment = await db.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'DIRECT', status: 'PENDING', assignedUserId, assignedByUserId: actorUserId }, select: { id: true } })
-  return { ok: true, value: assignment }
+  try {
+    const assignment = await db.$transaction(async (tx) => {
+      const created = await tx.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'DIRECT', status: 'PENDING', assignedUserId, assignedByUserId: actorUserId }, select: { id: true } })
+      if (isMatchDayTrackingV2Enabled()) await requireNotification(await notifyDirectAssignmentCreated(tx, created.id))
+      return created
+    })
+    return { ok: true, value: assignment }
+  } catch (error) {
+    console.error('Create direct assignment failed.', error)
+    return { ok: false, reason: 'Direct assignment could not be created.' }
+  }
 }
 
 export async function createGroupOffer({ db = prisma, actorUserId, trackingTaskId, recipientUserIds }: { db?: Db; actorUserId: string; trackingTaskId: string; recipientUserIds: string[] }): Promise<Result<{ id: string }>> {
@@ -269,12 +292,18 @@ export async function createGroupOffer({ db = prisma, actorUserId, trackingTaskI
   if (userIds.length === 0) return { ok: false, reason: 'Select at least one group offer recipient.' }
   const eligible = await ensureEligible(db, task.value, userIds)
   if (!eligible.ok) return eligible
-  const assignment = await db.$transaction(async (tx) => {
-    const created = await tx.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'GROUP_OFFER', status: 'OFFERED', assignedByUserId: actorUserId }, select: { id: true } })
-    await tx.matchContributorAssignmentRecipient.createMany({ data: userIds.map((userId) => ({ assignmentId: created.id, userId })), skipDuplicates: true })
-    return created
-  })
-  return { ok: true, value: assignment }
+  try {
+    const assignment = await db.$transaction(async (tx) => {
+      const created = await tx.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'GROUP_OFFER', status: 'OFFERED', assignedByUserId: actorUserId }, select: { id: true } })
+      await tx.matchContributorAssignmentRecipient.createMany({ data: userIds.map((userId) => ({ assignmentId: created.id, userId })), skipDuplicates: true })
+      if (isMatchDayTrackingV2Enabled()) await requireNotification(await notifyGroupOfferCreated(tx, created.id))
+      return created
+    })
+    return { ok: true, value: assignment }
+  } catch (error) {
+    console.error('Create group offer failed.', error)
+    return { ok: false, reason: 'Group offer could not be created.' }
+  }
 }
 
 async function updateAssignmentStatus({ db, assignmentId, actorUserId, action, data }: { db: Db; assignmentId: string; actorUserId: string; action: 'accept' | 'decline' | 'start' | 'submit' | 'cancel'; data: Record<string, unknown> }): Promise<Result> {
@@ -282,8 +311,19 @@ async function updateAssignmentStatus({ db, assignmentId, actorUserId, action, d
   if (!assignment) return { ok: false, reason: 'Assignment was not found.' }
   const transition = validateAssignmentTransition({ assignment, action, actorUserId })
   if (!transition.ok) return transition
-  await db.matchContributorAssignment.update({ where: { id: assignmentId }, data })
-  return { ok: true, value: true }
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.matchContributorAssignment.update({ where: { id: assignmentId }, data })
+      if (!isMatchDayTrackingV2Enabled()) return
+      if (action === 'accept') await requireNotification(await notifyAssignmentAccepted(tx, assignmentId))
+      if (action === 'decline') await requireNotification(await notifyAssignmentDeclined(tx, assignmentId, actorUserId))
+      if (action === 'submit') await requireNotification(await notifyAssignmentSubmitted(tx, assignmentId))
+    })
+    return { ok: true, value: true }
+  } catch (error) {
+    console.error('Update assignment status failed.', error)
+    return { ok: false, reason: 'Assignment status could not be updated.' }
+  }
 }
 
 export const acceptDirectAssignment = (input: { db?: Db; assignmentId: string; actorUserId: string }) => updateAssignmentStatus({ db: input.db ?? prisma, assignmentId: input.assignmentId, actorUserId: input.actorUserId, action: 'accept', data: { status: 'ACCEPTED', acceptedAt: new Date() } })
@@ -297,20 +337,34 @@ export async function cancelContributorAssignment({ db = prisma, actorUserId, as
   const permission = await assertCanManageTask(db, actorUserId, assignment.trackingTask.matchDayId)
   if (!permission.ok) return permission
   if (assignment.status === 'SUBMITTED') return { ok: false, reason: 'Submitted assignments cannot be cancelled.' }
-  await db.matchContributorAssignment.update({ where: { id: assignmentId }, data: { status: 'CANCELLED', cancelledAt: new Date() } })
-  return { ok: true, value: true }
+  try {
+    await db.$transaction(async (tx) => {
+      await tx.matchContributorAssignment.update({ where: { id: assignmentId }, data: { status: 'CANCELLED', cancelledAt: new Date() } })
+      if (isMatchDayTrackingV2Enabled()) await requireNotification(await notifyAssignmentCancelled(tx, assignmentId))
+    })
+    return { ok: true, value: true }
+  } catch (error) {
+    console.error('Cancel assignment failed.', error)
+    return { ok: false, reason: 'Assignment could not be cancelled.' }
+  }
 }
 
 export async function claimGroupOffer({ db = prisma, assignmentId, actorUserId }: { db?: Db; assignmentId: string; actorUserId: string }): Promise<Result> {
   const recipient = await db.matchContributorAssignmentRecipient.findFirst({ where: { assignmentId, userId: actorUserId, declinedAt: null, closedAt: null }, select: { id: true } })
   if (!recipient) return { ok: false, reason: 'You are not an open recipient for this offer.' }
   const now = new Date()
-  return db.$transaction(async (tx) => {
+  try {
+    return await db.$transaction(async (tx) => {
     const claimed = await tx.matchContributorAssignment.updateMany({ where: { id: assignmentId, assignmentMode: 'GROUP_OFFER', status: 'OFFERED', assignedUserId: null }, data: { status: 'ACCEPTED', assignedUserId: actorUserId, acceptedAt: now } })
     if (claimed.count !== 1) return { ok: false as const, reason: 'This group offer has already been claimed or closed.' }
     await tx.matchContributorAssignmentRecipient.updateMany({ where: { assignmentId, userId: { not: actorUserId }, closedAt: null }, data: { closedAt: now } })
+    if (isMatchDayTrackingV2Enabled()) await requireNotification(await notifyGroupOfferClaimed(tx, assignmentId, actorUserId))
     return { ok: true as const, value: true }
-  })
+    })
+  } catch (error) {
+    console.error('Claim group offer failed.', error)
+    return { ok: false, reason: 'Group offer could not be claimed.' }
+  }
 }
 
 export async function declineGroupOffer({ db = prisma, assignmentId, actorUserId }: { db?: Db; assignmentId: string; actorUserId: string }): Promise<Result> {

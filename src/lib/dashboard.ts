@@ -1,5 +1,6 @@
 import { getManageableTeamIds, getRecordableTeamIds } from '@/lib/accessWhere'
 import { getFitnessRecordingModes } from '@/lib/fitnessRecordingModes'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { prisma } from '@/lib/prisma'
 
 export type DashboardStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
@@ -22,6 +23,14 @@ export type DashboardParentSubmission = {
   createdAt: Date
 }
 
+export type DashboardNotificationItem = {
+  id: string
+  href: string
+  title: string
+  subtitle: string
+  createdAt: Date
+}
+
 export type DashboardData =
   | {
       kind: 'coach'
@@ -37,6 +46,7 @@ export type DashboardData =
         pendingParentSubmissions: DashboardParentSubmission[]
         activeMatches: DashboardWorkItem[]
         activeFitnessSessions: DashboardWorkItem[]
+        assignmentNotifications: DashboardNotificationItem[]
       }
       recentReports: {
         matches: DashboardWorkItem[]
@@ -47,6 +57,7 @@ export type DashboardData =
       kind: 'parent'
       linkedPlayerCount: number
       liveMatchCount: number
+      assignmentNeedsResponseCount: number
       recentSubmissions: DashboardParentSubmission[]
     }
   | { kind: 'no_access' }
@@ -76,11 +87,11 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   ])
 
   if (manageableTeamIds.length > 0) {
-    return getCoachDashboardData(manageableTeamIds, 'Coach snapshot')
+    return getCoachDashboardData(userId, manageableTeamIds, 'Coach snapshot')
   }
 
   if (recordableTeamIds.length > 0) {
-    return getCoachDashboardData(recordableTeamIds, 'Assigned team snapshot')
+    return getCoachDashboardData(userId, recordableTeamIds, 'Assigned team snapshot')
   }
 
   if (spectatorAccess.length > 0) {
@@ -90,9 +101,10 @@ export async function getDashboardData(userId: string): Promise<DashboardData> {
   return { kind: 'no_access' }
 }
 
-async function getCoachDashboardData(teamIds: string[], contextLabel: string): Promise<DashboardData> {
+async function getCoachDashboardData(userId: string, teamIds: string[], contextLabel: string): Promise<DashboardData> {
   const recentSince = thirtyDaysAgo()
   const teamWhere = { teamId: { in: teamIds } }
+  const v2Enabled = isMatchDayTrackingV2Enabled()
 
   const [
     playersTracked,
@@ -104,6 +116,7 @@ async function getCoachDashboardData(teamIds: string[], contextLabel: string): P
     activeFitnessSessions,
     latestCompletedMatches,
     latestCompletedFitnessSessions,
+    assignmentNotifications,
   ] = await Promise.all([
     prisma.player.count({ where: { ...teamWhere, isActive: true } }),
     prisma.matchDay.count({
@@ -182,6 +195,13 @@ async function getCoachDashboardData(teamIds: string[], contextLabel: string): P
       orderBy: [{ completedAt: 'desc' }, { updatedAt: 'desc' }],
       take: 3,
     }),
+    v2Enabled
+      ? prisma.notification.findMany({
+          where: { userId, archivedAt: null, type: { in: ['TRACKING_ASSIGNMENT_ACCEPTED', 'TRACKING_ASSIGNMENT_DECLINED', 'TRACKING_OFFER_CLAIMED', 'TRACKING_SUBMISSION_RECEIVED'] } },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+        })
+      : [],
   ])
 
   return {
@@ -219,6 +239,13 @@ async function getCoachDashboardData(teamIds: string[], contextLabel: string): P
         meta: `${formatDate(session.date)} · ${session._count.results} results`,
         status: formatStatus(session.status),
       })),
+      assignmentNotifications: assignmentNotifications.map((notification) => ({
+        id: notification.id,
+        href: notification.href ?? '/notifications',
+        title: notification.title,
+        subtitle: notification.body ?? 'Match Day tracking update',
+        createdAt: notification.createdAt,
+      })),
     },
     recentReports: {
       matches: latestCompletedMatches.map((match) => ({
@@ -242,7 +269,8 @@ async function getCoachDashboardData(teamIds: string[], contextLabel: string): P
 }
 
 async function getParentDashboardData(userId: string, linkedPlayerIds: string[]): Promise<DashboardData> {
-  const [liveMatches, recentSubmissions] = await Promise.all([
+  const v2Enabled = isMatchDayTrackingV2Enabled()
+  const [liveMatches, recentSubmissions, assignmentNeedsResponseCount] = await Promise.all([
     prisma.matchDay.findMany({
       where: {
         status: 'IN_PROGRESS',
@@ -264,12 +292,23 @@ async function getParentDashboardData(userId: string, linkedPlayerIds: string[])
       orderBy: { createdAt: 'desc' },
       take: 5,
     }),
+    v2Enabled
+      ? prisma.matchContributorAssignment.count({
+          where: {
+            OR: [
+              { assignedUserId: userId, status: 'PENDING' },
+              { assignmentMode: 'GROUP_OFFER', status: 'OFFERED', recipients: { some: { userId, declinedAt: null, closedAt: null } } },
+            ],
+          },
+        })
+      : 0,
   ])
 
   return {
     kind: 'parent',
     linkedPlayerCount: linkedPlayerIds.length,
     liveMatchCount: liveMatches.length,
+    assignmentNeedsResponseCount,
     recentSubmissions: recentSubmissions.map((submission) => ({
       id: submission.id,
       href: `/my-player/matches/${submission.matchDayId}`,
