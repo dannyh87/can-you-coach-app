@@ -151,6 +151,8 @@ const createEventDefinitionSlug = (name) => {
   return slug || 'event'
 }
 
+const normalizeTrackingSearch = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
+
 const matchEventDefinitions = [
   {
     legacyEventType: 'GOAL',
@@ -417,6 +419,28 @@ const matchEventDefinitions = [
   },
 ]
 
+const trackingTopics = [
+  { name: 'Receiving into feet', phase: 'IN_POSSESSION', focusArea: 'RECEIVING', contexts: [['PLAYER', 'CENTRE_FORWARD'], ['PLAYER', 'ATTACKING_MIDFIELDER'], ['PLAYER', 'GENERAL_OUTFIELD_PLAYER']], events: ['Touch', 'Pass complete', 'Pass incomplete'], aliases: ['receive to feet', 'set pass'] },
+  { name: 'Receiving and playing forward', phase: 'IN_POSSESSION', focusArea: 'RECEIVING', contexts: [['PLAYER', 'CENTRAL_MIDFIELDER'], ['PLAYER', 'DEFENSIVE_MIDFIELDER'], ['PLAYER', 'GENERAL_OUTFIELD_PLAYER']], events: ['Touch', 'Forward pass', 'Pass complete', 'Pass incomplete'], aliases: ['receive forward', 'play forward'] },
+  { name: 'Centre-forward link play', phase: 'IN_POSSESSION', focusArea: 'LINK_PLAY', contexts: [['PLAYER', 'CENTRE_FORWARD']], events: ['Touch', 'Pass complete', 'Forward pass', 'Key pass'], aliases: ['number nine link play', 'set and spin', 'bounce pass'] },
+  { name: 'Runs in behind', phase: 'IN_POSSESSION', focusArea: 'MOVEMENT', contexts: [['PLAYER', 'CENTRE_FORWARD'], ['PLAYER', 'WIDE_PLAYER']], events: ['Forward pass', 'Key pass', 'Shot on target', 'Shot off target'], aliases: ['run behind', 'balls in behind'] },
+  { name: 'Pressing from the front', phase: 'OUT_OF_POSSESSION', focusArea: 'PRESSING', contexts: [['PLAYER', 'CENTRE_FORWARD'], ['UNIT', 'PRESSING_UNIT']], events: ['Possession gained', 'Interception', 'Tackle won'], aliases: ['front press', 'first defender'] },
+  { name: 'Centre-back progression', phase: 'IN_POSSESSION', focusArea: 'PROGRESSION', contexts: [['PLAYER', 'CENTRE_BACK'], ['UNIT', 'BUILD_UP_UNIT']], events: ['Forward pass', 'Pass complete', 'Carry', 'Pass incomplete'], aliases: ['playing out centre back', 'break lines'] },
+  { name: 'Defending one-versus-one', phase: 'OUT_OF_POSSESSION', focusArea: 'DEFENDING', contexts: [['PLAYER', 'FULL_BACK'], ['PLAYER', 'CENTRE_BACK'], ['PLAYER', 'WIDE_PLAYER']], events: ['Tackle won', 'Interception'], aliases: ['1v1 defending', 'duel defending'] },
+  { name: 'Goalkeeper distribution', phase: 'GOALKEEPING', focusArea: 'GOALKEEPER_DISTRIBUTION', contexts: [['PLAYER', 'GOALKEEPER'], ['UNIT', 'GOALKEEPER_UNIT']], events: ['Pass complete', 'Pass incomplete', 'Forward pass'], aliases: ['keeper distribution', 'goalkeeper passing'] },
+  { name: 'Defensive unit protecting space behind', phase: 'OUT_OF_POSSESSION', focusArea: 'PROTECTING_SPACE_BEHIND', contexts: [['UNIT', 'DEFENSIVE_UNIT']], events: ['Interception', 'Possession gained', 'Tackle won'], aliases: ['space behind', 'balls played in behind', 'protect depth'] },
+  { name: 'Defensive unit defending crosses', phase: 'OUT_OF_POSSESSION', focusArea: 'DEFENDING_CROSSES', contexts: [['UNIT', 'DEFENSIVE_UNIT']], events: ['Shot blocked', 'Interception', 'Possession gained'], aliases: ['defend crosses', 'box defending'] },
+  { name: 'Midfield unit supporting possession', phase: 'IN_POSSESSION', focusArea: 'SUPPORTING_THE_BALL', contexts: [['UNIT', 'MIDFIELD_UNIT']], events: ['Pass complete', 'Forward pass', 'Touch', 'Pass incomplete'], aliases: ['midfield support', 'support angles'] },
+  { name: 'Attacking unit combination play', phase: 'IN_POSSESSION', focusArea: 'COMBINATION_PLAY', contexts: [['UNIT', 'ATTACKING_UNIT']], events: ['Pass complete', 'Key pass', 'Assist', 'Cutback'], aliases: ['third man', 'third-player run', 'third-player combinations'] },
+  { name: 'Pressing unit forcing play backwards', phase: 'OUT_OF_POSSESSION', focusArea: 'PRESSING', contexts: [['UNIT', 'PRESSING_UNIT']], events: ['Possession gained', 'Interception', 'Tackle won'], aliases: ['force backwards', 'press trap'] },
+  { name: 'Build-up effectiveness', phase: 'IN_POSSESSION', focusArea: 'BUILD_UP', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Pass complete', 'Forward pass', 'Carry', 'Pass incomplete'], aliases: ['build up', 'playing out'] },
+  { name: 'Final-third entries', phase: 'IN_POSSESSION', focusArea: 'CREATING_CHANCES', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Forward pass', 'Key pass', 'Cross', 'Cutback'], aliases: ['final third entries', 'enter final third'] },
+  { name: 'Team pressing', phase: 'OUT_OF_POSSESSION', focusArea: 'PRESSING', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Possession gained', 'Interception', 'Tackle won'], aliases: ['team press', 'collective pressing'] },
+  { name: 'Defensive transition', phase: 'DEFENSIVE_TRANSITION', focusArea: 'DEFENSIVE_TRANSITION', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Possession lost', 'Possession gained', 'Tackle won'], aliases: ['counter press', 'rest defence reaction'] },
+  { name: 'Counter-attacking effectiveness', phase: 'ATTACKING_TRANSITION', focusArea: 'ATTACKING_TRANSITION', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Possession gained', 'Forward pass', 'Carry', 'Key pass', 'Shot on target'], aliases: ['counter attack', 'progress forward quickly'] },
+  { name: 'Set-piece outcomes', phase: 'ATTACKING_SET_PIECES', focusArea: 'SET_PIECES', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Goal', 'Shot on target', 'Shot off target', 'Assist'], aliases: ['set pieces', 'corners and free kicks'] },
+]
+
 async function main() {
   const user = await prisma.user.upsert({
     where: { email: localUser.email },
@@ -571,6 +595,42 @@ async function main() {
       }
     }
   }
+
+  const eventDefinitionsByName = new Map((await prisma.eventDefinition.findMany({ where: { scope: 'GLOBAL' } })).map((eventDefinition) => [eventDefinition.name, eventDefinition]))
+  const missingTopicEventDefinitions = new Set()
+  for (const topic of trackingTopics) {
+    const slug = createEventDefinitionSlug(topic.name)
+    const data = {
+      ownerScope: 'GLOBAL',
+      clubId: null,
+      name: topic.name,
+      slug,
+      normalizedName: normalizeTrackingSearch(topic.name),
+      description: `${topic.name} coaching focus using existing standard event definitions.`,
+      phase: topic.phase,
+      focusArea: topic.focusArea,
+      agePhases: ['YOUTH', 'ADULT'],
+      suggestedMaxEvents: Math.min(8, Math.max(4, topic.events.length + 2)),
+      isActive: true,
+      archivedAt: null,
+    }
+    const savedTopic = await prisma.eventTopic.upsert({ where: { slug }, update: data, create: data })
+    await prisma.eventTopicContext.deleteMany({ where: { topicId: savedTopic.id } })
+    await prisma.eventTopicAlias.deleteMany({ where: { topicId: savedTopic.id } })
+    await prisma.eventTopicEvent.deleteMany({ where: { topicId: savedTopic.id } })
+    await prisma.eventTopicContext.createMany({ data: topic.contexts.map(([scopeType, targetContext], index) => ({ topicId: savedTopic.id, scopeType, targetContext, recommended: true, displayOrder: index })) })
+    await prisma.eventTopicAlias.createMany({ data: Array.from(new Set(topic.aliases.map((alias) => normalizeTrackingSearch(alias)))).map((normalizedAlias) => ({ topicId: savedTopic.id, alias: topic.aliases.find((alias) => normalizeTrackingSearch(alias) === normalizedAlias) ?? normalizedAlias, normalizedAlias })), skipDuplicates: true })
+    const linkedEvents = topic.events.flatMap((name, index) => {
+      const eventDefinition = eventDefinitionsByName.get(name)
+      if (!eventDefinition) {
+        missingTopicEventDefinitions.add(`${topic.name}: ${name}`)
+        return []
+      }
+      return [{ topicId: savedTopic.id, eventDefinitionId: eventDefinition.id, displayOrder: index, recommended: index < 4, guidance: index < 4 ? null : 'Optional context event; use only if observer workload allows.', observerLoadWeight: eventDefinition.requiresLocation ? 2 : 1 }]
+    })
+    if (linkedEvents.length > 0) await prisma.eventTopicEvent.createMany({ data: linkedEvents, skipDuplicates: true })
+  }
+  if (missingTopicEventDefinitions.size > 0) console.warn('Tracking topic seed skipped missing event definitions:', Array.from(missingTopicEventDefinitions).join(', '))
 }
 
 main()

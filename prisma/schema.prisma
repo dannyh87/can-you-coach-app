@@ -200,6 +200,7 @@ model MatchTrackingTask {
   id              String                  @id @default(cuid())
   matchDayId      String
   createdByUserId String
+  topicId         String?
   scopeType       MatchTrackingScope
   playerId        String?
   unitKey         String?
@@ -213,6 +214,7 @@ model MatchTrackingTask {
 
   matchDay    MatchDay                     @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   createdBy   User                         @relation("MatchTrackingTasksCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  topic       EventTopic?                  @relation(fields: [topicId], references: [id], onDelete: SetNull)
   player      Player?                      @relation(fields: [playerId], references: [id], onDelete: SetNull)
   sourceTask  MatchTrackingTask?           @relation("CopiedMatchTrackingTasks", fields: [sourceTaskId], references: [id], onDelete: SetNull)
   copiedTasks MatchTrackingTask[]          @relation("CopiedMatchTrackingTasks")
@@ -221,9 +223,88 @@ model MatchTrackingTask {
 
   @@index([matchDayId])
   @@index([createdByUserId])
+  @@index([topicId])
   @@index([playerId])
   @@index([sourceTaskId])
   @@index([status])
+}
+
+model EventTopic {
+  id                 String                    @id @default(cuid())
+  ownerScope         EventTopicOwnerScope      @default(GLOBAL)
+  clubId             String?
+  name               String
+  slug               String                    @unique
+  normalizedName     String
+  description        String?
+  phase              TrackingTopicPhase
+  focusArea          TrackingFocusArea
+  agePhases          EventDefinitionAgePhase[]
+  suggestedMaxEvents Int                       @default(6)
+  isActive           Boolean                   @default(true)
+  archivedAt         DateTime?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  contexts      EventTopicContext[]
+  events        EventTopicEvent[]
+  aliases       EventTopicAlias[]
+  trackingTasks MatchTrackingTask[]
+
+  @@unique([ownerScope, clubId, normalizedName])
+  @@index([ownerScope])
+  @@index([clubId])
+  @@index([phase])
+  @@index([focusArea])
+  @@index([isActive])
+}
+
+model EventTopicContext {
+  id            String                 @id @default(cuid())
+  topicId       String
+  scopeType     MatchTrackingScope
+  targetContext TrackingTargetContext?
+  recommended   Boolean                @default(true)
+  displayOrder  Int                    @default(0)
+  createdAt     DateTime               @default(now())
+
+  topic EventTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, scopeType, targetContext])
+  @@index([scopeType, targetContext])
+  @@index([recommended])
+}
+
+model EventTopicEvent {
+  id                 String   @id @default(cuid())
+  topicId            String
+  eventDefinitionId  String
+  displayOrder       Int
+  recommended        Boolean  @default(true)
+  guidance           String?
+  observerLoadWeight Int      @default(1)
+  createdAt          DateTime @default(now())
+
+  topic           EventTopic      @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  eventDefinition EventDefinition @relation(fields: [eventDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, eventDefinitionId])
+  @@index([topicId])
+  @@index([eventDefinitionId])
+  @@index([recommended])
+}
+
+model EventTopicAlias {
+  id              String   @id @default(cuid())
+  topicId         String
+  alias           String
+  normalizedAlias String
+  createdAt       DateTime @default(now())
+
+  topic EventTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, normalizedAlias])
+  @@index([normalizedAlias])
 }
 
 model MatchTrackingTaskEvent {
@@ -432,6 +513,7 @@ model EventDefinition {
   matchEvents          MatchEvent[]
   matchDayEventTypes   MatchDayEventType[]
   submittedMatchEvents SubmittedMatchEvent[]
+  topicEvents          EventTopicEvent[]
 
   @@unique([scope, clubId, normalizedName])
   @@unique([scope, clubId, slug])
@@ -509,6 +591,75 @@ enum MatchTrackingScope {
   PLAYER
   UNIT
   TEAM
+}
+
+enum EventTopicOwnerScope {
+  GLOBAL
+  CLUB
+}
+
+enum TrackingTargetContext {
+  GOALKEEPER
+  CENTRE_BACK
+  FULL_BACK
+  WING_BACK
+  DEFENSIVE_MIDFIELDER
+  CENTRAL_MIDFIELDER
+  ATTACKING_MIDFIELDER
+  WIDE_PLAYER
+  CENTRE_FORWARD
+  GENERAL_OUTFIELD_PLAYER
+  GOALKEEPER_UNIT
+  DEFENSIVE_UNIT
+  MIDFIELD_UNIT
+  ATTACKING_UNIT
+  LEFT_SIDE_UNIT
+  RIGHT_SIDE_UNIT
+  BUILD_UP_UNIT
+  PRESSING_UNIT
+  CUSTOM_UNIT
+  WHOLE_TEAM
+}
+
+enum TrackingTopicPhase {
+  IN_POSSESSION
+  OUT_OF_POSSESSION
+  ATTACKING_TRANSITION
+  DEFENSIVE_TRANSITION
+  ATTACKING_SET_PIECES
+  DEFENSIVE_SET_PIECES
+  GOALKEEPING
+}
+
+enum TrackingFocusArea {
+  RECEIVING
+  PASSING
+  CARRYING
+  LINK_PLAY
+  MOVEMENT
+  CREATING_CHANCES
+  FINISHING
+  PRESSING
+  DEFENDING
+  AERIAL_PLAY
+  BALL_RETENTION
+  SHAPE_AND_COMPACTNESS
+  COVER_AND_BALANCE
+  PLAYING_OUT
+  PROGRESSION
+  PROTECTING_SPACE_BEHIND
+  DEFENDING_WIDE_AREAS
+  DEFENDING_CROSSES
+  COMBINATION_PLAY
+  SUPPORTING_THE_BALL
+  BUILD_UP
+  POSSESSION
+  TERRITORY
+  ATTACKING_TRANSITION
+  DEFENSIVE_TRANSITION
+  SET_PIECES
+  REST_DEFENCE
+  GOALKEEPER_DISTRIBUTION
 }
 
 enum MatchTrackingTaskStatus {

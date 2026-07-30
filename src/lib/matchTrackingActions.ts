@@ -91,6 +91,7 @@ function getTaskInput(formData: FormData) {
   if (!scope.ok) return scope
   return ok({
     scopeType: scope.data,
+    topicId: getOptionalText(formData, 'topicId'),
     playerId: getOptionalText(formData, 'playerId'),
     unitKey: getOptionalText(formData, 'unitKey'),
     unitLabel: getOptionalText(formData, 'unitLabel'),

@@ -24,6 +24,7 @@ type Db = typeof prisma
 
 type TaskScopeInput = {
   scopeType: MatchTrackingScope
+  topicId?: string | null
   playerId?: string | null
   unitKey?: string | null
   unitLabel?: string | null
@@ -73,6 +74,12 @@ export function validateTrackingTaskScope(input: TaskScopeInput, { requireComple
 
   if (input.playerId || input.unitKey || input.unitLabel) return { ok: false, reason: 'Team tracking tasks cannot use player or unit fields.' }
   return { ok: true, value: true }
+}
+
+async function validateTaskTopic(db: Db, input: TaskScopeInput): Promise<Result> {
+  if (!input.topicId) return { ok: true, value: true }
+  const topic = await db.eventTopic.findFirst({ where: { id: input.topicId, isActive: true, archivedAt: null, contexts: { some: { scopeType: input.scopeType } } }, select: { id: true } })
+  return topic ? { ok: true, value: true } : { ok: false, reason: 'Tracking topic is not compatible with this task scope.' }
 }
 
 export function validateAssignmentTransition({
@@ -144,9 +151,11 @@ export async function createMatchTrackingTask(input: TaskScopeInput & { matchDay
   if (!permission.ok) return permission
   const scope = validateTrackingTaskScope(input)
   if (!scope.ok) return scope
+  const topic = await validateTaskTopic(db, input)
+  if (!topic.ok) return topic
   const title = input.title.trim()
   if (!title) return { ok: false, reason: 'Tracking task title is required.' }
-  const task = await db.matchTrackingTask.create({ data: { matchDayId: input.matchDayId, createdByUserId: input.createdByUserId, scopeType: input.scopeType, playerId: input.playerId ?? null, unitKey: normalizeOptionalText(input.unitKey), unitLabel: normalizeOptionalText(input.unitLabel), title, instructions: normalizeOptionalText(input.instructions), status: 'DRAFT' }, select: { id: true } })
+  const task = await db.matchTrackingTask.create({ data: { matchDayId: input.matchDayId, createdByUserId: input.createdByUserId, topicId: input.topicId ?? null, scopeType: input.scopeType, playerId: input.playerId ?? null, unitKey: normalizeOptionalText(input.unitKey), unitLabel: normalizeOptionalText(input.unitLabel), title, instructions: normalizeOptionalText(input.instructions), status: 'DRAFT' }, select: { id: true } })
   return { ok: true, value: task }
 }
 
@@ -159,12 +168,15 @@ export async function updateMatchTrackingTask(input: TaskScopeInput & { db?: Db;
   if (existingTask.status === 'ARCHIVED') return { ok: false, reason: 'Archived tasks cannot be changed.' }
   const scope = validateTrackingTaskScope(input)
   if (!scope.ok) return scope
+  const topic = await validateTaskTopic(db, input)
+  if (!topic.ok) return topic
   const title = input.title.trim()
   if (!title) return { ok: false, reason: 'Tracking task title is required.' }
   const task = await db.matchTrackingTask.update({
     where: { id: existingTask.id },
     data: {
       scopeType: input.scopeType,
+      topicId: input.topicId ?? null,
       playerId: input.playerId ?? null,
       unitKey: normalizeOptionalText(input.unitKey),
       unitLabel: normalizeOptionalText(input.unitLabel),
@@ -396,7 +408,7 @@ export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTa
   const missingEventIds = sourceTask.events.filter((_, index) => !mappedEvents[index]).map((event) => event.matchDayEventTypeId)
   if (missingEventIds.length > 0) return { ok: false, reason: 'One or more task events are not selected for the destination match.', missingEventIds }
   const created = await db.$transaction(async (tx) => {
-    const task = await tx.matchTrackingTask.create({ data: { matchDayId: destinationMatchDayId, createdByUserId: actorUserId, scopeType: sourceTask.scopeType, playerId, unitKey: sourceTask.unitKey, unitLabel: sourceTask.unitLabel, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'DRAFT' }, select: { id: true } })
+    const task = await tx.matchTrackingTask.create({ data: { matchDayId: destinationMatchDayId, createdByUserId: actorUserId, topicId: sourceTask.topicId, scopeType: sourceTask.scopeType, playerId, unitKey: sourceTask.unitKey, unitLabel: sourceTask.unitLabel, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'DRAFT' }, select: { id: true } })
     await tx.matchTrackingTaskEvent.createMany({ data: mappedEvents.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event!.id, displayOrder: index })) })
     return task
   })

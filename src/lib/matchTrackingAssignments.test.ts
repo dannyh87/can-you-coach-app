@@ -20,6 +20,7 @@ const baseTask = {
   id: 'task-1',
   matchDayId: 'match-1',
   createdByUserId: 'coach-1',
+  topicId: null,
   scopeType: 'PLAYER' as const,
   playerId: 'player-1',
   unitKey: null,
@@ -61,6 +62,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
       create: async () => ({ id: 'created-task' }),
       update: async () => ({ id: 'task-1' }),
     },
+    eventTopic: { findFirst: async () => ({ id: 'topic-1' }) },
     matchTrackingTaskEvent: {
       count: async () => 1,
       deleteMany: async () => ({ count: 1 }),
@@ -176,6 +178,16 @@ describe('copy tracking task', () => {
   it('copies player tasks as draft requiring player selection when no destination player is supplied', async () => {
     const result = await copyMatchTrackingTask({ db: createDb({ matchTrackingTask: { findUnique: async () => ({ ...baseTask, events: [{ matchDayEventTypeId: 'selected-1', matchDayEventType: { eventDefinitionId: 'definition-1', eventType: 'GOAL' } }] }), create: async () => ({ id: 'copy-1' }) } }), actorUserId: 'coach-1', sourceTaskId: 'task-1', destinationMatchDayId: 'match-1' })
     expect(result).toMatchObject({ ok: true, value: { requiresPlayerSelection: true } })
+  })
+
+  it('copies topic references without requiring existing tasks to have topics', async () => {
+    const createdData: Array<Record<string, unknown>> = []
+    const withTopic = await copyMatchTrackingTask({ db: createDb({ matchTrackingTask: { findUnique: async () => ({ ...baseTask, topicId: 'topic-1', events: [{ matchDayEventTypeId: 'selected-1', matchDayEventType: { eventDefinitionId: 'definition-1', eventType: 'GOAL' } }] }), create: async ({ data }: { data: Record<string, unknown> }) => { createdData.push(data); return { id: 'copy-1' } } } }), actorUserId: 'coach-1', sourceTaskId: 'task-1', destinationMatchDayId: 'match-1', destinationPlayerId: 'player-1' })
+    const withoutTopic = await copyMatchTrackingTask({ db: createDb({ matchTrackingTask: { findUnique: async () => ({ ...baseTask, topicId: null, events: [{ matchDayEventTypeId: 'selected-1', matchDayEventType: { eventDefinitionId: 'definition-1', eventType: 'GOAL' } }] }), create: async ({ data }: { data: Record<string, unknown> }) => { createdData.push(data); return { id: 'copy-2' } } } }), actorUserId: 'coach-1', sourceTaskId: 'task-1', destinationMatchDayId: 'match-1', destinationPlayerId: 'player-1' })
+
+    expect(withTopic.ok).toBe(true)
+    expect(withoutTopic.ok).toBe(true)
+    expect(createdData).toEqual(expect.arrayContaining([expect.objectContaining({ topicId: 'topic-1' }), expect.objectContaining({ topicId: null })]))
   })
 
   it('reports missing event mappings', async () => {
