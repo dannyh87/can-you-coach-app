@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyPlayerTrackingTaskToPlayersV2,
   createGuidedMatchTrackingTaskV2,
   ensureMatchDayEventTypesForDefinitions,
+  publishMatchDayV2Setup,
   saveMatchDayV2Squad,
 } from '@/lib/matchDayV2Setup'
 
@@ -67,6 +69,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
     matchDayPlayer: {
       upsert: async ({ create, update }: { create: Record<string, unknown>; update: Record<string, unknown> }) => ({ id: 'match-player', ...create, ...update }),
       findFirst: async ({ where }: { where: { playerId?: string } }) => where.playerId === 'player-1' ? { id: 'match-player-1' } : null,
+      findMany: async ({ where }: { where?: { playerId?: { in: string[] } } }) => (where?.playerId?.in ?? ['player-1', 'player-2']).map((playerId) => ({ playerId })),
     },
     eventDefinition: {
       findMany: async ({ where }: { where?: { id?: { in: string[] }; matchPhase?: { in: string[] } } }) => eventDefinitions.filter((event) => (!where?.id?.in || where.id.in.includes(event.id)) && (!where?.matchPhase?.in || where.matchPhase.in.includes(event.matchPhase))),
@@ -84,6 +87,8 @@ function createDb(overrides: Record<string, unknown> = {}) {
       findMany: async () => [],
     },
     matchTrackingTask: {
+      findUnique: async () => ({ id: 'source-task', matchDayId: 'match-1', createdByUserId: 'coach-1', topicId: 'cf-link', scopeType: 'PLAYER', playerId: 'player-1', unitKey: null, unitLabel: null, title: 'Watch link play', instructions: 'Same cues.', sourceTaskId: null, status: 'READY', events: [{ matchDayEventTypeId: 'selected-touch' }, { matchDayEventTypeId: 'selected-pass' }] }),
+      findMany: async () => [{ id: 'task-1', matchDayId: 'match-1', scopeType: 'PLAYER', playerId: 'player-1', unitKey: null, unitLabel: null, title: 'Watch link play', status: 'READY', events: [{ id: 'event-1' }] }],
       create: async ({ data }: { data: Record<string, unknown> }) => {
         createdTasks.push(data)
         return { id: 'task-1' }
@@ -152,5 +157,31 @@ describe('match day v2 setup', () => {
     })
 
     expect(result.ok).toBe(false)
+  })
+
+  it('applies one player task to multiple additional players without copying assignments', async () => {
+    const db = createDb() as never as { _createdTasks: Array<Record<string, unknown>>; _createdTaskEvents: Array<Record<string, unknown>> }
+    const result = await applyPlayerTrackingTaskToPlayersV2({ db: db as never, userId: 'coach-1', sourceTaskId: 'source-task', playerIds: ['player-1', 'player-2', 'player-2'] })
+
+    expect(result).toEqual({ ok: true, value: { ids: ['task-1'] } })
+    expect(db._createdTasks).toEqual([expect.objectContaining({ playerId: 'player-2', sourceTaskId: 'source-task', status: 'READY' })])
+    expect(db._createdTaskEvents).toHaveLength(2)
+  })
+
+  it('publishes valid setup with unassigned-task warnings', async () => {
+    const result = await publishMatchDayV2Setup({
+      db: createDb({
+        matchDay: {
+          findUnique: async ({ select }: { select?: Record<string, unknown> }) => select?.matchTrackingTasks
+            ? { id: 'match-1', status: 'DRAFT', matchDayPlayers: [{ id: 'mp-1' }], matchTrackingTasks: [{ id: 'task-1', title: 'Watch link play', scopeType: 'PLAYER', playerId: 'player-1', unitLabel: null, status: 'READY', player: { firstName: 'Jake', surname: 'Smith' }, topic: { name: 'Link play' }, events: [{ id: 'event-1' }], assignments: [] }] }
+            : { id: 'match-1', teamId: 'team-1', status: 'DRAFT', opposition: 'Rovers', kickoffAt: new Date('2026-08-01T10:00:00Z'), team: { clubId: 'club-1' } },
+        },
+      }),
+      userId: 'coach-1',
+      matchDayId: 'match-1',
+    })
+
+    expect(result).toMatchObject({ ok: true, value: { coverage: { totalTasks: 1, unassigned: 1 } } })
+    expect(result.ok && result.value.warnings[0]).toContain('unassigned')
   })
 })

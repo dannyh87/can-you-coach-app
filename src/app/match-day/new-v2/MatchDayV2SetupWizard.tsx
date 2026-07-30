@@ -29,6 +29,24 @@ type TeamOption = {
 }
 
 type PreviousTask = { id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; requiresPlayer: boolean }
+type SetupState = {
+  id: string
+  status: string
+  squadCount: number
+  tasks: Array<{
+    id: string
+    title: string
+    scopeType: 'PLAYER' | 'UNIT' | 'TEAM'
+    targetLabel: string
+    topicName: string | null
+    status: string
+    eventCount: number
+    assignments: Array<{ id: string; assignmentMode: string; status: string; assignedUserId: string | null; recipientCount: number; submittedObservationCount: number; pendingObservationCount: number; createdAt: Date; acceptedAt: Date | null; startedAt: Date | null; submittedAt: Date | null; cancelledAt: Date | null }>
+    activeAssignment: { id: string; assignmentMode: string; status: string; assignedUserId: string | null; recipientCount: number } | null
+  }>
+  coverage: { totalTasks: number; assigned: number; openGroupOffers: number; awaitingResponse: number; accepted: number; unassigned: number; draftTasks: number }
+}
+type ContributorOption = { userId: string; label: string; detail: string; alreadyAssignedOnMatch: boolean }
 
 type Props = {
   teams: TeamOption[]
@@ -42,17 +60,22 @@ type Props = {
   createTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string }>>
   getPreviousTasksAction: (matchDayId: string) => Promise<ActionResult<PreviousTask[]>>
   copyTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[] }>>
+  getSetupStateAction: (matchDayId: string) => Promise<ActionResult<SetupState>>
+  getEligibleContributorsAction: (trackingTaskId: string) => Promise<ActionResult<ContributorOption[]>>
+  assignTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string | null; alreadyExisted: boolean }>>
+  cancelAssignmentAction: (formData: FormData) => Promise<ActionResult>
+  applyToPlayersAction: (formData: FormData) => Promise<ActionResult<{ ids: string[] }>>
+  publishSetupAction: (matchDayId: string) => Promise<ActionResult<{ warnings: string[]; coverage: SetupState['coverage'] }>>
 }
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
-type Stage = 'match' | 'squad' | 'method' | 'topic' | 'events' | 'review'
+type Stage = 'match' | 'squad' | 'tracking' | 'topic' | 'events' | 'assignments' | 'review'
 
 const stages: Array<{ key: Stage; label: string }> = [
   { key: 'match', label: 'Match' },
   { key: 'squad', label: 'Squad' },
-  { key: 'method', label: 'Setup' },
-  { key: 'topic', label: 'Topic' },
-  { key: 'events', label: 'Events' },
+  { key: 'tracking', label: 'Tracking' },
+  { key: 'assignments', label: 'Assignments' },
   { key: 'review', label: 'Review' },
 ]
 
@@ -74,6 +97,12 @@ export default function MatchDayV2SetupWizard({
   createTaskAction,
   getPreviousTasksAction,
   copyTaskAction,
+  getSetupStateAction,
+  getEligibleContributorsAction,
+  assignTaskAction,
+  cancelAssignmentAction,
+  applyToPlayersAction,
+  publishSetupAction,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -83,6 +112,8 @@ export default function MatchDayV2SetupWizard({
   const [matchDayId, setMatchDayId] = useState<string | null>(null)
   const [createdTaskIds, setCreatedTaskIds] = useState<string[]>([])
   const [previousTasks, setPreviousTasks] = useState<PreviousTask[]>([])
+  const [setupState, setSetupState] = useState<SetupState | null>(null)
+  const [published, setPublished] = useState<{ warnings: string[]; coverage: SetupState['coverage'] } | null>(null)
 
   const [matchDetails, setMatchDetails] = useState({
     teamId: teams[0]?.id ?? '',
@@ -107,6 +138,17 @@ export default function MatchDayV2SetupWizard({
   const resetMessages = () => {
     setMessage(null)
     setError(null)
+  }
+
+  const refreshSetupState = async (id = matchDayId) => {
+    if (!id) return null
+    const state = await getSetupStateAction(id)
+    if (!state.ok) {
+      setError(state.message)
+      return null
+    }
+    setSetupState(state.data)
+    return state.data
   }
 
   const submitMatchDetails = () => {
@@ -136,6 +178,7 @@ export default function MatchDayV2SetupWizard({
         setMatchDayId(id)
         const previous = await getPreviousTasksAction(id)
         if (previous.ok) setPreviousTasks(previous.data)
+        await refreshSetupState(id)
       }
       setStage('squad')
       setMessage('Draft match saved.')
@@ -158,7 +201,8 @@ export default function MatchDayV2SetupWizard({
         setError(result.message)
         return
       }
-      setStage('method')
+      await refreshSetupState()
+      setStage('tracking')
       setMessage('Squad saved.')
     })
   }
@@ -254,7 +298,8 @@ export default function MatchDayV2SetupWizard({
       }
       setCreatedTaskIds((current) => [...current, result.data.id])
       setMessage('Tracking task saved and marked ready.')
-      setStage('review')
+      await refreshSetupState()
+      setStage('assignments')
     })
   }
 
@@ -272,13 +317,29 @@ export default function MatchDayV2SetupWizard({
         return
       }
       setCreatedTaskIds((current) => [...current, result.data.id])
+      await refreshSetupState()
       setMessage('Previous task copied into this match.')
+    })
+  }
+
+  const publishSetup = () => {
+    if (!matchDayId) return
+    resetMessages()
+    startTransition(async () => {
+      const result = await publishSetupAction(matchDayId)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setPublished(result.data)
+      await refreshSetupState()
+      setMessage('Match Day setup ready.')
     })
   }
 
   return (
     <div className="space-y-5">
-      <nav className="grid grid-cols-3 gap-2 sm:grid-cols-6" aria-label="Setup progress">
+      <nav className="grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label="Setup progress">
         {stages.map((item) => (
           <button key={item.key} type="button" onClick={() => setStage(item.key)} disabled={item.key !== 'match' && !matchDayId} className={`rounded-xl border px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40 ${stage === item.key ? 'border-emerald-700 bg-emerald-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>
             {item.label}
@@ -331,7 +392,7 @@ export default function MatchDayV2SetupWizard({
         </section>
       )}
 
-      {stage === 'method' && (
+      {stage === 'tracking' && (
         <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-2xl font-bold">Tracking setup</h2>
           <p className="mt-1 text-sm text-slate-600">Use standard coaching topics or copy a previous task into this draft match.</p>
@@ -345,7 +406,7 @@ export default function MatchDayV2SetupWizard({
               {previousTasks.length === 0 ? <p className="mt-2 text-sm text-slate-600">No previous tasks are available for this team yet.</p> : <PreviousTaskCopy tasks={previousTasks} players={involvedPlayers} onCopy={copyPreviousTask} disabled={isPending} />}
             </div>
           </div>
-          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('squad')}>Back</Button><Button variant="secondary" onClick={() => setStage('review')}>Review match</Button></div>
+          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('squad')}>Back</Button><Button variant="secondary" onClick={() => setStage('assignments')}>Assign contributors</Button></div>
         </section>
       )}
 
@@ -373,7 +434,7 @@ export default function MatchDayV2SetupWizard({
             <div className="mt-2 flex gap-2"><input className={fieldClassName} value={topicSearch} onChange={(event) => setTopicSearch(event.target.value)} placeholder="Try link play, counter, third man..." /><Button variant="secondary" onClick={searchTopics}>Search</Button></div>
             <div className="mt-3 grid gap-2">{topicResults.map((result) => <button key={result.topicId} type="button" onClick={() => loadTopic(result.topicId)} className="rounded-xl border p-3 text-left hover:border-emerald-500"><span className="font-bold">{result.name}</span>{result.description && <span className="block text-sm text-slate-600">{result.description}</span>}</button>)}</div>
           </div>
-          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('method')}>Back</Button>{topic && <Button onClick={() => setStage('events')}>Review events</Button>}</div>
+          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('tracking')}>Back</Button>{topic && <Button onClick={() => setStage('events')}>Review events</Button>}</div>
         </section>
       )}
 
@@ -399,16 +460,41 @@ export default function MatchDayV2SetupWizard({
         </section>
       )}
 
+      {stage === 'assignments' && (
+        <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold">Assignments</h2>
+              <p className="mt-1 text-sm text-slate-600">Choose who will track each ready task, or leave tasks unassigned for later.</p>
+            </div>
+            {setupState && <CoverageSummary coverage={setupState.coverage} />}
+          </div>
+          {!setupState || setupState.tasks.length === 0 ? (
+            <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">Create at least one tracking task before assigning contributors.</p>
+          ) : (
+            <div className="mt-5 grid gap-4">
+              {setupState.tasks.map((task) => <AssignmentTaskCard key={task.id} task={task} players={involvedPlayers} disabled={isPending} getEligibleContributorsAction={getEligibleContributorsAction} assignTaskAction={assignTaskAction} cancelAssignmentAction={cancelAssignmentAction} applyToPlayersAction={applyToPlayersAction} onChanged={refreshSetupState} />)}
+            </div>
+          )}
+          <div className="mt-5 flex flex-wrap justify-between gap-3"><Button variant="secondary" onClick={() => setStage('tracking')}>Back</Button><div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={chooseSetupMethod}>Add another task</Button><Button onClick={() => setStage('review')}>Review setup</Button></div></div>
+        </section>
+      )}
+
       {stage === 'review' && (
         <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-2xl font-bold">Review setup</h2>
+          {published && <Alert variant="success" className="mt-4">Match Day setup ready. {published.coverage.assigned} of {published.coverage.totalTasks} tasks have an active assignment.</Alert>}
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Summary label="Match" value={matchDetails.opposition || 'Draft'} />
             <Summary label="In squad" value={String(involvedPlayers.length)} />
-            <Summary label="Tracking tasks" value={String(createdTaskIds.length)} />
+            <Summary label="Tracking tasks" value={String(setupState?.coverage.totalTasks ?? createdTaskIds.length)} />
           </div>
+          {setupState && <div className="mt-4"><CoverageSummary coverage={setupState.coverage} /></div>}
+          {setupState && <div className="mt-5 grid gap-3">{setupState.tasks.map((task) => <article key={task.id} className="rounded-xl border p-4"><p className="font-bold">{task.title}</p><p className="mt-1 text-sm text-slate-600">{task.scopeType} · {task.targetLabel} · {task.eventCount} events · {task.status}</p><p className="mt-1 text-sm font-semibold text-slate-700">{task.activeAssignment ? `${task.activeAssignment.assignmentMode.replace('_', ' ')} · ${task.activeAssignment.status}${task.activeAssignment.recipientCount ? ` · ${task.activeAssignment.recipientCount} recipients` : ''}` : 'No assignment yet'}</p>{!task.activeAssignment && <p className="mt-1 text-sm text-amber-800">Warning: unassigned task.</p>}</article>)}</div>}
           <div className="mt-5 flex flex-wrap gap-3">
-            <Button variant="secondary" onClick={() => setStage('method')}>Add another task</Button>
+            <Button variant="secondary" onClick={() => setStage('tracking')}>Add another task</Button>
+            <Button variant="secondary" onClick={() => setStage('assignments')}>Manage assignments</Button>
+            <Button onClick={publishSetup} disabled={isPending || !matchDayId}>Publish setup</Button>
             {matchDayId && <Link href={`/match-day/${matchDayId}`} className="inline-flex items-center justify-center rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">Open draft match</Link>}
             <Button variant="ghost" onClick={() => router.push('/match-day')}>Back to list</Button>
           </div>
@@ -420,6 +506,142 @@ export default function MatchDayV2SetupWizard({
 
 function Summary({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-bold text-slate-950">{value}</p></div>
+}
+
+function CoverageSummary({ coverage }: { coverage: SetupState['coverage'] }) {
+  return <div className="grid gap-2 rounded-xl border bg-slate-50 p-3 text-sm sm:grid-cols-3"><span><b>{coverage.totalTasks}</b> tasks</span><span><b>{coverage.assigned}</b> assigned</span><span><b>{coverage.openGroupOffers}</b> open offers</span><span><b>{coverage.awaitingResponse}</b> awaiting response</span><span><b>{coverage.accepted}</b> accepted</span><span className={coverage.unassigned ? 'font-bold text-amber-800' : ''}><b>{coverage.unassigned}</b> unassigned</span></div>
+}
+
+function AssignmentTaskCard({ task, players, disabled, getEligibleContributorsAction, assignTaskAction, cancelAssignmentAction, applyToPlayersAction, onChanged }: { task: SetupState['tasks'][number]; players: TeamOption['players']; disabled: boolean; getEligibleContributorsAction: Props['getEligibleContributorsAction']; assignTaskAction: Props['assignTaskAction']; cancelAssignmentAction: Props['cancelAssignmentAction']; applyToPlayersAction: Props['applyToPlayersAction']; onChanged: () => Promise<SetupState | null> }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [method, setMethod] = useState<'SELF' | 'DIRECT' | 'GROUP_OFFER' | 'LATER'>('LATER')
+  const [contributors, setContributors] = useState<ContributorOption[]>([])
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [multiPlayerIds, setMultiPlayerIds] = useState<string[]>([])
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const filteredContributors = contributors.filter((contributor) => `${contributor.label} ${contributor.detail}`.toLowerCase().includes(search.toLowerCase()))
+
+  const openPicker = () => {
+    setIsOpen(true)
+    setError(null)
+    startTransition(async () => {
+      const result = await getEligibleContributorsAction(task.id)
+      if (!result.ok) setError(result.message)
+      else setContributors(result.data)
+    })
+  }
+
+  const assign = () => {
+    setError(null)
+    setMessage(null)
+    const formData = new FormData()
+    formData.set('trackingTaskId', task.id)
+    formData.set('method', method)
+    if (method === 'DIRECT') formData.set('assignedUserId', selectedUserId)
+    selectedRecipients.forEach((userId) => formData.append('recipientUserId', userId))
+    startTransition(async () => {
+      const result = await assignTaskAction(formData)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      await onChanged()
+      setMessage(result.data.alreadyExisted ? 'Existing matching assignment reused.' : method === 'LATER' ? 'Task left unassigned.' : 'Assignment saved.')
+      setIsOpen(false)
+    })
+  }
+
+  const cancel = (assignmentId: string) => {
+    const formData = new FormData()
+    formData.set('assignmentId', assignmentId)
+    setError(null)
+    startTransition(async () => {
+      const result = await cancelAssignmentAction(formData)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      await onChanged()
+      setMessage('Assignment cancelled. You can choose a replacement now.')
+    })
+  }
+
+  const applyToPlayers = () => {
+    const formData = new FormData()
+    formData.set('sourceTaskId', task.id)
+    multiPlayerIds.forEach((playerId) => formData.append('playerId', playerId))
+    setError(null)
+    startTransition(async () => {
+      const result = await applyToPlayersAction(formData)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      await onChanged()
+      setMultiPlayerIds([])
+      setMessage(`Created ${result.data.ids.length} additional player task${result.data.ids.length === 1 ? '' : 's'}.`)
+    })
+  }
+
+  return (
+    <article className="rounded-2xl border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-bold text-slate-950">{task.topicName ?? task.title}</p>
+          <p className="mt-1 text-sm text-slate-600">{task.scopeType} · {task.targetLabel} · {task.eventCount} events · {task.status}</p>
+          <p className="mt-1 text-sm font-semibold text-slate-700">{task.activeAssignment ? `${task.activeAssignment.assignmentMode.replace('_', ' ')} · ${task.activeAssignment.status}${task.activeAssignment.recipientCount ? ` · ${task.activeAssignment.recipientCount} recipients` : ''}` : 'Unassigned'}</p>
+        </div>
+        <Button variant="secondary" onClick={openPicker} disabled={disabled || isPending || task.status !== 'READY'}>Choose who will track this</Button>
+      </div>
+      {message && <p className="mt-3 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-800">{message}</p>}
+      {error && <p className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-800">{error}</p>}
+      {task.activeAssignment && ['PENDING', 'OFFERED'].includes(task.activeAssignment.status) && <Button className="mt-3" variant="secondary" onClick={() => cancel(task.activeAssignment!.id)} disabled={disabled || isPending}>Cancel current assignment</Button>}
+      {task.activeAssignment && ['IN_PROGRESS', 'SUBMITTED'].includes(task.activeAssignment.status) && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">Tracking has already started. This assignment cannot be silently reassigned.</p>}
+
+      {isOpen && (
+        <div className="mt-4 rounded-2xl border bg-slate-50 p-4">
+          <fieldset>
+            <legend className="font-bold">Assignment method</legend>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <MethodCard selected={method === 'SELF'} label="I'll track this" description="Create an accepted assignment for you." onSelect={() => setMethod('SELF')} />
+              <MethodCard selected={method === 'DIRECT'} label="Assign to one person" description="They will be asked to accept or decline this task." onSelect={() => setMethod('DIRECT')} />
+              <MethodCard selected={method === 'GROUP_OFFER'} label="Offer to a group" description="The first person to accept will take responsibility for it." onSelect={() => setMethod('GROUP_OFFER')} />
+              <MethodCard selected={method === 'LATER'} label="Assign later" description="Keep this task ready but unassigned." onSelect={() => setMethod('LATER')} />
+            </div>
+          </fieldset>
+          {(method === 'DIRECT' || method === 'GROUP_OFFER') && <ContributorPicker contributors={filteredContributors} search={search} onSearch={setSearch} method={method} selectedUserId={selectedUserId} selectedRecipients={selectedRecipients} onSelectUser={setSelectedUserId} onToggleRecipient={(userId) => setSelectedRecipients((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId])} />}
+          <div className="mt-4 flex flex-wrap justify-between gap-2"><Button variant="ghost" onClick={() => setIsOpen(false)}>Close</Button><Button onClick={assign} disabled={disabled || isPending || (method === 'DIRECT' && !selectedUserId) || (method === 'GROUP_OFFER' && selectedRecipients.length === 0)}>{method === 'LATER' ? 'Assign later' : 'Confirm assignment'}</Button></div>
+        </div>
+      )}
+
+      {task.scopeType === 'PLAYER' && (
+        <details className="mt-4 rounded-xl border p-3">
+          <summary className="cursor-pointer font-bold">Apply this setup to more players</summary>
+          <p className="mt-2 text-sm text-slate-600">Creates one separate task per selected player. Assignments are not copied.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">{players.filter((player) => player.name !== task.targetLabel).map((player) => <label key={player.id} className="flex gap-2 rounded-lg border bg-white p-3 text-sm"><input type="checkbox" checked={multiPlayerIds.includes(player.id)} onChange={(event) => setMultiPlayerIds((current) => event.target.checked ? [...current, player.id] : current.filter((id) => id !== player.id))} /> {player.name}</label>)}</div>
+          <Button className="mt-3" variant="secondary" onClick={applyToPlayers} disabled={disabled || isPending || multiPlayerIds.length === 0}>Create {multiPlayerIds.length || ''} player tasks</Button>
+        </details>
+      )}
+    </article>
+  )
+}
+
+function MethodCard({ selected, label, description, onSelect }: { selected: boolean; label: string; description: string; onSelect: () => void }) {
+  return <button type="button" role="radio" aria-checked={selected} onClick={onSelect} className={`rounded-xl border p-4 text-left ${selected ? 'border-emerald-700 bg-emerald-50' : 'bg-white'}`}><span className="block font-bold">{label}</span><span className="mt-1 block text-sm text-slate-600">{description}</span></button>
+}
+
+function ContributorPicker({ contributors, search, onSearch, method, selectedUserId, selectedRecipients, onSelectUser, onToggleRecipient }: { contributors: ContributorOption[]; search: string; onSearch: (value: string) => void; method: 'DIRECT' | 'GROUP_OFFER'; selectedUserId: string; selectedRecipients: string[]; onSelectUser: (value: string) => void; onToggleRecipient: (value: string) => void }) {
+  return (
+    <div className="mt-4">
+      <label className="text-sm font-bold text-slate-700">Search contributors<input className={`${fieldClassName} mt-1`} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search by role or relationship" /></label>
+      {contributors.length === 0 ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No eligible contributors are currently connected to this player.</p> : <div className="mt-3 grid gap-2">{contributors.map((contributor) => <label key={contributor.userId} className="flex gap-3 rounded-xl border bg-white p-3"><input type={method === 'DIRECT' ? 'radio' : 'checkbox'} name="contributor" checked={method === 'DIRECT' ? selectedUserId === contributor.userId : selectedRecipients.includes(contributor.userId)} onChange={() => method === 'DIRECT' ? onSelectUser(contributor.userId) : onToggleRecipient(contributor.userId)} /><span><span className="font-bold">{contributor.label}</span><span className="block text-sm text-slate-600">{contributor.detail}{contributor.alreadyAssignedOnMatch ? ' · already has a match assignment' : ''}</span></span></label>)}</div>}
+      {method === 'GROUP_OFFER' && <p className="mt-2 text-sm font-semibold text-slate-700">{selectedRecipients.length} selected. The first person to accept will take the assignment.</p>}
+    </div>
+  )
 }
 
 function PreviousTaskCopy({ tasks, players, onCopy, disabled }: { tasks: PreviousTask[]; players: TeamOption['players']; onCopy: (sourceTaskId: string, destinationPlayerId: string) => void; disabled: boolean }) {

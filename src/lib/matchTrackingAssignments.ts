@@ -3,6 +3,7 @@ import type {
   MatchContributorAssignmentStatus,
   MatchTrackingScope,
   MatchTrackingTaskStatus,
+  Prisma,
 } from '@prisma/client'
 
 import { canManageMatchDay } from '@/lib/permissions'
@@ -52,7 +53,7 @@ type Contributor = {
   roles: string[]
 }
 
-const activeAssignmentStatuses: MatchContributorAssignmentStatus[] = ['PENDING', 'OFFERED', 'ACCEPTED', 'IN_PROGRESS']
+export const activeAssignmentStatuses: MatchContributorAssignmentStatus[] = ['PENDING', 'OFFERED', 'ACCEPTED', 'IN_PROGRESS']
 
 const normalizeOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim() ?? ''
@@ -257,6 +258,49 @@ async function hasActiveDuplicate(db: Db, trackingTaskId: string, assignedUserId
   return db.matchContributorAssignment.findFirst({ where: { trackingTaskId, assignedUserId, status: { in: activeAssignmentStatuses } }, select: { id: true } })
 }
 
+type ActiveAssignment = {
+  id: string
+  assignmentMode: MatchContributorAssignmentMode
+  status: MatchContributorAssignmentStatus
+  assignedUserId: string | null
+  recipients: Array<{ userId: string }>
+}
+
+async function getActiveAssignmentForTask(db: Db, trackingTaskId: string): Promise<ActiveAssignment | null> {
+  return db.matchContributorAssignment.findFirst({
+    where: { trackingTaskId, status: { in: activeAssignmentStatuses } },
+    select: { id: true, assignmentMode: true, status: true, assignedUserId: true, recipients: { select: { userId: true } } },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+const sameUsers = (first: string[], second: string[]) => {
+  const firstIds = Array.from(new Set(first.filter(Boolean))).sort()
+  const secondIds = Array.from(new Set(second.filter(Boolean))).sort()
+  return firstIds.length === secondIds.length && firstIds.every((id, index) => id === secondIds[index])
+}
+
+function assignmentMatchesRequest(assignment: ActiveAssignment, request: { mode: MatchContributorAssignmentMode; assignedUserId?: string | null; recipientUserIds?: string[] }) {
+  if (assignment.assignmentMode !== request.mode) return false
+  if (request.mode === 'SELF' || request.mode === 'DIRECT') return assignment.assignedUserId === request.assignedUserId
+  return sameUsers(assignment.recipients.map((recipient) => recipient.userId), request.recipientUserIds ?? [])
+}
+
+function activeAssignmentConflict(assignment: ActiveAssignment): Result<{ id: string }> {
+  return { ok: false, reason: `This task already has an active ${assignment.assignmentMode.toLowerCase().replace('_', ' ')} assignment.` }
+}
+
+function isUniqueAssignmentConflict(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as Prisma.PrismaClientKnownRequestError).code === 'P2002'
+}
+
+async function resolveUniqueAssignmentConflict(db: Db, trackingTaskId: string, request: { mode: MatchContributorAssignmentMode; assignedUserId?: string | null; recipientUserIds?: string[] }): Promise<Result<{ id: string }>> {
+  const active = await getActiveAssignmentForTask(db, trackingTaskId)
+  if (active && assignmentMatchesRequest(active, request)) return { ok: true, value: { id: active.id } }
+  if (active) return activeAssignmentConflict(active)
+  return { ok: false, reason: 'This task already has a conflicting active assignment.' }
+}
+
 async function requireNotification(result: { ok: true } | { ok: false; reason: string }) {
   if (!result.ok) throw new Error(result.reason)
 }
@@ -268,10 +312,16 @@ export async function createSelfAssignment({ db = prisma, actorUserId, trackingT
   if (!permission.ok) return permission
   const eligible = await ensureEligible(db, task.value, [actorUserId])
   if (!eligible.ok) return eligible
-  if (await hasActiveDuplicate(db, trackingTaskId, actorUserId)) return { ok: false, reason: 'This contributor already has an active assignment for this task.' }
+  const active = await getActiveAssignmentForTask(db, trackingTaskId)
+  if (active) return assignmentMatchesRequest(active, { mode: 'SELF', assignedUserId: actorUserId }) ? { ok: true, value: { id: active.id } } : activeAssignmentConflict(active)
   const now = new Date()
-  const assignment = await db.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'SELF', status: 'ACCEPTED', assignedUserId: actorUserId, assignedByUserId: actorUserId, acceptedAt: now }, select: { id: true } })
-  return { ok: true, value: assignment }
+  try {
+    const assignment = await db.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'SELF', status: 'ACCEPTED', assignedUserId: actorUserId, assignedByUserId: actorUserId, acceptedAt: now }, select: { id: true } })
+    return { ok: true, value: assignment }
+  } catch (error) {
+    if (isUniqueAssignmentConflict(error)) return resolveUniqueAssignmentConflict(db, trackingTaskId, { mode: 'SELF', assignedUserId: actorUserId })
+    throw error
+  }
 }
 
 export async function createDirectAssignment({ db = prisma, actorUserId, trackingTaskId, assignedUserId }: { db?: Db; actorUserId: string; trackingTaskId: string; assignedUserId: string }): Promise<Result<{ id: string }>> {
@@ -281,6 +331,8 @@ export async function createDirectAssignment({ db = prisma, actorUserId, trackin
   if (!permission.ok) return permission
   const eligible = await ensureEligible(db, task.value, [assignedUserId])
   if (!eligible.ok) return eligible
+  const active = await getActiveAssignmentForTask(db, trackingTaskId)
+  if (active) return assignmentMatchesRequest(active, { mode: 'DIRECT', assignedUserId }) ? { ok: true, value: { id: active.id } } : activeAssignmentConflict(active)
   if (await hasActiveDuplicate(db, trackingTaskId, assignedUserId)) return { ok: false, reason: 'This contributor already has an active assignment for this task.' }
   try {
     const assignment = await db.$transaction(async (tx) => {
@@ -290,6 +342,7 @@ export async function createDirectAssignment({ db = prisma, actorUserId, trackin
     })
     return { ok: true, value: assignment }
   } catch (error) {
+    if (isUniqueAssignmentConflict(error)) return resolveUniqueAssignmentConflict(db, trackingTaskId, { mode: 'DIRECT', assignedUserId })
     console.error('Create direct assignment failed.', error)
     return { ok: false, reason: 'Direct assignment could not be created.' }
   }
@@ -304,6 +357,8 @@ export async function createGroupOffer({ db = prisma, actorUserId, trackingTaskI
   if (userIds.length === 0) return { ok: false, reason: 'Select at least one group offer recipient.' }
   const eligible = await ensureEligible(db, task.value, userIds)
   if (!eligible.ok) return eligible
+  const active = await getActiveAssignmentForTask(db, trackingTaskId)
+  if (active) return assignmentMatchesRequest(active, { mode: 'GROUP_OFFER', recipientUserIds: userIds }) ? { ok: true, value: { id: active.id } } : activeAssignmentConflict(active)
   try {
     const assignment = await db.$transaction(async (tx) => {
       const created = await tx.matchContributorAssignment.create({ data: { trackingTaskId, assignmentMode: 'GROUP_OFFER', status: 'OFFERED', assignedByUserId: actorUserId }, select: { id: true } })
@@ -313,6 +368,7 @@ export async function createGroupOffer({ db = prisma, actorUserId, trackingTaskI
     })
     return { ok: true, value: assignment }
   } catch (error) {
+    if (isUniqueAssignmentConflict(error)) return resolveUniqueAssignmentConflict(db, trackingTaskId, { mode: 'GROUP_OFFER', recipientUserIds: userIds })
     console.error('Create group offer failed.', error)
     return { ok: false, reason: 'Group offer could not be created.' }
   }

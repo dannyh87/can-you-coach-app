@@ -146,6 +146,26 @@ describe('assignment transitions and creation', () => {
     expect((await createDirectAssignment({ db: createDb(), actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'parent-2' })).ok).toBe(false)
   })
 
+  it('returns an existing identical direct assignment and conflicts on a different assignee', async () => {
+    const existing = { id: 'assignment-1', assignmentMode: 'DIRECT', status: 'PENDING', assignedUserId: 'parent-1', recipients: [] }
+    const identical = await createDirectAssignment({ db: createDb({ matchContributorAssignment: { findFirst: async () => existing, findUnique: async () => baseTask, create: async () => { throw new Error('should not create') } } }), actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'parent-1' })
+    const conflicting = await createDirectAssignment({ db: createDb({ matchContributorAssignment: { findFirst: async () => existing, findUnique: async () => baseTask, create: async () => { throw new Error('should not create') } } }), actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'assistant-1' })
+
+    expect(identical).toEqual({ ok: true, value: { id: 'assignment-1' } })
+    expect(conflicting.ok).toBe(false)
+  })
+
+  it('translates unique-index conflicts into existing assignment or friendly conflict', async () => {
+    let existing = null as null | { id: string; assignmentMode: 'DIRECT'; status: 'PENDING'; assignedUserId: string; recipients: never[] }
+    const db = createDb({ matchContributorAssignment: { findFirst: async () => existing, findUnique: async () => baseTask, create: async () => { existing = { id: 'assignment-1', assignmentMode: 'DIRECT', status: 'PENDING', assignedUserId: 'parent-1', recipients: [] }; throw { code: 'P2002' } } } })
+    const identical = await createDirectAssignment({ db, actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'parent-1' })
+    existing = { id: 'assignment-2', assignmentMode: 'DIRECT', status: 'PENDING', assignedUserId: 'assistant-1', recipients: [] }
+    const conflicting = await createDirectAssignment({ db, actorUserId: 'coach-1', trackingTaskId: 'task-1', assignedUserId: 'parent-1' })
+
+    expect(identical).toEqual({ ok: true, value: { id: 'assignment-1' } })
+    expect(conflicting.ok).toBe(false)
+  })
+
   it('allows accepted assignments to start and submit', async () => {
     const db = createDb({ matchContributorAssignment: { findUnique: async () => ({ id: 'assignment-1', trackingTaskId: 'task-1', assignmentMode: 'DIRECT', status: 'ACCEPTED', assignedUserId: 'parent-1' }), update: async () => ({}) } })
     expect((await startContributorAssignment({ db, assignmentId: 'assignment-1', actorUserId: 'parent-1' })).ok).toBe(true)
@@ -161,6 +181,15 @@ describe('assignment transitions and creation', () => {
 describe('group offers', () => {
   it('creates a group offer for eligible recipients', async () => {
     expect((await createGroupOffer({ db: createDb(), actorUserId: 'coach-1', trackingTaskId: 'task-1', recipientUserIds: ['parent-1', 'assistant-1'] })).ok).toBe(true)
+  })
+
+  it('returns existing identical group offers and conflicts on different recipients', async () => {
+    const existing = { id: 'assignment-1', assignmentMode: 'GROUP_OFFER', status: 'OFFERED', assignedUserId: null, recipients: [{ userId: 'parent-1' }, { userId: 'assistant-1' }] }
+    const identical = await createGroupOffer({ db: createDb({ matchContributorAssignment: { findFirst: async () => existing, findUnique: async () => baseTask, create: async () => { throw new Error('should not create') } } }), actorUserId: 'coach-1', trackingTaskId: 'task-1', recipientUserIds: ['assistant-1', 'parent-1'] })
+    const conflicting = await createGroupOffer({ db: createDb({ matchContributorAssignment: { findFirst: async () => existing, findUnique: async () => baseTask, create: async () => { throw new Error('should not create') } } }), actorUserId: 'coach-1', trackingTaskId: 'task-1', recipientUserIds: ['parent-1'] })
+
+    expect(identical).toEqual({ ok: true, value: { id: 'assignment-1' } })
+    expect(conflicting.ok).toBe(false)
   })
 
   it('claims group offers atomically and reports conflicts', async () => {

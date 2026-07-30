@@ -323,6 +323,10 @@ model MatchTrackingTaskEvent {
 }
 
 model MatchContributorAssignment {
+  /// Database invariant: one active assignment per tracking task is enforced by the
+  /// partial unique index "MatchContributorAssignment_one_active_per_task" for
+  /// PENDING, OFFERED, ACCEPTED and IN_PROGRESS rows. Historical DECLINED,
+  /// SUBMITTED and CANCELLED rows are intentionally excluded.
   id               String                           @id @default(cuid())
   trackingTaskId   String
   assignmentMode   MatchContributorAssignmentMode

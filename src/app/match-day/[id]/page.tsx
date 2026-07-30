@@ -31,6 +31,7 @@ import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay }
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { cancelMatchTrackingAssignmentV2 } from '@/lib/matchDayV2Setup'
 import { formatAssignmentStatus, getAssignmentStatusForMatch, getAssignmentTarget } from '@/lib/myAssignments'
 import { notifySubmissionReviewed } from '@/lib/notifications'
 
@@ -559,6 +560,20 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
 
   revalidatePath(`/match-day/${match.id}`)
   return { ok: true }
+}
+
+async function cancelCoachTrackingAssignment(formData: FormData): Promise<void> {
+  'use server'
+
+  if (!isMatchDayTrackingV2Enabled()) return
+  const user = await getCurrentUser()
+  const assignmentId = getTextValue(formData, 'assignmentId')
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  if (!assignmentId || !matchDayId) return
+  await cancelMatchTrackingAssignmentV2({ userId: user.id, assignmentId })
+  revalidatePath(`/match-day/${matchDayId}`)
+  revalidatePath('/my-assignments')
+  revalidatePath('/notifications')
 }
 
 async function startMatch(formData: FormData): Promise<MatchActionResult> {
@@ -1736,6 +1751,11 @@ export default async function MatchDayDetailPage({
             completeMatchAction={completeMatch}
             updateMatchScoreAction={updateMatchScore}
           />
+          {showTrackingAssignmentStatus && (
+            <section className="mt-6">
+              <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} cancelAssignmentAction={cancelCoachTrackingAssignment} />
+            </section>
+          )}
         </>
       )}
 
@@ -1814,7 +1834,7 @@ export default async function MatchDayDetailPage({
           </div>
           {showTrackingAssignmentStatus && (
             <div className="mt-4">
-              <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} />
+              <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} cancelAssignmentAction={cancelCoachTrackingAssignment} />
             </div>
           )}
         </section>
@@ -1846,7 +1866,7 @@ export default async function MatchDayDetailPage({
             <TouchMap events={touchMapEvents} />
           </section>
           <section className="mt-4">
-            {showTrackingAssignmentStatus && <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} />}
+             {showTrackingAssignmentStatus && <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} cancelAssignmentAction={cancelCoachTrackingAssignment} />}
           </section>
           <section className="mt-4">
             <ParentSubmissionsPanel
@@ -1879,7 +1899,7 @@ export default async function MatchDayDetailPage({
   )
 }
 
-function TrackingAssignmentsPanel({ tasks }: { tasks: Awaited<ReturnType<typeof getAssignmentStatusForMatch>> }) {
+function TrackingAssignmentsPanel({ tasks, cancelAssignmentAction }: { tasks: Awaited<ReturnType<typeof getAssignmentStatusForMatch>>; cancelAssignmentAction: (formData: FormData) => Promise<void> }) {
   return (
     <details open className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:p-4">
       <summary className="cursor-pointer list-none">
@@ -1910,13 +1930,23 @@ function TrackingAssignmentsPanel({ tasks }: { tasks: Awaited<ReturnType<typeof 
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {task.assignments.map((assignment) => (
                     <div key={assignment.id} className="rounded-lg bg-slate-50 p-3">
-                      <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open offer' : assignment.assignedUser?.email ?? 'Assigned contributor'}</p>
-                      <p className="mt-1 text-sm text-slate-700">{formatAssignmentStatus(assignment.status)}</p>
+                      <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open group offer' : assignment.assignedUser?.email ?? 'Assigned contributor'}</p>
+                      <p className="mt-1 text-sm text-slate-700">{assignment.assignmentMode.replace('_', ' ')} · {formatAssignmentStatus(assignment.status)}</p>
                       <p className="mt-1 text-xs font-semibold text-slate-500">Observations {assignment.submittedMatchEvents.length} ({assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length} pending) · Recipients {assignment.recipients.length}</p>
                       <div className="mt-2 space-y-1 text-xs font-semibold text-slate-500">
+                        <p>Created {formatDateTime(assignment.createdAt)}</p>
+                        {assignment.acceptedAt && <p>Accepted {formatDateTime(assignment.acceptedAt)}</p>}
                         {assignment.startedAt && <p>Started {formatDateTime(assignment.startedAt)}</p>}
                         {assignment.submittedAt && <p>Submitted {formatDateTime(assignment.submittedAt)}</p>}
+                        {assignment.cancelledAt && <p>Cancelled {formatDateTime(assignment.cancelledAt)}</p>}
                       </div>
+                      {(assignment.status === 'PENDING' || assignment.status === 'OFFERED') && (
+                        <form action={cancelAssignmentAction} className="mt-2">
+                          <input type="hidden" name="matchDayId" value={task.matchDayId} />
+                          <input type="hidden" name="assignmentId" value={assignment.id} />
+                          <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Cancel assignment</button>
+                        </form>
+                      )}
                     </div>
                   ))}
                 </div>

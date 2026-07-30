@@ -12,6 +12,12 @@ import {
   copyPreviousMatchTrackingTaskV2,
   createDraftMatchDayV2,
   createGuidedMatchTrackingTaskV2,
+  assignMatchTrackingTaskV2,
+  applyPlayerTrackingTaskToPlayersV2,
+  cancelMatchTrackingAssignmentV2,
+  getEligibleContributorsForTaskV2,
+  getMatchDayV2SetupState,
+  publishMatchDayV2Setup,
   saveMatchDayV2Squad,
   updateDraftMatchDayV2,
 } from '@/lib/matchDayV2Setup'
@@ -32,6 +38,9 @@ export const dynamic = 'force-dynamic'
 type ActionResult<T = undefined> =
   | { ok: true; data: T }
   | { ok: false; message: string; fieldErrors?: Record<string, string[]> }
+type SetupStatePayload = Extract<Awaited<ReturnType<typeof getMatchDayV2SetupState>>, { ok: true }>['value']
+type EligibleContributorsPayload = Extract<Awaited<ReturnType<typeof getEligibleContributorsForTaskV2>>, { ok: true }>['value']
+type PublishPayload = Extract<Awaited<ReturnType<typeof publishMatchDayV2Setup>>, { ok: true }>['value']
 
 const getText = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -186,6 +195,74 @@ async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: st
   return ok(result.value)
 }
 
+async function getSetupStateAction(matchDayId: string): Promise<ActionResult<SetupStatePayload>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await getMatchDayV2SetupState({ userId: user.id, matchDayId })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  return ok(result.value)
+}
+
+async function getEligibleContributorsAction(trackingTaskId: string): Promise<ActionResult<EligibleContributorsPayload>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await getEligibleContributorsForTaskV2({ userId: user.id, trackingTaskId })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  return ok(result.value)
+}
+
+async function assignTaskAction(formData: FormData): Promise<ActionResult<{ id: string | null; alreadyExisted: boolean }>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await assignMatchTrackingTaskV2({
+    userId: user.id,
+    trackingTaskId: getText(formData, 'trackingTaskId'),
+    method: getText(formData, 'method') as 'SELF' | 'DIRECT' | 'GROUP_OFFER' | 'LATER',
+    assignedUserId: getOptionalText(formData, 'assignedUserId'),
+    recipientUserIds: getSelectedIds(formData, 'recipientUserId'),
+  })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  revalidatePath('/my-assignments')
+  revalidatePath('/notifications')
+  return ok(result.value)
+}
+
+async function cancelAssignmentAction(formData: FormData): Promise<ActionResult> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await cancelMatchTrackingAssignmentV2({ userId: user.id, assignmentId: getText(formData, 'assignmentId') })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  revalidatePath('/my-assignments')
+  revalidatePath('/notifications')
+  return ok(undefined)
+}
+
+async function applyToPlayersAction(formData: FormData): Promise<ActionResult<{ ids: string[] }>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await applyPlayerTrackingTaskToPlayersV2({ userId: user.id, sourceTaskId: getText(formData, 'sourceTaskId'), playerIds: getSelectedIds(formData, 'playerId') })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  return ok(result.value)
+}
+
+async function publishSetupAction(matchDayId: string): Promise<ActionResult<PublishPayload>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await publishMatchDayV2Setup({ userId: user.id, matchDayId })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  revalidatePath(`/match-day/${matchDayId}`)
+  revalidatePath('/match-day')
+  revalidatePath('/my-assignments')
+  revalidatePath('/notifications')
+  return ok(result.value)
+}
+
 export default async function NewMatchDayV2Page() {
   const user = await requireV2User()
   const manageableTeamIds = await getManageableTeamIds(user.id)
@@ -235,6 +312,12 @@ export default async function NewMatchDayV2Page() {
         createTaskAction={createTaskAction}
         getPreviousTasksAction={getPreviousTasksAction}
         copyTaskAction={copyTaskAction}
+        getSetupStateAction={getSetupStateAction}
+        getEligibleContributorsAction={getEligibleContributorsAction}
+        assignTaskAction={assignTaskAction}
+        cancelAssignmentAction={cancelAssignmentAction}
+        applyToPlayersAction={applyToPlayersAction}
+        publishSetupAction={publishSetupAction}
       />
     </main>
   )
