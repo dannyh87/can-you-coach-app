@@ -34,6 +34,39 @@ const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
   purple: 'border-purple-200 bg-purple-50 text-purple-800',
 }
 
+function ClerkSignOutButton({ onClose }: { onClose: () => void }) {
+  const { signOut } = useClerk()
+
+  const handleSignOut = () => {
+    onClose()
+    void signOut({ redirectUrl: '/' })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleSignOut}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
+        <path d="M12 6l4 4-4 4" />
+        <path d="M16 10H8" />
+      </svg>
+      Log out
+    </button>
+  )
+}
+
 export default function MobileNav({
   groups,
   showDevTools,
@@ -43,7 +76,6 @@ export default function MobileNav({
   buttonLabel,
   ariaLabel,
 }: MobileNavProps) {
-  const { signOut } = useClerk()
   const [isOpen, setIsOpen] = useState(false)
   const menuId = useId()
 
@@ -59,10 +91,6 @@ export default function MobileNav({
   }, [isOpen])
 
   const closeMenu = () => setIsOpen(false)
-  const handleSignOut = () => {
-    setIsOpen(false)
-    void signOut({ redirectUrl: '/' })
-  }
   const menuButtonLabel = isOpen ? 'Close menu' : (buttonLabel ?? 'Open menu')
   const visibleGroups = groups.map((group) => {
     if (group.title === 'Admin' && showDevTools) {
@@ -164,27 +192,7 @@ export default function MobileNav({
                           Account
                         </Link>
                         <div className="mt-2 border-t border-slate-100 pt-2">
-                          <button
-                            type="button"
-                            onClick={handleSignOut}
-                            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
-                          >
-                            <svg
-                              aria-hidden="true"
-                              viewBox="0 0 20 20"
-                              className="h-5 w-5"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.8"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M8 4H5.5A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
-                              <path d="M12 6l4 4-4 4" />
-                              <path d="M16 10H8" />
-                            </svg>
-                            Log out
-                          </button>
+                          <ClerkSignOutButton onClose={closeMenu} />
                         </div>
                       </>
                     )}

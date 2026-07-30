@@ -181,5 +181,6 @@ describe('copy tracking task', () => {
   it('reports missing event mappings', async () => {
     const result = await copyMatchTrackingTask({ db: createDb({ matchTrackingTask: { findUnique: async () => ({ ...baseTask, events: [{ matchDayEventTypeId: 'missing-source', matchDayEventType: { eventDefinitionId: 'missing-definition', eventType: null } }] }) }, matchDayEventType: { findMany: async () => [] } }), actorUserId: 'coach-1', sourceTaskId: 'task-1', destinationMatchDayId: 'match-1' })
     expect(result.ok).toBe(false)
+    expect(result).toMatchObject({ ok: false, missingEventIds: ['missing-source'] })
   })
 })

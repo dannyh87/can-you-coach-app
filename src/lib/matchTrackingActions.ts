@@ -166,6 +166,7 @@ export async function copyTrackingTaskAction(formData: FormData): Promise<MatchT
   const user = await getCurrentUser()
   const destinationMatchDayId = getText(formData, 'destinationMatchDayId')
   const result = await copyMatchTrackingTask({ actorUserId: user.id, sourceTaskId: getText(formData, 'sourceTaskId'), destinationMatchDayId, destinationPlayerId: getOptionalText(formData, 'destinationPlayerId') })
+  if (!result.ok && result.missingEventIds) return fail('EVENT_NOT_SELECTED', result.reason, { missingEventIds: result.missingEventIds })
   if (!result.ok) return mapDomainFailure(result.reason)
   await revalidateTrackingPaths(destinationMatchDayId)
   return ok(result.value)

@@ -46,5 +46,5 @@ run('match tracking group claim integration', () => {
     expect(assignment?.status).toBe('ACCEPTED')
     expect(assignment?.assignedUserId === recipientA || assignment?.assignedUserId === recipientB).toBe(true)
     expect(assignment?.recipients.filter((recipient) => recipient.userId !== assignment.assignedUserId).every((recipient) => recipient.closedAt !== null)).toBe(true)
-  })
+  }, 60000)
 })

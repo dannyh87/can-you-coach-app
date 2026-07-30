@@ -8,7 +8,7 @@ import type {
 import { canManageMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
-type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string }
+type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; missingEventIds?: string[] }
 
 type Db = typeof prisma
 
@@ -340,7 +340,7 @@ export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTa
     return destinationEvents.find((destination) => source.eventDefinitionId ? destination.eventDefinitionId === source.eventDefinitionId : destination.eventType === source.eventType) ?? null
   })
   const missingEventIds = sourceTask.events.filter((_, index) => !mappedEvents[index]).map((event) => event.matchDayEventTypeId)
-  if (missingEventIds.length > 0) return { ok: false, reason: 'One or more task events are not selected for the destination match.' }
+  if (missingEventIds.length > 0) return { ok: false, reason: 'One or more task events are not selected for the destination match.', missingEventIds }
   const created = await db.$transaction(async (tx) => {
     const task = await tx.matchTrackingTask.create({ data: { matchDayId: destinationMatchDayId, createdByUserId: actorUserId, scopeType: sourceTask.scopeType, playerId, unitKey: sourceTask.unitKey, unitLabel: sourceTask.unitLabel, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'DRAFT' }, select: { id: true } })
     await tx.matchTrackingTaskEvent.createMany({ data: mappedEvents.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event!.id, displayOrder: index })) })
