@@ -45,6 +45,10 @@ export const roleTesterScenarios = [
   },
 ] as const
 
+export function normalizeRoleTesterEmailCookie(value: string | undefined) {
+  return value ? decodeURIComponent(value).trim().toLowerCase() : null
+}
+
 export function isRoleTesterEnabled() {
   return process.env.ENABLE_ROLE_TESTER === 'true'
 }
@@ -57,7 +61,7 @@ export async function getRoleTesterSelectedEmail() {
   if (!canSwitchRoleTesterUser()) return null
 
   const cookieStore = await cookies()
-  const selectedEmail = cookieStore.get(ROLE_TESTER_COOKIE)?.value?.trim().toLowerCase()
+  const selectedEmail = normalizeRoleTesterEmailCookie(cookieStore.get(ROLE_TESTER_COOKIE)?.value)
   const validEmails = new Set<string>(roleTesterScenarios.map((scenario) => scenario.email))
 
   return selectedEmail && validEmails.has(selectedEmail) ? selectedEmail : null

@@ -483,7 +483,12 @@ export default function MatchDayV2SetupWizard({
       {stage === 'review' && (
         <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-2xl font-bold">Review setup</h2>
-          {published && <Alert variant="success" className="mt-4">Match Day setup ready. {published.coverage.assigned} of {published.coverage.totalTasks} tasks have an active assignment.</Alert>}
+          {published && (
+            <Alert variant="success" className="mt-4">
+              <p>Match Day setup ready. {published.coverage.assigned} of {published.coverage.totalTasks} tasks have an active assignment.</p>
+              {published.warnings.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5">{published.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+            </Alert>
+          )}
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <Summary label="Match" value={matchDetails.opposition || 'Draft'} />
             <Summary label="In squad" value={String(involvedPlayers.length)} />

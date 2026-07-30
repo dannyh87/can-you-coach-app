@@ -1,7 +1,10 @@
+import { unstable_noStore as noStore } from 'next/cache'
+
 import { prisma } from '@/lib/prisma'
 import { getRoleTesterSelectedEmail, LOCAL_COACH_EMAIL } from '@/lib/roleTester'
 
 export async function getLocalUser() {
+  noStore()
   const selectedEmail = await getRoleTesterSelectedEmail()
   const email = selectedEmail ?? LOCAL_COACH_EMAIL
 
