@@ -49,6 +49,7 @@ type MatchDayClientProps = {
   teams: TeamOption[]
   matches: MatchDayRow[]
   canCreateMatches: boolean
+  showV2CreateLink: boolean
   createMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
   deleteMatchDayAction: (formData: FormData) => Promise<MatchActionResult>
 }
@@ -59,6 +60,7 @@ export default function MatchDayClient({
   teams,
   matches,
   canCreateMatches,
+  showV2CreateLink,
   createMatchDayAction,
   deleteMatchDayAction,
 }: MatchDayClientProps) {
@@ -147,9 +149,17 @@ export default function MatchDayClient({
         title="Matches"
         description={canCreateMatches ? 'Review created match records and open details.' : 'Review matches for your assigned team. Coaches create and manage fixtures.'}
         actions={canCreateMatches ? (
-          <ActionLink href="/match-day/new" variant="primary">
-            Create Match Day
-          </ActionLink>
+          <div className="flex flex-wrap items-center gap-2">
+            {showV2CreateLink && (
+              <ActionLink href="/match-day/new-v2" variant="secondary">
+                <span className="mr-2 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-800">New</span>
+                Try new Match Day setup
+              </ActionLink>
+            )}
+            <ActionLink href="/match-day/new" variant="primary">
+              Create Match Day
+            </ActionLink>
+          </div>
         ) : undefined}
         bodyClassName="p-0"
       >

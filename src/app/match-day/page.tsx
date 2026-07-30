@@ -7,6 +7,7 @@ import EmptyState from '@/components/ui/EmptyState'
 import PageHeader from '@/components/ui/PageHeader'
 import { accessibleMatchWhere, accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { ensureDefaultClub } from '@/lib/localUser'
 import { canManageMatchDay, canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -189,6 +190,7 @@ export default async function MatchDayPage() {
     statusClasses: getStatusClasses(match.status),
     canDelete: manageableTeamIds.includes(match.teamId) && match.status !== 'IN_PROGRESS' && match.status !== 'HALF_TIME',
   }))
+  const canCreateMatches = teamOptions.length > 0
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -249,7 +251,8 @@ export default async function MatchDayPage() {
         <MatchDayClient
           teams={teamOptions}
           matches={matchRows}
-          canCreateMatches={teamOptions.length > 0}
+          canCreateMatches={canCreateMatches}
+          showV2CreateLink={canCreateMatches && isMatchDayTrackingV2Enabled()}
           createMatchDayAction={createMatchDay}
           deleteMatchDayAction={deleteMatchDay}
         />
