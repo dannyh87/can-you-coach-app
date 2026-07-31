@@ -21,10 +21,12 @@ const topics = [
       { eventDefinitionId: 'touch', displayOrder: 0, recommended: true, guidance: null, eventDefinition: eventDefinitions[0] },
       { eventDefinitionId: 'pass', displayOrder: 1, recommended: true, guidance: null, eventDefinition: eventDefinitions[1] },
     ],
+    patterns: [{ patternId: 'pattern-1', displayOrder: 2, recommended: true, observerLoadWeight: 2, pattern: { id: 'pattern-1', name: 'Striker receives and sets', description: 'Receive into feet and set support.', active: true, requiresLocation: false, contexts: [{ scopeType: 'PLAYER', targetContext: 'CENTRE_FORWARD' }], steps: [{ stepOrder: 0, eventDefinitionId: 'touch', label: 'Pass into striker', eventDefinition: eventDefinitions[0] }], outcomes: [{ id: 'outcome-1', code: 'RETAINED', label: 'Retained possession' }] } }],
   },
   {
     id: 'team-counter', name: 'Counter-attacking effectiveness', description: null, normalizedName: 'counter attacking effectiveness', phase: 'ATTACKING_TRANSITION', focusArea: 'ATTACKING_TRANSITION', agePhases: ['YOUTH'], suggestedMaxEvents: 6, isActive: true, archivedAt: null, contexts: [{ scopeType: 'TEAM', targetContext: 'WHOLE_TEAM', recommended: true, displayOrder: 1 }], aliases: [],
     events: [{ eventDefinitionId: 'regain', displayOrder: 0, recommended: true, guidance: null, eventDefinition: eventDefinitions[2] }],
+    patterns: [],
   },
 ]
 
@@ -55,10 +57,12 @@ function createDb(overrides: Record<string, unknown> = {}) {
   const createdRows: Array<Record<string, unknown>> = []
   const createdTasks: Array<Record<string, unknown>> = []
   const createdTaskEvents: Array<Record<string, unknown>> = []
+  const createdTaskPatterns: Array<Record<string, unknown>> = []
   const db = {
     _createdRows: createdRows,
     _createdTasks: createdTasks,
     _createdTaskEvents: createdTaskEvents,
+    _createdTaskPatterns: createdTaskPatterns,
     $transaction: async (input: unknown) => {
       if (Array.isArray(input)) return Promise.all(input)
       if (typeof input === 'function') return input(db)
@@ -87,7 +91,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
       findMany: async () => [],
     },
     matchTrackingTask: {
-      findUnique: async () => ({ id: 'source-task', matchDayId: 'match-1', createdByUserId: 'coach-1', topicId: 'cf-link', scopeType: 'PLAYER', playerId: 'player-1', unitKey: null, unitLabel: null, title: 'Watch link play', instructions: 'Same cues.', sourceTaskId: null, status: 'READY', events: [{ matchDayEventTypeId: 'selected-touch' }, { matchDayEventTypeId: 'selected-pass' }] }),
+      findUnique: async () => ({ id: 'source-task', matchDayId: 'match-1', createdByUserId: 'coach-1', topicId: 'cf-link', scopeType: 'PLAYER', playerId: 'player-1', unitKey: null, unitLabel: null, title: 'Watch link play', instructions: 'Same cues.', sourceTaskId: null, status: 'READY', events: [{ matchDayEventTypeId: 'selected-touch' }, { matchDayEventTypeId: 'selected-pass' }], patterns: [{ patternId: 'pattern-1' }] }),
       findMany: async () => [{ id: 'task-1', matchDayId: 'match-1', scopeType: 'PLAYER', playerId: 'player-1', unitKey: null, unitLabel: null, title: 'Watch link play', status: 'READY', events: [{ id: 'event-1' }] }],
       create: async ({ data }: { data: Record<string, unknown> }) => {
         createdTasks.push(data)
@@ -99,6 +103,15 @@ function createDb(overrides: Record<string, unknown> = {}) {
         createdTaskEvents.push(...data)
         return { count: data.length }
       },
+    },
+    matchTrackingTaskPattern: {
+      createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+        createdTaskPatterns.push(...data)
+        return { count: data.length }
+      },
+    },
+    trackingPatternDefinition: {
+      findMany: async () => [{ id: 'pattern-1', name: 'Striker receives and sets', description: 'Receive into feet and set support.', active: true, requiresLocation: false, ownerScope: 'GLOBAL', aliases: [{ alias: 'set' }], contexts: [{ scopeType: 'PLAYER', targetContext: 'CENTRE_FORWARD' }], steps: [{ stepOrder: 0, eventDefinitionId: 'touch', label: 'Pass into striker', eventDefinition: eventDefinitions[0] }], outcomes: [{ id: 'outcome-1', code: 'RETAINED', label: 'Retained possession' }] }],
     },
     ...overrides,
   }
@@ -139,6 +152,34 @@ describe('match day v2 setup', () => {
     expect(result).toEqual({ ok: true, value: { id: 'task-1' } })
     expect(db._createdTasks[0]).toMatchObject({ topicId: 'cf-link', status: 'READY', scopeType: 'PLAYER', playerId: 'player-1' })
     expect(db._createdTaskEvents).toHaveLength(2)
+  })
+
+  it('creates a pattern-only guided task without placeholder event rows', async () => {
+    const db = createDb() as never as { _createdTaskEvents: Array<Record<string, unknown>>; _createdTaskPatterns: Array<Record<string, unknown>> }
+    const result = await createGuidedMatchTrackingTaskV2({
+      db: db as never,
+      userId: 'coach-1',
+      matchDayId: 'match-1',
+      scope: 'PLAYER',
+      targetContext: 'CENTRE_FORWARD',
+      phase: 'IN_POSSESSION',
+      focusArea: 'LINK_PLAY',
+      topicId: 'cf-link',
+      selectedEventDefinitionIds: [],
+      selectedPatternIds: ['pattern-1'],
+      playerId: 'player-1',
+      title: 'Watch striker sets',
+    })
+
+    expect(result).toEqual({ ok: true, value: { id: 'task-1' } })
+    expect(db._createdTaskEvents).toHaveLength(0)
+    expect(db._createdTaskPatterns).toEqual([expect.objectContaining({ patternId: 'pattern-1', displayOrder: 0 })])
+  })
+
+  it('rejects duplicate guided pattern selections', async () => {
+    const result = await createGuidedMatchTrackingTaskV2({ db: createDb(), userId: 'coach-1', matchDayId: 'match-1', scope: 'PLAYER', targetContext: 'CENTRE_FORWARD', phase: 'IN_POSSESSION', focusArea: 'LINK_PLAY', topicId: 'cf-link', selectedEventDefinitionIds: [], selectedPatternIds: ['pattern-1', 'pattern-1'], playerId: 'player-1', title: 'Duplicates' })
+
+    expect(result).toMatchObject({ ok: false })
   })
 
   it('rejects incompatible guided topic selections', async () => {

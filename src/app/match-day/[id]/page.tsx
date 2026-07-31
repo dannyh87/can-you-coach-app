@@ -34,6 +34,7 @@ import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { cancelMatchTrackingAssignmentV2 } from '@/lib/matchDayV2Setup'
 import { formatAssignmentStatus, getAssignmentStatusForMatch, getAssignmentTarget } from '@/lib/myAssignments'
 import { notifySubmissionReviewed } from '@/lib/notifications'
+import { reviewPatternObservation } from '@/lib/trackingPatterns'
 
 export const dynamic = 'force-dynamic'
 
@@ -1236,6 +1237,19 @@ async function ignoreParentSubmission(formData: FormData): Promise<MatchActionRe
   return result
 }
 
+async function reviewPatternSubmission(formData: FormData): Promise<MatchActionResult> {
+  'use server'
+
+  const user = await getCurrentUser()
+  const matchDayId = getTextValue(formData, 'matchDayId')
+  const observationId = getTextValue(formData, 'submittedPatternObservationId')
+  const decision = getTextValue(formData, 'decision') === 'IGNORED' ? 'IGNORED' : 'ACCEPTED'
+  if (!matchDayId || !observationId) return { ok: false, reason: 'Match and pattern observation are required.' }
+  const result = await reviewPatternObservation({ actorUserId: user.id, observationId, decision })
+  revalidatePath(`/match-day/${matchDayId}`)
+  return result.ok ? { ok: true } : { ok: false, reason: result.reason }
+}
+
 export default async function MatchDayDetailPage({
   params,
   searchParams,
@@ -1277,6 +1291,10 @@ export default async function MatchDayDetailPage({
         },
         orderBy: { createdAt: 'asc' },
       },
+      patternObservations: {
+        include: { pattern: true, outcome: true, player: true, trackingTask: { include: { topic: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
       matchDayEventTypes: {
         include: {
           eventDefinition: true,
@@ -1315,6 +1333,17 @@ export default async function MatchDayDetailPage({
           },
         },
         orderBy: { createdAt: 'desc' },
+      },
+      submittedPatterns: {
+        include: {
+          player: { select: { id: true, firstName: true, surname: true, squadNumber: true } },
+          submittedBy: { select: { id: true, email: true } },
+          reviewedBy: { select: { id: true, email: true } },
+          pattern: true,
+          outcome: true,
+          trackingTask: { select: { scopeType: true, unitLabel: true, player: { select: { firstName: true, surname: true } } } },
+        },
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       },
     },
   })
@@ -1606,6 +1635,26 @@ export default async function MatchDayDetailPage({
     event: getMatchEventLabel(event),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
+  const patternCsvRows = match.patternObservations.map((observation) => ({
+    observationType: 'Tactical pattern',
+    pattern: observation.pattern.name,
+    outcome: observation.outcome.label,
+    scope: observation.trackingTask.scopeType,
+    target: observation.trackingTask.scopeType === 'PLAYER'
+      ? observation.player ? `${observation.player.firstName} ${observation.player.surname}` : 'Selected player'
+      : observation.trackingTask.scopeType === 'UNIT'
+        ? observation.trackingTask.unitLabel ?? 'Selected unit'
+        : 'Whole team',
+    playerName: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : '',
+    unit: observation.trackingTask.scopeType === 'UNIT' ? observation.trackingTask.unitLabel ?? '' : '',
+    phase: String(observation.pattern.phase),
+    focusArea: String(observation.pattern.focusArea),
+    matchMinute: formatMatchTime(observation.matchSecond),
+    scoreAtTime: `${observation.ownScoreAtTime}-${observation.oppositionScoreAtTime}`,
+    locationX: observation.x,
+    locationY: observation.y,
+    reviewStatus: 'ACCEPTED',
+  }))
   const touchMapEvents = match.matchEvents
     .filter((event) => (event.eventDefinition?.requiresLocation ?? false) || event.eventType === 'TOUCH')
     .map((event) => ({
@@ -1621,22 +1670,44 @@ export default async function MatchDayDetailPage({
     }))
   const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
     id: submission.id,
+    type: 'event' as const,
     playerName: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : getSubmissionTargetLabel(submission),
     squadNumber: submission.player?.squadNumber ?? null,
     eventLabel: getParentSubmissionEventDisplayName(submission),
+    detailLabel: null,
     submitterLabel: submission.submittedBy.email,
     halfLabel: formatHalfLabel(submission.half),
     matchTime: formatMatchTime(submission.matchSecond),
     status: submission.status,
     statusLabel: formatStatus(submission.status),
+    createdAt: submission.createdAt.toISOString(),
     createdAtLabel: formatDateTime(submission.createdAt),
     reviewedAtLabel: submission.acceptedAt ? formatDateTime(submission.acceptedAt) : null,
     reviewedByLabel: submission.acceptedBy?.email ?? null,
     note: submission.note,
+    hasLocation: submission.x !== null && submission.y !== null,
   }))
-  const pendingParentSubmissionCount = match.submittedMatchEvents.filter(
-    (submission) => submission.status === 'PENDING'
-  ).length
+  const patternSubmissionRows = match.submittedPatterns.map((submission) => ({
+    id: submission.id,
+    type: 'pattern' as const,
+    playerName: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : getSubmissionTargetLabel({ assignment: { trackingTask: submission.trackingTask } }),
+    squadNumber: submission.player?.squadNumber ?? null,
+    eventLabel: submission.pattern.name,
+    detailLabel: `Outcome: ${submission.outcome.label}`,
+    submitterLabel: submission.submittedBy.email,
+    halfLabel: formatHalfLabel(submission.half),
+    matchTime: formatMatchTime(submission.matchSecond),
+    status: submission.status,
+    statusLabel: formatStatus(submission.status),
+    createdAt: submission.createdAt.toISOString(),
+    createdAtLabel: formatDateTime(submission.createdAt),
+    reviewedAtLabel: submission.reviewedAt ? formatDateTime(submission.reviewedAt) : null,
+    reviewedByLabel: submission.reviewedBy?.email ?? null,
+    note: submission.note,
+    hasLocation: submission.x !== null && submission.y !== null,
+  }))
+  const unifiedSubmissionRows = [...parentSubmissionRows, ...patternSubmissionRows].sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING') || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+  const pendingParentSubmissionCount = unifiedSubmissionRows.filter((submission) => submission.status === 'PENDING').length
   const showHeaderScore = match.status !== 'DRAFT'
   const copiedSetupNotice = setupCopied === '1'
   const showTrackingAssignmentStatus = isMatchDayTrackingV2Enabled() && canManageThisMatch
@@ -1825,11 +1896,12 @@ export default async function MatchDayDetailPage({
             <ParentSubmissionsPanel
               matchDayId={match.id}
               matchStatus={match.status}
-              submissions={parentSubmissionRows}
+              submissions={unifiedSubmissionRows}
               pendingCount={pendingParentSubmissionCount}
               canReview={canReviewParentSubmissions}
               acceptParentSubmissionAction={acceptParentSubmission}
               ignoreParentSubmissionAction={ignoreParentSubmission}
+              reviewPatternSubmissionAction={reviewPatternSubmission}
             />
           </div>
           {showTrackingAssignmentStatus && (
@@ -1856,6 +1928,7 @@ export default async function MatchDayDetailPage({
               csvMetadata={csvMetadata}
               summaryCsvRows={summaryCsvRows}
               eventCsvRows={eventCsvRows}
+              patternCsvRows={patternCsvRows}
             />
           </section>
           <section className="mt-4">
@@ -1872,26 +1945,28 @@ export default async function MatchDayDetailPage({
             <ParentSubmissionsPanel
               matchDayId={match.id}
               matchStatus={match.status}
-              submissions={parentSubmissionRows}
+              submissions={unifiedSubmissionRows}
               pendingCount={pendingParentSubmissionCount}
               canReview={canReviewParentSubmissions}
               acceptParentSubmissionAction={acceptParentSubmission}
               ignoreParentSubmissionAction={ignoreParentSubmission}
+              reviewPatternSubmissionAction={reviewPatternSubmission}
             />
           </section>
         </>
       )}
 
-      {match.status === 'DRAFT' && parentSubmissionRows.length > 0 && (
+      {match.status === 'DRAFT' && unifiedSubmissionRows.length > 0 && (
         <section className="mt-6">
           <ParentSubmissionsPanel
             matchDayId={match.id}
             matchStatus={match.status}
-            submissions={parentSubmissionRows}
+            submissions={unifiedSubmissionRows}
             pendingCount={pendingParentSubmissionCount}
             canReview={canReviewParentSubmissions}
             acceptParentSubmissionAction={acceptParentSubmission}
             ignoreParentSubmissionAction={ignoreParentSubmission}
+            reviewPatternSubmissionAction={reviewPatternSubmission}
           />
         </section>
       )}
@@ -1920,7 +1995,7 @@ function TrackingAssignmentsPanel({ tasks, cancelAssignmentAction }: { tasks: Aw
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-bold text-slate-950">{task.title}</p>
-                  <p className="mt-1 text-sm text-slate-600">{task.scopeType} · {getAssignmentTarget(task)} · {task.events.length} event{task.events.length === 1 ? '' : 's'}</p>
+                  <p className="mt-1 text-sm text-slate-600">{task.scopeType} · {getAssignmentTarget(task)} · {task.events.length} event{task.events.length === 1 ? '' : 's'} · {task.patterns.length} pattern{task.patterns.length === 1 ? '' : 's'}</p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{task.status}</span>
               </div>
@@ -1932,7 +2007,7 @@ function TrackingAssignmentsPanel({ tasks, cancelAssignmentAction }: { tasks: Aw
                     <div key={assignment.id} className="rounded-lg bg-slate-50 p-3">
                       <p className="font-bold text-slate-950">{assignment.assignmentMode === 'GROUP_OFFER' && !assignment.assignedUserId ? 'Open group offer' : assignment.assignedUser?.email ?? 'Assigned contributor'}</p>
                       <p className="mt-1 text-sm text-slate-700">{assignment.assignmentMode.replace('_', ' ')} · {formatAssignmentStatus(assignment.status)}</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">Observations {assignment.submittedMatchEvents.length} ({assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length} pending) · Recipients {assignment.recipients.length}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">{assignment.submittedMatchEvents.length} events · {assignment.submittedPatterns.length} patterns · {assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length + assignment.submittedPatterns.filter((pattern) => pattern.status === 'PENDING').length} awaiting review · Recipients {assignment.recipients.length}</p>
                       <div className="mt-2 space-y-1 text-xs font-semibold text-slate-500">
                         <p>Created {formatDateTime(assignment.createdAt)}</p>
                         {assignment.acceptedAt && <p>Accepted {formatDateTime(assignment.acceptedAt)}</p>}

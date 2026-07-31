@@ -23,6 +23,7 @@ import {
 } from '@/lib/matchDayV2Setup'
 import {
   getNextTrackingQuestion,
+  getAdvancedCompatibleTrackingItems,
   getRecommendedEventsForTopic,
   resolveTrackingSetup,
   searchTrackingTopics,
@@ -153,6 +154,7 @@ async function createTaskAction(formData: FormData): Promise<ActionResult<{ id: 
     focusArea: getText(formData, 'focusArea') as TrackingFocusArea,
     topicId: getText(formData, 'topicId'),
     selectedEventDefinitionIds: getSelectedIds(formData, 'eventDefinitionId'),
+    selectedPatternIds: getSelectedIds(formData, 'patternId'),
     playerId: getOptionalText(formData, 'playerId'),
     unitKey: getOptionalText(formData, 'unitKey'),
     unitLabel: getOptionalText(formData, 'unitLabel'),
@@ -164,7 +166,7 @@ async function createTaskAction(formData: FormData): Promise<ActionResult<{ id: 
   return ok(result.value)
 }
 
-async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<Array<{ id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; requiresPlayer: boolean }>>> {
+async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<Array<{ id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; patternNames: string[]; requiresPlayer: boolean }>>> {
   'use server'
 
   const user = await requireV2User()
@@ -176,8 +178,17 @@ async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<
     matchLabel: `${task.matchDay.opposition} · ${new Intl.DateTimeFormat('en-GB').format(task.matchDay.kickoffAt)}`,
     scopeType: task.scopeType,
     eventCount: task.events.length,
+    patternCount: task.patterns.length,
+    patternNames: task.patterns.map((taskPattern) => taskPattern.pattern.name),
     requiresPlayer: task.scopeType === 'PLAYER',
   })))
+}
+
+async function getAdvancedItemsAction(context: TrackingResolverContext): Promise<ActionResult<Awaited<ReturnType<typeof getAdvancedCompatibleTrackingItems>>>> {
+  'use server'
+
+  await requireV2User()
+  return ok(await getAdvancedCompatibleTrackingItems(context))
 }
 
 async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
@@ -309,6 +320,7 @@ export default async function NewMatchDayV2Page() {
         nextTrackingQuestionAction={nextTrackingQuestionAction}
         searchTopicsAction={searchTopicsAction}
         getTopicEventsAction={getTopicEventsAction}
+        getAdvancedItemsAction={getAdvancedItemsAction}
         createTaskAction={createTaskAction}
         getPreviousTasksAction={getPreviousTasksAction}
         copyTaskAction={copyTaskAction}

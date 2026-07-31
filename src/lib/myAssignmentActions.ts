@@ -8,8 +8,10 @@ import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { acceptDirectAssignment, claimGroupOffer, declineDirectAssignment, declineGroupOffer, markContributorAssignmentSubmitted, startContributorAssignment } from '@/lib/matchTrackingAssignments'
 import { createAssignmentLinkedSubmission } from '@/lib/matchTrackingSubmissions'
 import { prisma } from '@/lib/prisma'
+import { createPatternObservation, getPatternObservationLabel } from '@/lib/trackingPatterns'
 
 type ActionResult = { ok: true } | { ok: false; reason: string }
+type UndoActionResult = { ok: true; type: 'event' | 'pattern'; label: string; timestamp: string } | { ok: false; reason: string }
 
 const getText = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -97,21 +99,50 @@ export async function recordAssignmentObservationAction(formData: FormData): Pro
   return result.ok ? { ok: true } : { ok: false, reason: result.reason }
 }
 
-export async function undoAssignmentObservationAction(formData: FormData): Promise<ActionResult> {
+export async function recordAssignmentPatternObservationAction(formData: FormData): Promise<ActionResult> {
   if (!isMatchDayTrackingV2Enabled()) return { ok: false, reason: 'Match Day tracking is not available.' }
   const user = await getCurrentUser()
   const assignmentId = getText(formData, 'assignmentId')
-  const submittedEventId = getText(formData, 'submittedEventId')
-  const submittedEvent = await prisma.submittedMatchEvent.findFirst({
-    where: { id: submittedEventId, assignmentId, submittedByUserId: user.id, status: 'PENDING' },
-    select: { id: true, matchDayId: true },
+  const matchDayId = getText(formData, 'matchDayId')
+  const x = getOptionalNumber(formData, 'x')
+  const y = getOptionalNumber(formData, 'y')
+  if (Number.isNaN(x) || Number.isNaN(y)) return { ok: false, reason: 'Pitch location must be valid.' }
+
+  const result = await createPatternObservation({
+    assignmentId,
+    actorUserId: user.id,
+    patternId: getText(formData, 'patternId'),
+    outcomeId: getText(formData, 'outcomeId'),
+    playerId: getText(formData, 'playerId') || null,
+    note: getText(formData, 'note'),
+    x,
+    y,
   })
-  if (!submittedEvent) return { ok: false, reason: 'Pending observation was not found.' }
-  await prisma.submittedMatchEvent.delete({ where: { id: submittedEvent.id } })
   revalidatePath(`/my-assignments/${assignmentId}`)
   revalidatePath(`/my-assignments/${assignmentId}/track`)
-  revalidatePath(`/match-day/${submittedEvent.matchDayId}`)
-  return { ok: true }
+  if (result.ok) revalidatePath(`/match-day/${matchDayId}`)
+  return result.ok ? { ok: true } : { ok: false, reason: result.reason }
+}
+
+export async function undoAssignmentObservationAction(formData: FormData): Promise<UndoActionResult> {
+  if (!isMatchDayTrackingV2Enabled()) return { ok: false, reason: 'Match Day tracking is not available.' }
+  const user = await getCurrentUser()
+  const assignmentId = getText(formData, 'assignmentId')
+  const assignment = await prisma.matchContributorAssignment.findFirst({ where: { id: assignmentId, assignedUserId: user.id }, select: { id: true, status: true, trackingTask: { select: { matchDayId: true } } } })
+  if (!assignment) return { ok: false, reason: 'Assignment was not found.' }
+  if (assignment.status === 'SUBMITTED') return { ok: false, reason: 'Submitted assignments cannot be changed.' }
+  const [event, pattern] = await Promise.all([
+    prisma.submittedMatchEvent.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { eventDefinition: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    prisma.submittedTrackingPatternObservation.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { pattern: true, outcome: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+  ])
+  const latest = !pattern || (event && (event.createdAt > pattern.createdAt || (event.createdAt.getTime() === pattern.createdAt.getTime() && event.id > pattern.id))) ? event && { type: 'event' as const, value: event } : { type: 'pattern' as const, value: pattern }
+  if (!latest) return { ok: false, reason: 'Pending observation was not found.' }
+  if (latest.type === 'event') await prisma.submittedMatchEvent.delete({ where: { id: latest.value.id } })
+  else await prisma.submittedTrackingPatternObservation.delete({ where: { id: latest.value.id } })
+  revalidatePath(`/my-assignments/${assignmentId}`)
+  revalidatePath(`/my-assignments/${assignmentId}/track`)
+  revalidatePath(`/match-day/${assignment.trackingTask.matchDayId}`)
+  return { ok: true, type: latest.type, label: latest.type === 'event' ? latest.value.eventDefinition?.name ?? latest.value.eventType ?? 'Event observation' : getPatternObservationLabel(latest.value), timestamp: latest.value.createdAt.toISOString() }
 }
 
 export async function finishAssignmentTrackingAction(formData: FormData): Promise<ActionResult> {

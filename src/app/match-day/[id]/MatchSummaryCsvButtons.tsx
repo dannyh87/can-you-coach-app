@@ -3,10 +3,12 @@
 import { downloadCsv } from '@/lib/csv'
 import {
   buildMatchEventsCsv,
+  buildMatchPatternObservationsCsv,
   buildMatchSummaryCsv,
   getMatchCsvBaseFilename,
   type MatchCsvMetadata,
   type MatchEventCsvRow,
+  type MatchPatternObservationCsvRow,
   type MatchSummaryCsvRow,
 } from '@/lib/reportCsv'
 
@@ -14,12 +16,14 @@ type MatchSummaryCsvButtonsProps = {
   metadata: MatchCsvMetadata
   summaryRows: MatchSummaryCsvRow[]
   eventRows: MatchEventCsvRow[]
+  patternRows: MatchPatternObservationCsvRow[]
 }
 
 export default function MatchSummaryCsvButtons({
   metadata,
   summaryRows,
   eventRows,
+  patternRows,
 }: MatchSummaryCsvButtonsProps) {
   const baseFilename = getMatchCsvBaseFilename(metadata)
 
@@ -29,6 +33,10 @@ export default function MatchSummaryCsvButtons({
 
   const downloadEvents = () => {
     downloadCsv(`match-events-${baseFilename}.csv`, buildMatchEventsCsv(metadata, eventRows))
+  }
+
+  const downloadPatterns = () => {
+    downloadCsv(`match-pattern-observations-${baseFilename}.csv`, buildMatchPatternObservationsCsv(metadata, patternRows))
   }
 
   return (
@@ -46,6 +54,13 @@ export default function MatchSummaryCsvButtons({
         className="inline-flex rounded border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700"
       >
         Download events CSV
+      </button>
+      <button
+        type="button"
+        onClick={downloadPatterns}
+        className="inline-flex rounded border border-blue-200 bg-white px-4 py-2 text-sm font-medium text-blue-700"
+      >
+        Download pattern CSV
       </button>
     </div>
   )

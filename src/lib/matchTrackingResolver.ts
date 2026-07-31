@@ -61,6 +61,7 @@ export type ResolvedTrackingTopic = {
     guidance?: string
     requiresLocation: boolean
     benchmarkable: boolean
+    observerLoadWeight: number
   }>
   patterns: ResolvedTrackingPattern[]
 }
@@ -72,6 +73,7 @@ export type ResolvedTrackingPattern = {
   recommended: boolean
   displayOrder: number
   requiresLocation: boolean
+  observerLoadWeight: number
   steps: Array<{ order: number; eventDefinitionId: string; label: string }>
   outcomes: Array<{ id: string; code: string; label: string }>
 }
@@ -229,9 +231,9 @@ export async function getRecommendedEventsForTopic(topicId: string, context: Tra
       { key: 'topic', label: topic.name },
     ],
     suggestedMaxEvents: topic.suggestedMaxEvents,
-    workloadMessage: `Recommended: ${events.filter((event) => event.recommended).length} events. Tracking more than ${topic.suggestedMaxEvents + 2} events may be difficult for one observer.`,
-    events: events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, description: event.eventDefinition.description ?? undefined, recommended: event.recommended, displayOrder: event.displayOrder, guidance: event.guidance ?? undefined, requiresLocation: event.eventDefinition.requiresLocation, benchmarkable: event.eventDefinition.benchmarkable })),
-    patterns: patterns.map((topicPattern) => ({ patternId: topicPattern.patternId, name: topicPattern.pattern.name, description: topicPattern.pattern.description ?? undefined, recommended: topicPattern.recommended, displayOrder: topicPattern.displayOrder, requiresLocation: topicPattern.pattern.requiresLocation, steps: topicPattern.pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: topicPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })),
+    workloadMessage: `Recommended: ${events.filter((event) => event.recommended).length} events and ${patterns.filter((pattern) => pattern.recommended).length} tactical patterns. Patterns usually require more observer focus than single events.`,
+    events: events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, description: event.eventDefinition.description ?? undefined, recommended: event.recommended, displayOrder: event.displayOrder, guidance: event.guidance ?? undefined, requiresLocation: event.eventDefinition.requiresLocation, benchmarkable: event.eventDefinition.benchmarkable, observerLoadWeight: event.observerLoadWeight })),
+    patterns: patterns.map((topicPattern) => ({ patternId: topicPattern.patternId, name: topicPattern.pattern.name, description: topicPattern.pattern.description ?? undefined, recommended: topicPattern.recommended, displayOrder: topicPattern.displayOrder, requiresLocation: topicPattern.pattern.requiresLocation, observerLoadWeight: topicPattern.observerLoadWeight, steps: topicPattern.pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: topicPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })),
   }
 }
 
@@ -267,7 +269,7 @@ export async function getAdvancedCompatibleEvents(context: TrackingResolverConte
     where: { isActive: true, archivedAt: null, OR: [{ scope: 'GLOBAL' }, ...(context.clubId ? [{ scope: 'CLUB' as const, clubId: context.clubId }] : [])], ...(context.phase ? { matchPhase: { in: mapTopicPhaseToEventDefinitionPhases(context.phase) } } : {}) },
     orderBy: [{ enabledByDefault: 'desc' }, { matchDayGroup: 'asc' }, { name: 'asc' }],
   })
-  return definitions.map((event) => ({ eventDefinitionId: event.id, name: event.name, description: event.description ?? undefined, requiresLocation: event.requiresLocation, benchmarkable: event.benchmarkable, recommendedByTopic: topicEventIds.has(event.id), outsideChosenTopic: Boolean(context.topicId && !topicEventIds.has(event.id)) }))
+  return definitions.map((event) => ({ itemType: 'EVENT' as const, eventDefinitionId: event.id, name: event.name, description: event.description ?? undefined, requiresLocation: event.requiresLocation, benchmarkable: event.benchmarkable, observerLoadWeight: topic?.events.find((candidate) => candidate.eventDefinitionId === event.id)?.observerLoadWeight ?? 1, recommendedByTopic: topicEventIds.has(event.id), outsideChosenTopic: Boolean(context.topicId && !topicEventIds.has(event.id)), ownerScope: event.scope, searchText: normalizeTrackingSearch(`${event.name} ${event.description ?? ''} ${topic?.name ?? ''}`) }))
 }
 
 export async function getAdvancedCompatibleTrackingItems(context: TrackingResolverContext, db: Db = prisma) {
@@ -287,7 +289,7 @@ export async function getAdvancedCompatibleTrackingItems(context: TrackingResolv
     include: { aliases: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } } },
     orderBy: [{ phase: 'asc' }, { focusArea: 'asc' }, { name: 'asc' }],
   }) : []
-  return { context, events, patterns: patterns.map((pattern) => ({ patternId: pattern.id, name: pattern.name, description: pattern.description ?? undefined, requiresLocation: pattern.requiresLocation, recommendedByTopic: topicPatternIds.has(pattern.id), outsideChosenTopic: Boolean(context.topicId && !topicPatternIds.has(pattern.id)), aliases: pattern.aliases.map((alias) => alias.alias), steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })) }
+  return { context, events, patterns: patterns.map((pattern) => ({ itemType: 'PATTERN' as const, patternId: pattern.id, name: pattern.name, description: pattern.description ?? undefined, requiresLocation: pattern.requiresLocation, observerLoadWeight: topic?.patterns.find((candidate) => candidate.patternId === pattern.id)?.observerLoadWeight ?? 2, recommendedByTopic: topicPatternIds.has(pattern.id), outsideChosenTopic: Boolean(context.topicId && !topicPatternIds.has(pattern.id)), aliases: pattern.aliases.map((alias) => alias.alias), steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })), ownerScope: 'GLOBAL', searchText: normalizeTrackingSearch(`${pattern.name} ${pattern.description ?? ''} ${pattern.aliases.map((alias) => alias.alias).join(' ')} ${topic?.name ?? ''}`) })) }
 }
 
 export async function validateTrackingSetup(context: TrackingResolverContext, db: Db = prisma): Promise<TrackingValidationResult> {
@@ -298,6 +300,10 @@ export async function validateTrackingSetup(context: TrackingResolverContext, db
   if (!context.phase) errors.push({ field: 'phase', message: 'Choose a phase of play.' })
   if (!context.focusArea) errors.push({ field: 'focusArea', message: 'Choose a focus area.' })
   if (!context.selectedEventDefinitionIds?.length && !context.selectedPatternIds?.length) errors.push({ field: 'trackingItems', message: 'Choose at least one event or pattern.' })
+  const rawEventIds = context.selectedEventDefinitionIds?.filter(Boolean) ?? []
+  const rawPatternIds = context.selectedPatternIds?.filter(Boolean) ?? []
+  if (rawEventIds.length !== new Set(rawEventIds).size) errors.push({ field: 'eventDefinitionIds', message: 'Duplicate event selections are not allowed.' })
+  if (rawPatternIds.length !== new Set(rawPatternIds).size) errors.push({ field: 'patternIds', message: 'Duplicate pattern selections are not allowed.' })
   if (context.mode === 'CUSTOM') errors.push({ field: 'mode', message: 'Custom tracking setups are not supported in this phase.' })
   if (errors.length > 0) return { ok: false, errors }
 

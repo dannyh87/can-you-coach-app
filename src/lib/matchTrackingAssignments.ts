@@ -130,8 +130,8 @@ export async function validateTaskCanBeReady(db: Db, task: TaskRecord): Promise<
     if (!player.ok) return player
   }
   const eventCount = task.events?.length ?? await db.matchTrackingTaskEvent.count({ where: { trackingTaskId: task.id } })
-  const patternDelegate = (db as Db & { matchTrackingTaskPattern?: { count: (args: { where: { trackingTaskId: string } }) => Promise<number> } }).matchTrackingTaskPattern
-  const patternCount = task.patterns?.length ?? (patternDelegate ? await patternDelegate.count({ where: { trackingTaskId: task.id } }) : 0)
+  const patternDelegate = (db as Db & { matchTrackingTaskPattern?: { count?: (args: { where: { trackingTaskId: string } }) => Promise<number> } }).matchTrackingTaskPattern
+  const patternCount = task.patterns?.length ?? (patternDelegate?.count ? await patternDelegate.count({ where: { trackingTaskId: task.id } }) : 0)
   if (eventCount + patternCount === 0) return { ok: false, reason: 'Tracking tasks require at least one selected event or pattern before they can be readied.' }
   return { ok: true, value: true }
 }
@@ -477,7 +477,7 @@ export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTa
   if (missingPatternIds.length > 0) return { ok: false, reason: 'One or more task patterns are not available for the destination match.', missingEventIds: [], missingPatternIds }
   const created = await db.$transaction(async (tx) => {
     const task = await tx.matchTrackingTask.create({ data: { matchDayId: destinationMatchDayId, createdByUserId: actorUserId, topicId: sourceTask.topicId, scopeType: sourceTask.scopeType, playerId, unitKey: sourceTask.unitKey, unitLabel: sourceTask.unitLabel, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'DRAFT' }, select: { id: true } })
-    await tx.matchTrackingTaskEvent.createMany({ data: mappedEvents.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event!.id, displayOrder: index })) })
+    if (mappedEvents.length > 0) await tx.matchTrackingTaskEvent.createMany({ data: mappedEvents.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event!.id, displayOrder: index })) })
     if (sourcePatterns.length > 0) {
       const copiedPatterns = await copyTrackingTaskPatterns({ db: tx, sourceTaskId: sourceTask.id, destinationTaskId: task.id, destinationClubId: destinationMatch.team.clubId })
       if (!copiedPatterns.ok) throw new Error(copiedPatterns.reason)

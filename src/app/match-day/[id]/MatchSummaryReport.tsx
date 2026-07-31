@@ -4,6 +4,7 @@ import MatchSummaryCsvButtons from '@/app/match-day/[id]/MatchSummaryCsvButtons'
 import type {
   MatchCsvMetadata,
   MatchEventCsvRow,
+  MatchPatternObservationCsvRow,
   MatchSummaryCsvRow,
 } from '@/lib/reportCsv'
 
@@ -51,6 +52,7 @@ type MatchSummaryReportProps = {
   csvMetadata: MatchCsvMetadata
   summaryCsvRows: MatchSummaryCsvRow[]
   eventCsvRows: MatchEventCsvRow[]
+  patternCsvRows: MatchPatternObservationCsvRow[]
 }
 
 const formatSquadNumber = (squadNumber: number | null) =>
@@ -77,6 +79,7 @@ export default function MatchSummaryReport({
   csvMetadata,
   summaryCsvRows,
   eventCsvRows,
+  patternCsvRows,
 }: MatchSummaryReportProps) {
   const totalTeamEvents = teamEventTotals.reduce((total, row) => total + row.count, 0)
   const playersUsed = minutesRows.filter((row) => row.minutesPlayed > 0).length
@@ -102,6 +105,7 @@ export default function MatchSummaryReport({
               metadata={csvMetadata}
               summaryRows={summaryCsvRows}
               eventRows={eventCsvRows}
+              patternRows={patternCsvRows}
             />
           </div>
         </div>
@@ -164,6 +168,27 @@ export default function MatchSummaryReport({
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <ReportPanel title="Tactical pattern summary">
+          {patternCsvRows.length === 0 ? (
+            <EmptyText>No official tactical-pattern observations were accepted for this match.</EmptyText>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(patternCsvRows.reduce((groups, row) => {
+                const group = groups[row.pattern] ?? { count: 0, outcomes: {} as Record<string, number> }
+                group.count += 1
+                group.outcomes[row.outcome] = (group.outcomes[row.outcome] ?? 0) + 1
+                groups[row.pattern] = group
+                return groups
+              }, {} as Record<string, { count: number; outcomes: Record<string, number> }>)).map(([pattern, group]) => (
+                <div key={pattern} className="rounded-lg bg-gray-50 p-3">
+                  <div className="flex items-center justify-between gap-3"><p className="font-bold">{pattern}</p><p className="text-lg font-bold">{group.count}</p></div>
+                  <p className="mt-1 text-sm text-gray-500">{Object.entries(group.outcomes).map(([outcome, count]) => `${outcome}: ${count}`).join(' · ')}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </ReportPanel>
+
         <ReportPanel title="Player event counts">
           {playerEventCounts.length === 0 ? (
             <EmptyText>No player events were recorded. Event recording creates per-player totals for post-match review.</EmptyText>

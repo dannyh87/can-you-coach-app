@@ -250,6 +250,7 @@ export async function createGuidedMatchTrackingTaskV2({
   focusArea,
   topicId,
   selectedEventDefinitionIds,
+  selectedPatternIds,
   playerId,
   unitKey,
   unitLabel,
@@ -265,6 +266,7 @@ export async function createGuidedMatchTrackingTaskV2({
   focusArea: TrackingFocusArea
   topicId: string
   selectedEventDefinitionIds: string[]
+  selectedPatternIds?: string[]
   playerId?: string | null
   unitKey?: string | null
   unitLabel?: string | null
@@ -294,11 +296,12 @@ export async function createGuidedMatchTrackingTaskV2({
     topicId,
     clubId: match.team.clubId,
     selectedEventDefinitionIds,
+    selectedPatternIds,
     mode: 'STANDARD_GUIDED',
   }, db)
   if (!setup.ok) return { ok: false, reason: 'Tracking setup is invalid.', fieldErrors: Object.fromEntries(setup.errors.map((error) => [error.field, [error.message]])) }
 
-  const eventRows = await ensureMatchDayEventTypesForDefinitions({ db, userId, matchDayId, eventDefinitionIds: setup.eventDefinitionIds })
+  const eventRows = setup.eventDefinitionIds.length > 0 ? await ensureMatchDayEventTypesForDefinitions({ db, userId, matchDayId, eventDefinitionIds: setup.eventDefinitionIds }) : { ok: true as const, value: [] }
   if (!eventRows.ok) return eventRows
   const taskTitle = title.trim()
   if (!taskTitle) return { ok: false, reason: 'Tracking task title is required.' }
@@ -319,9 +322,16 @@ export async function createGuidedMatchTrackingTaskV2({
       },
       select: { id: true },
     })
-    await tx.matchTrackingTaskEvent.createMany({
-      data: eventRows.value.map((row, index) => ({ trackingTaskId: created.id, matchDayEventTypeId: row.id, displayOrder: index })),
-    })
+    if (eventRows.value.length > 0) {
+      await tx.matchTrackingTaskEvent.createMany({
+        data: eventRows.value.map((row, index) => ({ trackingTaskId: created.id, matchDayEventTypeId: row.id, displayOrder: index })),
+      })
+    }
+    if (setup.patternIds.length > 0) {
+      await tx.matchTrackingTaskPattern.createMany({
+        data: setup.patternIds.map((patternId, index) => ({ trackingTaskId: created.id, patternId, displayOrder: index })),
+      })
+    }
     return created
   })
 
@@ -368,6 +378,8 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
     topicName: string | null
     status: string
     eventCount: number
+    patternCount: number
+    patternNames: string[]
     assignments: Array<{
       id: string
       assignmentMode: string
@@ -399,6 +411,7 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
           player: { select: { firstName: true, surname: true } },
           topic: { select: { name: true } },
           events: { select: { id: true } },
+          patterns: { select: { pattern: { select: { name: true } } }, orderBy: { displayOrder: 'asc' } },
           assignments: {
             include: { recipients: { select: { id: true } }, submittedMatchEvents: { select: { status: true } }, submittedPatterns: { select: { status: true } } },
             orderBy: { createdAt: 'desc' },
@@ -433,6 +446,8 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
       topicName: task.topic?.name ?? null,
       status: task.status,
       eventCount: task.events.length,
+      patternCount: task.patterns?.length ?? 0,
+      patternNames: task.patterns?.map((taskPattern) => taskPattern.pattern.name) ?? [],
       assignments,
       activeAssignment: activeAssignment ? { id: activeAssignment.id, assignmentMode: activeAssignment.assignmentMode, status: activeAssignment.status, assignedUserId: activeAssignment.assignedUserId, recipientCount: activeAssignment.recipientCount } : null,
     }
@@ -487,7 +502,7 @@ export async function cancelMatchTrackingAssignmentV2({ db = prisma, userId, ass
 }
 
 export async function applyPlayerTrackingTaskToPlayersV2({ db = prisma, userId, sourceTaskId, playerIds }: { db?: Db; userId: string; sourceTaskId: string; playerIds: string[] }): Promise<MatchDayV2Result<{ ids: string[] }>> {
-  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { orderBy: { displayOrder: 'asc' } } } })
+  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } } } })
   if (!sourceTask) return { ok: false, reason: 'Source tracking task was not found.' }
   if (sourceTask.scopeType !== 'PLAYER') return { ok: false, reason: 'Only player tasks can be applied to more players.' }
   if (!(await userCanManageMatch(db, userId, sourceTask.matchDayId))) return { ok: false, reason: 'You cannot manage this tracking task.' }
@@ -501,7 +516,8 @@ export async function applyPlayerTrackingTaskToPlayersV2({ db = prisma, userId, 
     const tasks = [] as Array<{ id: string }>
     for (const playerId of destinationPlayerIds) {
       const task = await tx.matchTrackingTask.create({ data: { matchDayId: sourceTask.matchDayId, createdByUserId: userId, topicId: sourceTask.topicId, scopeType: 'PLAYER', playerId, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'READY' }, select: { id: true } })
-      await tx.matchTrackingTaskEvent.createMany({ data: sourceTask.events.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event.matchDayEventTypeId, displayOrder: index })) })
+      if (sourceTask.events.length > 0) await tx.matchTrackingTaskEvent.createMany({ data: sourceTask.events.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event.matchDayEventTypeId, displayOrder: index })) })
+      if (sourceTask.patterns.length > 0) await tx.matchTrackingTaskPattern.createMany({ data: sourceTask.patterns.map((pattern, index) => ({ trackingTaskId: task.id, patternId: pattern.patternId, displayOrder: index })) })
       tasks.push(task)
     }
     return tasks

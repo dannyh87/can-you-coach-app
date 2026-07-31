@@ -55,6 +55,7 @@ export async function getAssignmentStatusForMatch(matchDayId: string) {
     include: {
       player: { select: { firstName: true, surname: true } },
       events: { select: { id: true } },
+      patterns: { select: { id: true } },
       assignments: {
         include: {
           assignedUser: { select: { id: true, email: true } },

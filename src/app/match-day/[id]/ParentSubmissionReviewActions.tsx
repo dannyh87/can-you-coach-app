@@ -9,10 +9,13 @@ type ReviewActionResult =
 
 type ParentSubmissionReviewActionsProps = {
   matchDayId: string
-  submittedMatchEventId: string
+  submittedMatchEventId?: string
+  submittedPatternObservationId?: string
+  observationType?: 'event' | 'pattern'
   matchStatus: 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
   acceptParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
   ignoreParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
+  reviewPatternSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
 }
 
 type ConfirmingAction = 'accept' | 'ignore' | null
@@ -20,9 +23,12 @@ type ConfirmingAction = 'accept' | 'ignore' | null
 export default function ParentSubmissionReviewActions({
   matchDayId,
   submittedMatchEventId,
+  submittedPatternObservationId,
+  observationType = 'event',
   matchStatus,
   acceptParentSubmissionAction,
   ignoreParentSubmissionAction,
+  reviewPatternSubmissionAction,
 }: ParentSubmissionReviewActionsProps) {
   const router = useRouter()
   const [confirmingAction, setConfirmingAction] = useState<ConfirmingAction>(null)
@@ -37,11 +43,18 @@ export default function ParentSubmissionReviewActions({
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    formData.set('submittedMatchEventId', submittedMatchEventId)
+    if (observationType === 'pattern') {
+      formData.set('submittedPatternObservationId', submittedPatternObservationId ?? '')
+      formData.set('decision', action === 'accept' ? 'ACCEPTED' : 'IGNORED')
+    } else {
+      formData.set('submittedMatchEventId', submittedMatchEventId ?? '')
+    }
 
-    const result = action === 'accept'
-      ? await acceptParentSubmissionAction(formData)
-      : await ignoreParentSubmissionAction(formData)
+    const result = observationType === 'pattern'
+      ? await reviewPatternSubmissionAction(formData)
+      : action === 'accept'
+        ? await acceptParentSubmissionAction(formData)
+        : await ignoreParentSubmissionAction(formData)
 
     if (result.ok) {
       setConfirmingAction(null)
@@ -56,7 +69,7 @@ export default function ParentSubmissionReviewActions({
   return (
     <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
       <p className="text-sm font-semibold text-blue-950">
-        Accepted submissions become official match events and will be included in reports.
+        {observationType === 'pattern' ? 'Accepted patterns become official tactical-pattern observations. They do not create step events.' : 'Accepted submissions become official match events and will be included in reports.'}
       </p>
 
       {error && (
@@ -73,7 +86,7 @@ export default function ParentSubmissionReviewActions({
             disabled={isBusy}
             className="w-full rounded-lg bg-green-700 px-3 py-2 text-sm font-bold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
           >
-            Accept as official event
+            {observationType === 'pattern' ? 'Accept pattern' : 'Accept as official event'}
           </button>
           <button
             type="button"
@@ -89,7 +102,7 @@ export default function ParentSubmissionReviewActions({
       {confirmingAction === 'accept' && (
         <div className="mt-3 rounded-lg border border-green-200 bg-white p-3">
           <p className="text-sm font-semibold text-slate-950">
-            Accept this parent submission as an official match event? It will be included in reports and CSV.
+            {observationType === 'pattern' ? 'Accept this tactical-pattern observation? It will create one official pattern record and no match events.' : 'Accept this parent submission as an official match event? It will be included in reports and CSV.'}
           </p>
           {isCompletedMatch && (
             <p className="mt-2 text-sm font-semibold text-amber-800">

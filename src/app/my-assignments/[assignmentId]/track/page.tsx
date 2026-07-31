@@ -7,7 +7,7 @@ import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { getCurrentUser } from '@/lib/auth'
 import { getEventDisplayName } from '@/lib/eventDefinitions'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
-import { finishAssignmentTrackingAction, recordAssignmentObservationAction, startAssignmentForCurrentUserAction, undoAssignmentObservationAction } from '@/lib/myAssignmentActions'
+import { finishAssignmentTrackingAction, recordAssignmentObservationAction, recordAssignmentPatternObservationAction, startAssignmentForCurrentUserAction, undoAssignmentObservationAction } from '@/lib/myAssignmentActions'
 import { formatAssignmentStatus, getAssignmentForUser, getAssignmentTarget, getTrackableAssignmentForUser } from '@/lib/myAssignments'
 
 export const dynamic = 'force-dynamic'
@@ -50,15 +50,43 @@ export default async function AssignmentTrackingPage({ params }: { params: Promi
     description: event.matchDayEventType.eventDefinition?.description ?? null,
     requiresLocation: event.matchDayEventType.eventDefinition?.requiresLocation ?? false,
   }))
-  const observations = (assignment?.submittedMatchEvents ?? []).map((observation) => ({
+  const patterns = task.patterns.map((taskPattern) => ({
+    id: taskPattern.patternId,
+    name: taskPattern.pattern.name,
+    description: taskPattern.pattern.description ?? null,
+    requiresLocation: taskPattern.pattern.requiresLocation,
+    steps: taskPattern.pattern.steps.map((step) => ({ order: step.stepOrder, label: step.label ?? step.eventDefinition.name })),
+    outcomes: taskPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, label: outcome.label, positive: outcome.positive })),
+    pendingCount: assignment?.submittedPatterns.filter((observation) => observation.patternId === taskPattern.patternId && observation.status === 'PENDING').length ?? visibleAssignment.submittedPatterns.filter((observation) => observation.status === 'PENDING').length,
+  }))
+  const eventObservations = (assignment?.submittedMatchEvents ?? []).map((observation) => ({
     id: observation.id,
+    type: 'event' as const,
     label: getEventDisplayName(observation),
+    detail: null,
     targetLabel: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : targetLabel,
     matchTime: `${formatHalf(observation.half)} ${formatMatchTime(observation.matchSecond)}`,
+    createdAt: observation.createdAt.toISOString(),
     status: observation.status,
     statusLabel: formatStatus(observation.status),
     note: observation.note,
   }))
+  const patternObservations = (assignment?.submittedPatterns ?? []).map((observation) => ({
+    id: observation.id,
+    type: 'pattern' as const,
+    label: observation.pattern.name,
+    detail: `Outcome: ${observation.outcome.label}`,
+    targetLabel: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : targetLabel,
+    matchTime: `${formatHalf(observation.half)} ${formatMatchTime(observation.matchSecond)}`,
+    createdAt: observation.createdAt.toISOString(),
+    status: observation.status,
+    statusLabel: formatStatus(observation.status),
+    note: observation.note,
+    hasLocation: observation.x !== null && observation.y !== null,
+  }))
+  const observations = [...eventObservations, ...patternObservations].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).slice(0, 20)
+  const eventCount = assignment?.submittedMatchEvents.length ?? visibleAssignment.submittedMatchEvents.length
+  const patternCount = assignment?.submittedPatterns.length ?? visibleAssignment.submittedPatterns.length
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:p-6">
@@ -99,9 +127,13 @@ export default async function AssignmentTrackingPage({ params }: { params: Promi
           canRecord={canRecord}
           canFinish={canFinish}
           blockedMessage={blockedMessage}
-          events={events}
+           events={events}
+          patterns={patterns}
           observations={observations}
+          eventObservationCount={eventCount}
+          patternObservationCount={patternCount}
           recordAssignmentObservationAction={recordAssignmentObservationAction}
+          recordAssignmentPatternObservationAction={recordAssignmentPatternObservationAction}
           undoAssignmentObservationAction={undoAssignmentObservationAction}
           finishAssignmentTrackingAction={finishAssignmentTrackingAction}
         />

@@ -52,7 +52,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
     matchPlayerStint: { findFirst: async () => ({ id: 'stint-1' }) },
     submittedTrackingPatternObservation: {
       create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `submitted:${data.patternId}` }),
-      findFirst: async () => ({ id: 'submitted-1', status: 'PENDING', assignment: { status: 'IN_PROGRESS' } }),
+      findFirst: async ({ where }: { where?: { createdAt?: unknown } } = {}) => where?.createdAt ? null : ({ id: 'submitted-1', status: 'PENDING', assignment: { status: 'IN_PROGRESS' } }),
       findUnique: async () => ({
         id: 'submitted-1',
         matchDayId: 'match-1',
@@ -107,7 +107,7 @@ describe('tracking pattern observations', () => {
           trackingTask: { id: 'task-1', matchDayId: 'match-1', scopeType: 'UNIT', playerId: null, unitKey: 'DEFENSIVE_UNIT', status: 'READY', matchDay: match, player: null, patterns: [{ patternId: 'pattern-1', pattern: { id: 'pattern-1', active: true, requiresLocation: false, contexts: [{ scopeType: 'UNIT', targetContext: 'DEFENSIVE_UNIT' }], outcomes: [{ id: 'outcome-1' }] } }] },
         }),
       },
-      submittedTrackingPatternObservation: { create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'submitted-1' } } },
+      submittedTrackingPatternObservation: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'submitted-1' } } },
     })
 
     const result = await createPatternObservation({ db, assignmentId: 'assignment-1', actorUserId: 'contributor-1', patternId: 'pattern-1', outcomeId: 'outcome-1', playerId: 'player-1' })

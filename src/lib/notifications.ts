@@ -39,6 +39,7 @@ async function getAssignmentSummary(db: Db, assignmentId: string) {
         include: {
           player: { select: { firstName: true, surname: true } },
           events: { include: { matchDayEventType: { include: { eventDefinition: true } } } },
+          patterns: { select: { id: true } },
           matchDay: { include: { team: { select: { name: true } } } },
         },
       },
@@ -54,7 +55,8 @@ function describeAssignment(assignment: NonNullable<Awaited<ReturnType<typeof ge
       ? task.unitLabel ?? 'the selected unit'
       : 'the whole team'
   const eventCount = task.events.length
-  const eventLabel = eventCount === 1 ? '1 event' : `${eventCount} events`
+  const patternCount = task.patterns?.length ?? 0
+  const eventLabel = `${eventCount} event${eventCount === 1 ? '' : 's'}${patternCount > 0 ? ` and ${patternCount} tactical pattern${patternCount === 1 ? '' : 's'}` : ''}`
 
   return {
     href: assignmentHref(assignment.id),

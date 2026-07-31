@@ -100,6 +100,20 @@ export async function createPatternObservation({ db = prisma, assignmentId, acto
   const validation = await validatePatternObservationContext({ db, assignmentId, actorUserId, patternId, outcomeId, playerId, x, y })
   if (!validation.ok) return validation
   const now = new Date()
+  const duplicateSince = new Date(Date.now() - 5000)
+  const duplicate = await db.submittedTrackingPatternObservation.findFirst({
+    where: {
+      assignmentId,
+      matchDayId: validation.value.matchDayId,
+      submittedByUserId: actorUserId,
+      playerId: validation.value.playerId,
+      patternId,
+      outcomeId,
+      createdAt: { gte: duplicateSince },
+    },
+    select: { id: true },
+  })
+  if (duplicate) return { ok: false, reason: 'That pattern observation was already submitted a moment ago.' }
   const observation = await db.submittedTrackingPatternObservation.create({
     data: {
       assignmentId,

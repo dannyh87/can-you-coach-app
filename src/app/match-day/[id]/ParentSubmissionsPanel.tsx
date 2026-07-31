@@ -1,3 +1,7 @@
+"use client"
+
+import { useMemo, useState } from 'react'
+
 import ParentSubmissionReviewActions from '@/app/match-day/[id]/ParentSubmissionReviewActions'
 
 type ReviewActionResult =
@@ -6,18 +10,22 @@ type ReviewActionResult =
 
 type ParentSubmissionRow = {
   id: string
+  type: 'event' | 'pattern'
   playerName: string
   squadNumber: number | null
   eventLabel: string
+  detailLabel: string | null
   submitterLabel: string
   halfLabel: string
   matchTime: string
   statusLabel: string
   status: 'PENDING' | 'ACCEPTED' | 'IGNORED'
+  createdAt: string
   createdAtLabel: string
   reviewedAtLabel: string | null
   reviewedByLabel: string | null
   note: string | null
+  hasLocation: boolean
 }
 
 type ParentSubmissionsPanelProps = {
@@ -28,6 +36,7 @@ type ParentSubmissionsPanelProps = {
   canReview: boolean
   acceptParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
   ignoreParentSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
+  reviewPatternSubmissionAction: (formData: FormData) => Promise<ReviewActionResult>
   defaultOpen?: boolean
 }
 
@@ -48,8 +57,22 @@ export default function ParentSubmissionsPanel({
   canReview,
   acceptParentSubmissionAction,
   ignoreParentSubmissionAction,
+  reviewPatternSubmissionAction,
   defaultOpen = false,
 }: ParentSubmissionsPanelProps) {
+  const [typeFilter, setTypeFilter] = useState<'all' | 'event' | 'pattern'>('all')
+  const [statusFilter, setStatusFilter] = useState<'PENDING' | 'ACCEPTED' | 'IGNORED' | 'all'>('PENDING')
+  const [textFilter, setTextFilter] = useState('')
+  const visibleSubmissions = useMemo(() => {
+    const query = textFilter.toLowerCase().trim()
+    return submissions.filter((submission) => {
+      if (typeFilter !== 'all' && submission.type !== typeFilter) return false
+      if (statusFilter !== 'all' && submission.status !== statusFilter) return false
+      if (!query) return true
+      return `${submission.playerName} ${submission.submitterLabel} ${submission.eventLabel} ${submission.detailLabel ?? ''}`.toLowerCase().includes(query)
+    })
+  }, [submissions, typeFilter, statusFilter, textFilter])
+
   return (
     <details open={defaultOpen} className="rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm sm:p-4">
       <summary className="cursor-pointer list-none">
@@ -57,10 +80,10 @@ export default function ParentSubmissionsPanel({
           <div>
             <h2 className="text-lg font-bold text-slate-950">Submitted observations</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Read-only parent and contributor observations. Not included in official report or CSV yet.
+              Review submitted event and tactical-pattern observations before they become official records.
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-700">
-              Accepted submissions become official match events and will be included in reports.
+              Accepted event submissions become official match events. Accepted patterns become official pattern observations only.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-xs font-bold">
@@ -74,20 +97,29 @@ export default function ParentSubmissionsPanel({
         </div>
       </summary>
 
-      {submissions.length === 0 ? (
+      <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-3">
+        <label className="text-sm font-bold text-slate-700">Type<select className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as typeof typeFilter)}><option value="all">All</option><option value="event">Events</option><option value="pattern">Tactical patterns</option></select></label>
+        <label className="text-sm font-bold text-slate-700">Status<select className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}><option value="PENDING">Pending</option><option value="ACCEPTED">Accepted</option><option value="IGNORED">Ignored</option><option value="all">All</option></select></label>
+        <label className="text-sm font-bold text-slate-700">Player, unit or contributor<input className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2" value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search review rows" /></label>
+      </div>
+
+      {visibleSubmissions.length === 0 ? (
         <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-          No parent submissions yet.
+          No submitted observations match these filters.
         </p>
       ) : (
         <div className="mt-4 space-y-3">
-          {submissions.map((submission) => (
+          {visibleSubmissions.map((submission) => (
             <article key={submission.id} className="rounded-xl border border-slate-200 p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="font-bold text-slate-950">{submission.eventLabel}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {submission.playerName} / {formatSquadNumber(submission.squadNumber)}
-                  </p>
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{submission.type === 'pattern' ? 'Tactical pattern' : 'Event'}</p>
+                    <p className="font-bold text-slate-950">{submission.eventLabel}</p>
+                    {submission.detailLabel && <p className="mt-1 text-sm font-semibold text-slate-700">{submission.detailLabel}</p>}
+                    <p className="mt-1 text-sm text-slate-600">
+                      {submission.playerName} / {formatSquadNumber(submission.squadNumber)}
+                      {submission.hasLocation ? ' / location saved' : ''}
+                    </p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-bold ${getStatusClasses(submission.status)}`}>
                   {submission.statusLabel}
@@ -118,10 +150,13 @@ export default function ParentSubmissionsPanel({
               {submission.status === 'PENDING' && canReview && (
                 <ParentSubmissionReviewActions
                   matchDayId={matchDayId}
-                  submittedMatchEventId={submission.id}
+                  submittedMatchEventId={submission.type === 'event' ? submission.id : undefined}
+                  submittedPatternObservationId={submission.type === 'pattern' ? submission.id : undefined}
+                  observationType={submission.type}
                   matchStatus={matchStatus}
                   acceptParentSubmissionAction={acceptParentSubmissionAction}
                   ignoreParentSubmissionAction={ignoreParentSubmissionAction}
+                  reviewPatternSubmissionAction={reviewPatternSubmissionAction}
                 />
               )}
 

@@ -97,7 +97,7 @@ export async function getPreviousTrackingTasksForCopy(userId: string, destinatio
 
   return prisma.matchTrackingTask.findMany({
     where: { matchDay: { teamId: destinationMatch.teamId }, matchDayId: { not: destinationMatchDayId }, status: { not: 'ARCHIVED' } },
-    include: { matchDay: true, events: { include: { matchDayEventType: { include: { eventDefinition: true } } } } },
+    include: { matchDay: true, events: { include: { matchDayEventType: { include: { eventDefinition: true } } } }, patterns: { include: { pattern: { select: { name: true } } }, orderBy: { displayOrder: 'asc' } } },
     orderBy: { createdAt: 'desc' },
     take: 20,
   })
