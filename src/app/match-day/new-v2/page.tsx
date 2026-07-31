@@ -33,6 +33,13 @@ import { getPreviousTrackingTasksForCopy } from '@/lib/matchTrackingQueries'
 import { inferAgePhase } from '@/lib/matchEventTaxonomy'
 import { canManageMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
+import {
+  applyTrackingTemplateToMatch,
+  createTemplateFromMatchTasks,
+  getAccessibleTrackingTemplates,
+  getTrackingTemplatePreview,
+  type ApplyTemplateMapping,
+} from '@/lib/trackingSetupTemplates'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +49,8 @@ type ActionResult<T = undefined> =
 type SetupStatePayload = Extract<Awaited<ReturnType<typeof getMatchDayV2SetupState>>, { ok: true }>['value']
 type EligibleContributorsPayload = Extract<Awaited<ReturnType<typeof getEligibleContributorsForTaskV2>>, { ok: true }>['value']
 type PublishPayload = Extract<Awaited<ReturnType<typeof publishMatchDayV2Setup>>, { ok: true }>['value']
+type TemplateSummaryPayload = Awaited<ReturnType<typeof getAccessibleTrackingTemplates>>[number]
+type TemplatePreviewPayload = NonNullable<Awaited<ReturnType<typeof getTrackingTemplatePreview>>>
 
 const getText = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -184,6 +193,51 @@ async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<
   })))
 }
 
+async function getTemplatesAction(teamId: string, query: string): Promise<ActionResult<TemplateSummaryPayload[]>> {
+  'use server'
+
+  const user = await requireV2User()
+  return ok(await getAccessibleTrackingTemplates({ userId: user.id, teamId, query }))
+}
+
+async function getTemplatePreviewAction(templateId: string): Promise<ActionResult<TemplatePreviewPayload | null>> {
+  'use server'
+
+  const user = await requireV2User()
+  return ok(await getTrackingTemplatePreview({ userId: user.id, templateId }))
+}
+
+async function applyTemplateAction(formData: FormData): Promise<ActionResult<{ applicationId: string; taskIds: string[]; warnings: string[] }>> {
+  'use server'
+
+  const user = await requireV2User()
+  const templateId = getText(formData, 'templateId')
+  const template = await getTrackingTemplatePreview({ userId: user.id, templateId })
+  if (!template) return fail('Template was not found.')
+  const mappings: ApplyTemplateMapping[] = template.tasks.map((task) => ({
+    templateTaskId: task.id,
+    playerIds: getSelectedIds(formData, `playerId:${task.id}`),
+    unitKey: getOptionalText(formData, `unitKey:${task.id}`),
+    unitLabel: getOptionalText(formData, `unitLabel:${task.id}`),
+    skip: getText(formData, `skip:${task.id}`) === 'true',
+    allowDuplicate: getText(formData, 'allowDuplicate') === 'true',
+  }))
+  const result = await applyTrackingTemplateToMatch({ userId: user.id, templateId, matchDayId: getText(formData, 'matchDayId'), idempotencyKey: getText(formData, 'idempotencyKey'), mappings })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  revalidatePath(`/match-day/${getText(formData, 'matchDayId')}`)
+  return ok(result.value)
+}
+
+async function saveSetupAsTemplateAction(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  'use server'
+
+  const user = await requireV2User()
+  const result = await createTemplateFromMatchTasks({ userId: user.id, matchDayId: getText(formData, 'matchDayId'), taskIds: getSelectedIds(formData, 'taskId'), name: getText(formData, 'name'), description: getOptionalText(formData, 'description'), visibility: getText(formData, 'visibility') as 'PERSONAL' | 'TEAM' | 'CLUB' })
+  if (!result.ok) return fail(result.reason, result.fieldErrors)
+  revalidatePath('/match-day/templates')
+  return ok(result.value)
+}
+
 async function getAdvancedItemsAction(context: TrackingResolverContext): Promise<ActionResult<Awaited<ReturnType<typeof getAdvancedCompatibleTrackingItems>>>> {
   'use server'
 
@@ -323,6 +377,10 @@ export default async function NewMatchDayV2Page() {
         getAdvancedItemsAction={getAdvancedItemsAction}
         createTaskAction={createTaskAction}
         getPreviousTasksAction={getPreviousTasksAction}
+        getTemplatesAction={getTemplatesAction}
+        getTemplatePreviewAction={getTemplatePreviewAction}
+        applyTemplateAction={applyTemplateAction}
+        saveSetupAsTemplateAction={saveSetupAsTemplateAction}
         copyTaskAction={copyTaskAction}
         getSetupStateAction={getSetupStateAction}
         getEligibleContributorsAction={getEligibleContributorsAction}

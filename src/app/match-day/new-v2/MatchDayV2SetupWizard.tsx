@@ -29,6 +29,8 @@ type TeamOption = {
 }
 
 type PreviousTask = { id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; patternNames: string[]; requiresPlayer: boolean }
+type TemplateSummary = { id: string; name: string; description: string | null; visibility: string; taskCount: number; eventCount: number; patternCount: number; scopeSummary: string; teamName: string | null; lastUsedAt: Date | null }
+type TemplatePreview = TemplateSummary & { tasks: Array<{ id: string; scopeType: 'PLAYER' | 'UNIT' | 'TEAM'; targetContext: string | null; unitKey: string | null; unitLabel: string | null; title: string; instructions: string | null; topicName: string | null; events: Array<{ eventDefinitionId: string; name: string; active: boolean }>; patterns: Array<{ patternId: string; name: string; active: boolean; aliases: string[] }> }> }
 type SetupState = {
   id: string
   status: string
@@ -62,6 +64,10 @@ type Props = {
   getAdvancedItemsAction: (context: TrackingResolverContext) => Promise<ActionResult<{ events: Array<{ eventDefinitionId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; searchText: string }>; patterns: Array<{ patternId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; aliases: string[]; steps: Array<{ order: number; label: string }>; outcomes: Array<{ id: string; label: string }>; searchText: string }> }>>
   createTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string }>>
   getPreviousTasksAction: (matchDayId: string) => Promise<ActionResult<PreviousTask[]>>
+  getTemplatesAction: (teamId: string, query: string) => Promise<ActionResult<TemplateSummary[]>>
+  getTemplatePreviewAction: (templateId: string) => Promise<ActionResult<TemplatePreview | null>>
+  applyTemplateAction: (formData: FormData) => Promise<ActionResult<{ applicationId: string; taskIds: string[]; warnings: string[] }>>
+  saveSetupAsTemplateAction: (formData: FormData) => Promise<ActionResult<{ id: string }>>
   copyTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>>
   getSetupStateAction: (matchDayId: string) => Promise<ActionResult<SetupState>>
   getEligibleContributorsAction: (trackingTaskId: string) => Promise<ActionResult<ContributorOption[]>>
@@ -101,6 +107,10 @@ export default function MatchDayV2SetupWizard({
   getAdvancedItemsAction,
   createTaskAction,
   getPreviousTasksAction,
+  getTemplatesAction,
+  getTemplatePreviewAction,
+  applyTemplateAction,
+  saveSetupAsTemplateAction,
   copyTaskAction,
   getSetupStateAction,
   getEligibleContributorsAction,
@@ -117,6 +127,13 @@ export default function MatchDayV2SetupWizard({
   const [matchDayId, setMatchDayId] = useState<string | null>(null)
   const [createdTaskIds, setCreatedTaskIds] = useState<string[]>([])
   const [previousTasks, setPreviousTasks] = useState<PreviousTask[]>([])
+  const [templates, setTemplates] = useState<TemplateSummary[]>([])
+  const [templateSearch, setTemplateSearch] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplatePreview | null>(null)
+  const [templatePlayerMappings, setTemplatePlayerMappings] = useState<Record<string, string[]>>({})
+  const [templateUnitLabels, setTemplateUnitLabels] = useState<Record<string, string>>({})
+  const [allowTemplateDuplicates, setAllowTemplateDuplicates] = useState(false)
+  const [saveTemplateDetails, setSaveTemplateDetails] = useState({ name: '', description: '', visibility: 'PERSONAL' })
   const [setupState, setSetupState] = useState<SetupState | null>(null)
   const [published, setPublished] = useState<{ warnings: string[]; coverage: SetupState['coverage'] } | null>(null)
 
@@ -191,6 +208,8 @@ export default function MatchDayV2SetupWizard({
         setMatchDayId(id)
         const previous = await getPreviousTasksAction(id)
         if (previous.ok) setPreviousTasks(previous.data)
+        const savedTemplates = await getTemplatesAction(matchDetails.teamId, '')
+        if (savedTemplates.ok) setTemplates(savedTemplates.data)
         await refreshSetupState(id)
       }
       setStage('squad')
@@ -355,6 +374,86 @@ export default function MatchDayV2SetupWizard({
     })
   }
 
+  const searchTemplates = () => {
+    if (!selectedTeam) return
+    resetMessages()
+    startTransition(async () => {
+      const result = await getTemplatesAction(selectedTeam.id, templateSearch)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setTemplates(result.data)
+    })
+  }
+
+  const loadTemplate = (templateId: string) => {
+    resetMessages()
+    startTransition(async () => {
+      const result = await getTemplatePreviewAction(templateId)
+      if (!result.ok || !result.data) {
+        setError(result.ok ? 'Template was not found.' : result.message)
+        return
+      }
+      setSelectedTemplate(result.data)
+      setTemplatePlayerMappings({})
+      setTemplateUnitLabels(Object.fromEntries(result.data.tasks.filter((task) => task.scopeType === 'UNIT').map((task) => [task.id, task.unitLabel ?? ''])))
+    })
+  }
+
+  const toggleTemplatePlayer = (taskId: string, playerId: string, checked: boolean) => {
+    setTemplatePlayerMappings((current) => ({ ...current, [taskId]: toggleId(current[taskId] ?? [], playerId, checked) }))
+  }
+
+  const applyTemplate = () => {
+    if (!matchDayId || !selectedTemplate) return
+    resetMessages()
+    const formData = new FormData()
+    formData.set('matchDayId', matchDayId)
+    formData.set('templateId', selectedTemplate.id)
+    formData.set('idempotencyKey', crypto.randomUUID())
+    formData.set('allowDuplicate', allowTemplateDuplicates ? 'true' : 'false')
+    selectedTemplate.tasks.forEach((task) => {
+      if (task.scopeType === 'PLAYER') (templatePlayerMappings[task.id] ?? []).forEach((playerId) => formData.append(`playerId:${task.id}`, playerId))
+      if (task.scopeType === 'UNIT') {
+        const label = templateUnitLabels[task.id] || task.unitLabel || titleCase(task.targetContext ?? 'CUSTOM_UNIT')
+        formData.set(`unitLabel:${task.id}`, label)
+        formData.set(`unitKey:${task.id}`, (task.targetContext ?? label).toLowerCase().replaceAll('_', '-').replaceAll(' ', '-'))
+      }
+    })
+    startTransition(async () => {
+      const result = await applyTemplateAction(formData)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setCreatedTaskIds((current) => [...current, ...result.data.taskIds])
+      await refreshSetupState()
+      setMessage(`Template applied. Created ${result.data.taskIds.length} task${result.data.taskIds.length === 1 ? '' : 's'}.${result.data.warnings.length ? ` ${result.data.warnings.join(' ')}` : ''}`)
+      setStage('assignments')
+    })
+  }
+
+  const saveSetupAsTemplate = () => {
+    if (!matchDayId || !setupState || setupState.tasks.length === 0) return
+    resetMessages()
+    const formData = new FormData()
+    formData.set('matchDayId', matchDayId)
+    formData.set('name', saveTemplateDetails.name)
+    formData.set('description', saveTemplateDetails.description)
+    formData.set('visibility', saveTemplateDetails.visibility)
+    setupState.tasks.forEach((task) => formData.append('taskId', task.id))
+    startTransition(async () => {
+      const result = await saveSetupAsTemplateAction(formData)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      setSaveTemplateDetails({ name: '', description: '', visibility: 'PERSONAL' })
+      setMessage('Tracking setup saved as a reusable template.')
+    })
+  }
+
   const publishSetup = () => {
     if (!matchDayId) return
     resetMessages()
@@ -428,12 +527,17 @@ export default function MatchDayV2SetupWizard({
       {stage === 'tracking' && (
         <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-2xl font-bold">Tracking setup</h2>
-          <p className="mt-1 text-sm text-slate-600">Use standard coaching topics or copy a previous task into this draft match.</p>
+          <p className="mt-1 text-sm text-slate-600">Use standard coaching topics, saved templates, or copy a previous task into this draft match.</p>
           <div className="mt-5 grid gap-3 md:grid-cols-2">
             <button type="button" onClick={chooseSetupMethod} className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-left hover:border-emerald-500">
               <span className="text-lg font-bold text-emerald-950">Create from coaching topic</span>
               <span className="mt-2 block text-sm text-emerald-900">Pick player, unit or team context and review recommended events.</span>
             </button>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+              <h3 className="text-lg font-bold text-blue-950">Use a saved template</h3>
+              <p className="mt-1 text-sm text-blue-900">Reusable task blueprints for standard events and tactical patterns.</p>
+              <TemplatePicker templates={templates} search={templateSearch} onSearch={setTemplateSearch} onRunSearch={searchTemplates} selectedTemplate={selectedTemplate} onSelectTemplate={loadTemplate} players={involvedPlayers} playerMappings={templatePlayerMappings} onTogglePlayer={toggleTemplatePlayer} unitLabels={templateUnitLabels} onUnitLabelChange={(taskId, label) => setTemplateUnitLabels((current) => ({ ...current, [taskId]: label }))} allowDuplicate={allowTemplateDuplicates} onAllowDuplicateChange={setAllowTemplateDuplicates} onApply={applyTemplate} disabled={isPending} />
+            </div>
             <div className="rounded-2xl border p-5">
               <h3 className="text-lg font-bold">Copy previous task</h3>
               {previousTasks.length === 0 ? <p className="mt-2 text-sm text-slate-600">No previous tasks are available for this team yet.</p> : <PreviousTaskCopy tasks={previousTasks} players={involvedPlayers} onCopy={copyPreviousTask} disabled={isPending} />}
@@ -556,6 +660,7 @@ export default function MatchDayV2SetupWizard({
           </div>
           {setupState && <div className="mt-4"><CoverageSummary coverage={setupState.coverage} /></div>}
           {setupState && <div className="mt-5 grid gap-3">{setupState.tasks.map((task) => <article key={task.id} className="rounded-xl border p-4"><p className="font-bold">{task.title}</p><p className="mt-1 text-sm text-slate-600">{task.scopeType} · {task.targetLabel} · {task.eventCount} events · {task.patternCount} patterns · {task.status}</p>{task.patternNames.length > 0 && <p className="mt-1 text-xs font-semibold text-slate-500">Patterns: {task.patternNames.join(', ')}</p>}<p className="mt-1 text-sm font-semibold text-slate-700">{task.activeAssignment ? `${task.activeAssignment.assignmentMode.replace('_', ' ')} · ${task.activeAssignment.status}${task.activeAssignment.recipientCount ? ` · ${task.activeAssignment.recipientCount} recipients` : ''}` : 'No assignment yet'}</p>{!task.activeAssignment && <p className="mt-1 text-sm text-amber-800">Warning: unassigned task.</p>}</article>)}</div>}
+          {setupState && setupState.tasks.length > 0 && <SaveTemplatePanel details={saveTemplateDetails} onChange={setSaveTemplateDetails} onSave={saveSetupAsTemplate} disabled={isPending} />}
           <div className="mt-5 flex flex-wrap gap-3">
             <Button variant="secondary" onClick={() => setStage('tracking')}>Add another task</Button>
             <Button variant="secondary" onClick={() => setStage('assignments')}>Manage assignments</Button>
@@ -765,6 +870,54 @@ function ContributorPicker({ contributors, search, onSearch, method, selectedUse
       {contributors.length === 0 ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">No eligible contributors are currently connected to this player.</p> : <div className="mt-3 grid gap-2">{contributors.map((contributor) => <label key={contributor.userId} className="flex gap-3 rounded-xl border bg-white p-3"><input type={method === 'DIRECT' ? 'radio' : 'checkbox'} name="contributor" checked={method === 'DIRECT' ? selectedUserId === contributor.userId : selectedRecipients.includes(contributor.userId)} onChange={() => method === 'DIRECT' ? onSelectUser(contributor.userId) : onToggleRecipient(contributor.userId)} /><span><span className="font-bold">{contributor.label}</span><span className="block text-sm text-slate-600">{contributor.detail}{contributor.alreadyAssignedOnMatch ? ' · already has a match assignment' : ''}</span></span></label>)}</div>}
       {method === 'GROUP_OFFER' && <p className="mt-2 text-sm font-semibold text-slate-700">{selectedRecipients.length} selected. The first person to accept will take the assignment.</p>}
     </div>
+  )
+}
+
+function TemplatePicker({ templates, search, onSearch, onRunSearch, selectedTemplate, onSelectTemplate, players, playerMappings, onTogglePlayer, unitLabels, onUnitLabelChange, allowDuplicate, onAllowDuplicateChange, onApply, disabled }: { templates: TemplateSummary[]; search: string; onSearch: (value: string) => void; onRunSearch: () => void; selectedTemplate: TemplatePreview | null; onSelectTemplate: (templateId: string) => void; players: TeamOption['players']; playerMappings: Record<string, string[]>; onTogglePlayer: (taskId: string, playerId: string, checked: boolean) => void; unitLabels: Record<string, string>; onUnitLabelChange: (taskId: string, label: string) => void; allowDuplicate: boolean; onAllowDuplicateChange: (value: boolean) => void; onApply: () => void; disabled: boolean }) {
+  const selectedTemplateId = selectedTemplate?.id ?? templates[0]?.id ?? ''
+  const playerTasksReady = selectedTemplate?.tasks.filter((task) => task.scopeType === 'PLAYER').every((task) => (playerMappings[task.id] ?? []).length > 0) ?? false
+  const canApply = Boolean(selectedTemplate && (selectedTemplate.tasks.every((task) => task.scopeType !== 'PLAYER') || playerTasksReady))
+
+  return (
+    <div className="mt-3 grid gap-3">
+      <div className="flex gap-2"><input className={fieldClassName} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search templates" /><Button variant="secondary" onClick={onRunSearch} disabled={disabled}>Search</Button></div>
+      {templates.length === 0 ? <p className="rounded-xl bg-white p-3 text-sm text-blue-900">No saved templates are available for this team yet.</p> : <select className={fieldClassName} value={selectedTemplateId} onChange={(event) => onSelectTemplate(event.target.value)}><option value="">Choose template</option>{templates.map((template) => <option key={template.id} value={template.id}>{template.name} ({template.taskCount} tasks)</option>)}</select>}
+      {selectedTemplate && (
+        <div className="rounded-xl bg-white p-4">
+          <p className="font-bold text-slate-950">{selectedTemplate.name}</p>
+          <p className="mt-1 text-sm text-slate-600">{selectedTemplate.visibility} · {selectedTemplate.taskCount} tasks · {selectedTemplate.eventCount} events · {selectedTemplate.patternCount} patterns</p>
+          {selectedTemplate.description && <p className="mt-1 text-sm text-slate-600">{selectedTemplate.description}</p>}
+          <div className="mt-3 grid gap-3">
+            {selectedTemplate.tasks.map((task) => (
+              <article key={task.id} className="rounded-lg border p-3">
+                <p className="font-bold">{task.title}</p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">{task.scopeType} · {task.topicName ?? 'No topic'} · {task.events.length} events · {task.patterns.length} patterns</p>
+                <p className="mt-1 text-xs text-slate-500">{[...task.events.map((event) => event.name), ...task.patterns.map((pattern) => pattern.name)].join(', ')}</p>
+                {task.scopeType === 'PLAYER' && <div className="mt-3 grid gap-2 sm:grid-cols-2">{players.map((player) => <label key={player.id} className="flex gap-2 rounded-lg border bg-slate-50 p-2 text-sm"><input type="checkbox" checked={(playerMappings[task.id] ?? []).includes(player.id)} onChange={(event) => onTogglePlayer(task.id, player.id, event.target.checked)} />{player.name}</label>)}</div>}
+                {task.scopeType === 'UNIT' && <label className="mt-3 block text-sm font-bold text-slate-700">Unit label<input className={`${fieldClassName} mt-1`} value={unitLabels[task.id] ?? task.unitLabel ?? ''} onChange={(event) => onUnitLabelChange(task.id, event.target.value)} /></label>}
+              </article>
+            ))}
+          </div>
+          <label className="mt-3 flex gap-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={allowDuplicate} onChange={(event) => onAllowDuplicateChange(event.target.checked)} />Allow duplicate resulting tasks</label>
+          <Button className="mt-3" onClick={onApply} disabled={disabled || !canApply}>Apply template</Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SaveTemplatePanel({ details, onChange, onSave, disabled }: { details: { name: string; description: string; visibility: string }; onChange: (details: { name: string; description: string; visibility: string }) => void; onSave: () => void; disabled: boolean }) {
+  return (
+    <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <h3 className="text-lg font-bold text-blue-950">Save this setup as a template</h3>
+      <p className="mt-1 text-sm text-blue-900">Saves the current tracking tasks only. Player IDs, assignments and observations are not stored.</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <input className={fieldClassName} value={details.name} onChange={(event) => onChange({ ...details, name: event.target.value })} placeholder="Template name" />
+        <select className={fieldClassName} value={details.visibility} onChange={(event) => onChange({ ...details, visibility: event.target.value })}><option value="PERSONAL">Personal</option><option value="TEAM">Team</option><option value="CLUB">Club owner only</option></select>
+        <Button variant="secondary" onClick={onSave} disabled={disabled || !details.name.trim()}>Save template</Button>
+      </div>
+      <textarea className={`${fieldClassName} mt-3`} value={details.description} onChange={(event) => onChange({ ...details, description: event.target.value })} placeholder="Optional description" rows={2} />
+    </section>
   )
 }
 
