@@ -340,10 +340,10 @@ export async function copyPreviousMatchTrackingTaskV2({
   sourceTaskId: string
   destinationMatchDayId: string
   destinationPlayerId?: string | null
-}): Promise<MatchDayV2Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[] }>> {
+}): Promise<MatchDayV2Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
   const sourceTask = await db.matchTrackingTask.findUnique({
     where: { id: sourceTaskId },
-    include: { events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } } },
+    include: { events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } }, patterns: true },
   })
   if (!sourceTask) return { ok: false, reason: 'Source tracking task was not found.' }
   const eventDefinitionIds = sourceTask.events.flatMap((event) => event.matchDayEventType.eventDefinitionId ? [event.matchDayEventType.eventDefinitionId] : [])
@@ -352,7 +352,7 @@ export async function copyPreviousMatchTrackingTaskV2({
     if (!ensured.ok) return ensured
   }
   const copied = await copyMatchTrackingTask({ db, actorUserId: userId, sourceTaskId, destinationMatchDayId, destinationPlayerId })
-  if (!copied.ok) return { ok: false, reason: copied.reason, fieldErrors: copied.missingEventIds ? { missingEventIds: copied.missingEventIds } : undefined }
+  if (!copied.ok) return { ok: false, reason: copied.reason, fieldErrors: { ...(copied.missingEventIds ? { missingEventIds: copied.missingEventIds } : {}), ...(copied.missingPatternIds ? { missingPatternIds: copied.missingPatternIds } : {}) } }
   return { ok: true, value: copied.value }
 }
 
@@ -400,7 +400,7 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
           topic: { select: { name: true } },
           events: { select: { id: true } },
           assignments: {
-            include: { recipients: { select: { id: true } }, submittedMatchEvents: { select: { status: true } } },
+            include: { recipients: { select: { id: true } }, submittedMatchEvents: { select: { status: true } }, submittedPatterns: { select: { status: true } } },
             orderBy: { createdAt: 'desc' },
           },
         },
@@ -416,8 +416,8 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
       status: assignment.status,
       assignedUserId: assignment.assignedUserId,
       recipientCount: assignment.recipients.length,
-      submittedObservationCount: assignment.submittedMatchEvents.length,
-      pendingObservationCount: assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length,
+      submittedObservationCount: assignment.submittedMatchEvents.length + assignment.submittedPatterns.length,
+      pendingObservationCount: assignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length + assignment.submittedPatterns.filter((event) => event.status === 'PENDING').length,
       createdAt: assignment.createdAt,
       acceptedAt: assignment.acceptedAt,
       startedAt: assignment.startedAt,
@@ -478,10 +478,10 @@ export async function assignMatchTrackingTaskV2({ db = prisma, userId, trackingT
 }
 
 export async function cancelMatchTrackingAssignmentV2({ db = prisma, userId, assignmentId }: { db?: Db; userId: string; assignmentId: string }): Promise<MatchDayV2Result> {
-  const assignment = await db.matchContributorAssignment.findUnique({ where: { id: assignmentId }, include: { submittedMatchEvents: { select: { id: true } }, trackingTask: { select: { matchDayId: true } } } })
+  const assignment = await db.matchContributorAssignment.findUnique({ where: { id: assignmentId }, include: { submittedMatchEvents: { select: { id: true } }, submittedPatterns: { select: { id: true } }, trackingTask: { select: { matchDayId: true } } } })
   if (!assignment) return { ok: false, reason: 'Assignment was not found.' }
   if (!(await userCanManageMatch(db, userId, assignment.trackingTask.matchDayId))) return { ok: false, reason: 'You cannot manage this assignment.' }
-  if (assignment.status === 'IN_PROGRESS' || assignment.status === 'SUBMITTED' || assignment.submittedMatchEvents.length > 0) return { ok: false, reason: 'Tracking has already started. Cancel or reassign from the Match Day management screen only after resolving the existing observations.' }
+  if (assignment.status === 'IN_PROGRESS' || assignment.status === 'SUBMITTED' || assignment.submittedMatchEvents.length + assignment.submittedPatterns.length > 0) return { ok: false, reason: 'Tracking has already started. Cancel or reassign from the Match Day management screen only after resolving the existing observations.' }
   const result = await cancelContributorAssignment({ db, actorUserId: userId, assignmentId })
   return result.ok ? { ok: true, value: true } : { ok: false, reason: result.reason }
 }

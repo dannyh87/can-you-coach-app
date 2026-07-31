@@ -36,6 +36,23 @@ export type MatchEventCsvRow = {
   scoreAtTime: string
 }
 
+export type MatchPatternObservationCsvRow = {
+  observationType: string
+  pattern: string
+  outcome: string
+  scope: string
+  target: string
+  playerName: string
+  unit: string
+  phase: string
+  focusArea: string
+  matchMinute: string
+  scoreAtTime: string
+  locationX: number | null
+  locationY: number | null
+  reviewStatus: string
+}
+
 export type FitnessCsvResult = {
   playerName: string
   squadNumber: number | null
@@ -93,6 +110,30 @@ const matchEventHeaders = [
   'Player',
   'Event',
   'Score At Time',
+]
+
+const matchPatternObservationHeaders = [
+  'Match',
+  'Date',
+  'Team',
+  'Opposition',
+  'Venue',
+  'Match Type',
+  'Final Score',
+  'Observation Type',
+  'Pattern',
+  'Outcome',
+  'Scope',
+  'Target',
+  'Player',
+  'Unit',
+  'Phase',
+  'Focus Area',
+  'Match Minute',
+  'Score',
+  'Location X',
+  'Location Y',
+  'Review Status',
 ]
 
 const fitnessHeaders = [
@@ -172,6 +213,37 @@ export const buildMatchEventsCsv = (
   ])
 
   return buildCsv(matchEventHeaders, rows)
+}
+
+export const buildMatchPatternObservationsCsv = (
+  metadata: MatchCsvMetadata,
+  patternRows: MatchPatternObservationCsvRow[]
+) => {
+  const rows = patternRows.map((row) => [
+    metadata.match,
+    metadata.dateLabel,
+    metadata.teamName,
+    metadata.opposition,
+    metadata.venue,
+    metadata.matchType,
+    metadata.finalScore,
+    row.observationType,
+    row.pattern,
+    row.outcome,
+    row.scope,
+    row.target,
+    row.playerName,
+    row.unit,
+    row.phase,
+    row.focusArea,
+    row.matchMinute,
+    row.scoreAtTime,
+    row.locationX ?? '',
+    row.locationY ?? '',
+    row.reviewStatus,
+  ])
+
+  return buildCsv(matchPatternObservationHeaders, rows)
 }
 
 export const buildFitnessResultsCsv = (

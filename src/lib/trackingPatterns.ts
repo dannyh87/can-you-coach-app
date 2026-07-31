@@ -1,0 +1,231 @@
+import type { MatchTrackingScope, Prisma, TrackingTargetContext } from '@prisma/client'
+
+import { canManageMatchDay, canRunMatchDay } from '@/lib/permissions'
+import { getActiveHalf, getSecondsBetween } from '@/lib/parentMatchAccess'
+import { prisma } from '@/lib/prisma'
+import { normalizeTrackingSearch } from '@/lib/matchTrackingResolver'
+
+type Db = typeof prisma | Prisma.TransactionClient
+type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; fieldErrors?: Record<string, string[]> }
+type CoordinateInput = { x?: number | null; y?: number | null }
+
+const validCoordinate = (value: number | null | undefined) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
+const normalizeOptionalText = (value: string | null | undefined) => value?.trim() ? value.trim() : null
+const canRunTransaction = (db: Db): db is typeof prisma => '$transaction' in db
+
+function getTaskTargetContext(task: { scopeType: MatchTrackingScope; player?: { preferredPosition: string | null } | null; unitKey: string | null }) {
+  if (task.scopeType === 'TEAM') return 'WHOLE_TEAM' as const
+  if (task.scopeType === 'UNIT') return (task.unitKey || 'CUSTOM_UNIT') as TrackingTargetContext
+  return null
+}
+
+function patternWhereForAccess(clubId?: string | null): Prisma.TrackingPatternDefinitionWhereInput {
+  return { OR: [{ ownerScope: 'GLOBAL' }, ...(clubId ? [{ ownerScope: 'CLUB' as const, clubId }] : [])] }
+}
+
+export async function getAvailableTrackingPatterns({ db = prisma, clubId, scopeType, targetContext, phase, focusArea, includeInactive = false }: { db?: Db; clubId?: string | null; scopeType?: MatchTrackingScope; targetContext?: TrackingTargetContext | null; phase?: string; focusArea?: string; includeInactive?: boolean }) {
+  const patterns = await db.trackingPatternDefinition.findMany({
+    where: {
+      ...patternWhereForAccess(clubId),
+      ...(includeInactive ? {} : { active: true }),
+      ...(phase ? { phase: phase as never } : {}),
+      ...(focusArea ? { focusArea: focusArea as never } : {}),
+      ...(scopeType ? { contexts: { some: { scopeType, OR: [{ targetContext: targetContext ?? null }, { targetContext: null }] } } } : {}),
+    },
+    include: { contexts: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } }, aliases: true },
+    orderBy: [{ phase: 'asc' }, { focusArea: 'asc' }, { name: 'asc' }],
+  })
+  return patterns.map(formatPattern)
+}
+
+export async function getTrackingPattern(patternId: string, db: Db = prisma) {
+  const pattern = await db.trackingPatternDefinition.findUnique({ where: { id: patternId }, include: { contexts: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } }, aliases: true } })
+  return pattern ? formatPattern(pattern) : null
+}
+
+export async function searchTrackingPatterns(query: string, { db = prisma, clubId, scopeType, targetContext }: { db?: Db; clubId?: string | null; scopeType?: MatchTrackingScope; targetContext?: TrackingTargetContext | null } = {}) {
+  const normalized = normalizeTrackingSearch(query)
+  if (!normalized) return []
+  const patterns = await db.trackingPatternDefinition.findMany({
+    where: { AND: [patternWhereForAccess(clubId), { active: true }, { OR: [{ normalizedName: { contains: normalized, mode: 'insensitive' } }, { aliases: { some: { normalizedAlias: { contains: normalized, mode: 'insensitive' } } } }] }, ...(scopeType ? [{ contexts: { some: { scopeType, OR: [{ targetContext: targetContext ?? null }, { targetContext: null }] } } }] : [])] },
+    include: { contexts: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } }, aliases: true },
+    take: 20,
+  })
+  return patterns.map((pattern) => ({ ...formatPattern(pattern), matchedAliases: pattern.aliases.filter((alias) => alias.normalizedAlias.includes(normalized)).map((alias) => alias.alias) }))
+}
+
+export async function getPatternOutcomes(patternId: string, db: Db = prisma) {
+  return db.trackingPatternOutcome.findMany({ where: { patternId }, select: { id: true, code: true, label: true, description: true, displayOrder: true, positive: true }, orderBy: { displayOrder: 'asc' } })
+}
+
+export async function getPatternSteps(patternId: string, db: Db = prisma) {
+  return db.trackingPatternStep.findMany({ where: { patternId }, select: { id: true, stepOrder: true, label: true, description: true, required: true, eventDefinitionId: true, eventDefinition: { select: { name: true } } }, orderBy: { stepOrder: 'asc' } })
+}
+
+export async function validatePatternContext({ db = prisma, patternId, scopeType, targetContext, clubId }: { db?: Db; patternId: string; scopeType: MatchTrackingScope; targetContext?: TrackingTargetContext | null; clubId?: string | null }): Promise<Result> {
+  const pattern = await db.trackingPatternDefinition.findFirst({ where: { id: patternId, active: true, ...patternWhereForAccess(clubId) }, include: { contexts: true } })
+  if (!pattern) return { ok: false, reason: 'Pattern is not active or accessible.' }
+  const compatible = pattern.contexts.some((context) => context.scopeType === scopeType && (context.targetContext === null || context.targetContext === (targetContext ?? null)))
+  return compatible ? { ok: true, value: true } : { ok: false, reason: 'Pattern is not compatible with this tracking context.' }
+}
+
+export async function validatePatternSelection({ db = prisma, trackingTaskId, patternIds }: { db?: Db; trackingTaskId: string; patternIds: string[] }): Promise<Result> {
+  const selectedIds = patternIds.filter(Boolean)
+  if (selectedIds.length !== new Set(selectedIds).size) return { ok: false, reason: 'Duplicate pattern selections are not allowed.' }
+  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, select: { id: true, scopeType: true, unitKey: true, matchDay: { select: { team: { select: { clubId: true } } } } } })
+  if (!task) return { ok: false, reason: 'Tracking task was not found.' }
+  for (const patternId of selectedIds) {
+    const result = await validatePatternContext({ db, patternId, scopeType: task.scopeType, targetContext: getTaskTargetContext(task), clubId: task.matchDay.team.clubId })
+    if (!result.ok) return result
+  }
+  return { ok: true, value: true }
+}
+
+export async function setMatchTrackingTaskPatterns({ db = prisma, actorUserId, trackingTaskId, patternIds }: { db?: Db; actorUserId: string; trackingTaskId: string; patternIds: string[] }): Promise<Result> {
+  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, select: { id: true, matchDayId: true, status: true } })
+  if (!task) return { ok: false, reason: 'Tracking task was not found.' }
+  if (!(await canManageMatchDay(actorUserId, task.matchDayId))) return { ok: false, reason: 'You cannot manage tracking tasks for this match.' }
+  if (task.status === 'ARCHIVED') return { ok: false, reason: 'Archived tasks cannot be changed.' }
+  const selectedIds = Array.from(new Set(patternIds.filter(Boolean)))
+  if (selectedIds.length !== patternIds.filter(Boolean).length) return { ok: false, reason: 'Duplicate pattern selections are not allowed.' }
+  const valid = await validatePatternSelection({ db, trackingTaskId, patternIds: selectedIds })
+  if (!valid.ok) return valid
+  const operations = [db.matchTrackingTaskPattern.deleteMany({ where: { trackingTaskId } }), ...selectedIds.map((patternId, index) => db.matchTrackingTaskPattern.create({ data: { trackingTaskId, patternId, displayOrder: index } }))]
+  if (canRunTransaction(db)) await db.$transaction(operations)
+  else for (const operation of operations) await operation
+  return { ok: true, value: true }
+}
+
+export async function createPatternObservation({ db = prisma, assignmentId, actorUserId, patternId, outcomeId, playerId, note, x, y }: { db?: Db; assignmentId: string; actorUserId: string; patternId: string; outcomeId: string; playerId?: string | null; note?: string | null } & CoordinateInput): Promise<Result<{ id: string }>> {
+  const validation = await validatePatternObservationContext({ db, assignmentId, actorUserId, patternId, outcomeId, playerId, x, y })
+  if (!validation.ok) return validation
+  const now = new Date()
+  const observation = await db.submittedTrackingPatternObservation.create({
+    data: {
+      assignmentId,
+      matchDayId: validation.value.matchDayId,
+      trackingTaskId: validation.value.trackingTaskId,
+      submittedByUserId: actorUserId,
+      playerId: validation.value.playerId,
+      patternId,
+      outcomeId,
+      half: validation.value.activeHalf.half,
+      matchSecond: getSecondsBetween(validation.value.activeHalf.startedAt, now),
+      ownScoreAtTime: validation.value.match.ownScore,
+      oppositionScoreAtTime: validation.value.match.oppositionScore,
+      x: validation.value.x,
+      y: validation.value.y,
+      note: normalizeOptionalText(note)?.slice(0, 280) ?? null,
+      status: 'PENDING',
+    },
+    select: { id: true },
+  })
+  return { ok: true, value: observation }
+}
+
+export async function undoPendingPatternObservation({ db = prisma, actorUserId, assignmentId, observationId }: { db?: Db; actorUserId: string; assignmentId: string; observationId: string }): Promise<Result> {
+  const observation = await db.submittedTrackingPatternObservation.findFirst({ where: { id: observationId, assignmentId, submittedByUserId: actorUserId }, select: { id: true, status: true, assignment: { select: { status: true } } } })
+  if (!observation) return { ok: false, reason: 'Pending pattern observation was not found.' }
+  if (observation.status !== 'PENDING') return { ok: false, reason: 'Reviewed pattern observations cannot be undone.' }
+  if (observation.assignment.status === 'SUBMITTED') return { ok: false, reason: 'Submitted assignments cannot be changed.' }
+  await db.submittedTrackingPatternObservation.delete({ where: { id: observation.id } })
+  return { ok: true, value: true }
+}
+
+export async function reviewPatternObservation({ db = prisma, actorUserId, observationId, decision }: { db?: Db; actorUserId: string; observationId: string; decision: 'ACCEPTED' | 'IGNORED' }): Promise<Result<{ officialObservationId: string | null }>> {
+  const observation = await db.submittedTrackingPatternObservation.findUnique({ where: { id: observationId }, include: { matchDay: { select: { id: true, status: true } } } })
+  if (!observation) return { ok: false, reason: 'Pattern observation was not found.' }
+  if (observation.submittedByUserId === actorUserId) return { ok: false, reason: 'Contributors cannot review their own observations.' }
+  if (!(await canRunMatchDay(actorUserId, observation.matchDayId))) return { ok: false, reason: 'You cannot review observations for this match.' }
+  if (observation.status !== 'PENDING') return { ok: false, reason: 'This pattern observation has already been reviewed.' }
+  if (observation.matchDay.status === 'DRAFT') return { ok: false, reason: 'Draft matches cannot review pattern observations.' }
+  const reviewedAt = new Date()
+  const applyReview = async (tx: Db) => {
+    const updated = await tx.submittedTrackingPatternObservation.updateMany({ where: { id: observation.id, status: 'PENDING' }, data: { status: decision, reviewedAt, reviewedByUserId: actorUserId } })
+    if (updated.count !== 1) return { ok: false as const, reason: 'This pattern observation has already been reviewed.' }
+    if (decision === 'IGNORED') return { ok: true as const, value: { officialObservationId: null } }
+    const official = await tx.matchTrackingPatternObservation.create({
+      data: {
+        submittedObservationId: observation.id,
+        matchDayId: observation.matchDayId,
+        trackingTaskId: observation.trackingTaskId,
+        assignmentId: observation.assignmentId,
+        submittedByUserId: observation.submittedByUserId,
+        playerId: observation.playerId,
+        patternId: observation.patternId,
+        outcomeId: observation.outcomeId,
+        half: observation.half,
+        matchSecond: observation.matchSecond,
+        ownScoreAtTime: observation.ownScoreAtTime,
+        oppositionScoreAtTime: observation.oppositionScoreAtTime,
+        x: observation.x,
+        y: observation.y,
+        note: observation.note,
+      },
+      select: { id: true },
+    })
+    return { ok: true as const, value: { officialObservationId: official.id } }
+  }
+  return canRunTransaction(db) ? db.$transaction((tx) => applyReview(tx)) : applyReview(db)
+}
+
+async function validatePatternObservationContext({ db, assignmentId, actorUserId, patternId, outcomeId, playerId, x, y }: { db: Db; assignmentId: string; actorUserId: string; patternId: string; outcomeId: string; playerId?: string | null } & CoordinateInput): Promise<Result<{ matchDayId: string; trackingTaskId: string; playerId: string | null; activeHalf: NonNullable<ReturnType<typeof getActiveHalf>>; match: { ownScore: number; oppositionScore: number }; x: number | null; y: number | null }>> {
+  const assignment = await db.matchContributorAssignment.findUnique({ where: { id: assignmentId }, include: { trackingTask: { include: { matchDay: true, player: { select: { id: true, preferredPosition: true } }, patterns: { include: { pattern: { include: { contexts: true, outcomes: true } } } } } } } })
+  if (!assignment) return { ok: false, reason: 'Assignment was not found.' }
+  if (assignment.assignedUserId !== actorUserId) return { ok: false, reason: 'This assignment belongs to another user.' }
+  if (assignment.status !== 'IN_PROGRESS') return { ok: false, reason: 'Assignment must be started before observations can be recorded.' }
+  if (assignment.trackingTask.status !== 'READY') return { ok: false, reason: 'Tracking task is not ready.' }
+  const taskPattern = assignment.trackingTask.patterns.find((candidate) => candidate.patternId === patternId)
+  if (!taskPattern) return { ok: false, reason: 'This pattern is not part of the assignment task.' }
+  if (!taskPattern.pattern.active) return { ok: false, reason: 'Pattern is not active.' }
+  if (!taskPattern.pattern.outcomes.some((outcome) => outcome.id === outcomeId)) return { ok: false, reason: 'Outcome does not belong to this pattern.' }
+  const compatible = taskPattern.pattern.contexts.some((context) => context.scopeType === assignment.trackingTask.scopeType && (context.targetContext === null || context.targetContext === getTaskTargetContext(assignment.trackingTask)))
+  if (!compatible) return { ok: false, reason: 'Pattern is not compatible with this task scope.' }
+  const activeHalf = getActiveHalf(assignment.trackingTask.matchDay)
+  if (!activeHalf) return { ok: false, reason: 'Match is not currently recordable.' }
+  const submittedPlayerId = assignment.trackingTask.scopeType === 'PLAYER' ? playerId?.trim() || null : null
+  if (assignment.trackingTask.scopeType === 'PLAYER') {
+    if (!submittedPlayerId || submittedPlayerId !== assignment.trackingTask.playerId) return { ok: false, reason: 'Pattern observation player does not match the assignment player.' }
+    const openStint = await db.matchPlayerStint.findFirst({ where: { matchDayId: assignment.trackingTask.matchDayId, playerId: submittedPlayerId, endedAt: null }, select: { id: true } })
+    if (!openStint) return { ok: false, reason: 'Player is not currently on the pitch.' }
+  }
+  if (taskPattern.pattern.requiresLocation && (!validCoordinate(x) || !validCoordinate(y))) return { ok: false, reason: 'This pattern requires pitch coordinates.' }
+  return { ok: true, value: { matchDayId: assignment.trackingTask.matchDayId, trackingTaskId: assignment.trackingTaskId, playerId: submittedPlayerId, activeHalf, match: assignment.trackingTask.matchDay, x: validCoordinate(x) ? x ?? null : null, y: validCoordinate(y) ? y ?? null : null } }
+}
+
+export function getPatternObservationLabel(observation: { pattern: { name: string }; outcome: { label: string } }) {
+  return `${observation.pattern.name} · ${observation.outcome.label}`
+}
+
+export function getPatternObservationTarget(observation: { player?: { firstName: string; surname: string } | null; trackingTask: { scopeType: string; unitLabel: string | null } }) {
+  if (observation.trackingTask.scopeType === 'PLAYER') return observation.player ? `${observation.player.firstName} ${observation.player.surname}` : 'Selected player'
+  if (observation.trackingTask.scopeType === 'UNIT') return observation.trackingTask.unitLabel ?? 'Selected unit'
+  return 'Whole team'
+}
+
+export async function copyTrackingTaskPatterns({ db, sourceTaskId, destinationTaskId, destinationClubId }: { db: Db; sourceTaskId: string; destinationTaskId: string; destinationClubId?: string | null }): Promise<Result<{ missingPatternIds: string[] }>> {
+  const sourcePatterns = await db.matchTrackingTaskPattern.findMany({ where: { trackingTaskId: sourceTaskId }, include: { pattern: true }, orderBy: { displayOrder: 'asc' } })
+  const accessiblePatterns = await db.trackingPatternDefinition.findMany({ where: { id: { in: sourcePatterns.map((item) => item.patternId) }, active: true, ...patternWhereForAccess(destinationClubId) }, select: { id: true } })
+  const accessibleIds = new Set(accessiblePatterns.map((pattern) => pattern.id))
+  const missingPatternIds = sourcePatterns.filter((item) => !accessibleIds.has(item.patternId)).map((item) => item.patternId)
+  if (missingPatternIds.length > 0) return { ok: false, reason: 'One or more task patterns are not available for the destination match.', fieldErrors: { patternIds: missingPatternIds } }
+  if (sourcePatterns.length > 0) await db.matchTrackingTaskPattern.createMany({ data: sourcePatterns.map((item, index) => ({ trackingTaskId: destinationTaskId, patternId: item.patternId, displayOrder: index })), skipDuplicates: true })
+  return { ok: true, value: { missingPatternIds: [] } }
+}
+
+export async function getPatternReportBreakdown({ db = prisma, matchDayId }: { db?: Db; matchDayId?: string } = {}) {
+  const observations = await db.matchTrackingPatternObservation.findMany({ where: matchDayId ? { matchDayId } : {}, include: { pattern: true, outcome: true, player: true, trackingTask: { include: { topic: true } }, matchDay: true } })
+  const byPattern = new Map<string, { patternId: string; pattern: string; count: number; positiveCount: number; outcomeCounts: Record<string, number> }>()
+  for (const observation of observations) {
+    const row = byPattern.get(observation.patternId) ?? { patternId: observation.patternId, pattern: observation.pattern.name, count: 0, positiveCount: 0, outcomeCounts: {} }
+    row.count += 1
+    if (observation.outcome.positive === true) row.positiveCount += 1
+    row.outcomeCounts[observation.outcome.label] = (row.outcomeCounts[observation.outcome.label] ?? 0) + 1
+    byPattern.set(observation.patternId, row)
+  }
+  return Array.from(byPattern.values()).map((row) => ({ ...row, positiveRate: row.count > 0 && row.positiveCount > 0 ? row.positiveCount / row.count : null }))
+}
+
+function formatPattern(pattern: { id: string; name: string; slug: string; description: string | null; phase: unknown; focusArea: unknown; requiresLocation: boolean; contexts: Array<{ scopeType: MatchTrackingScope; targetContext: TrackingTargetContext | null; recommended: boolean; displayOrder: number }>; steps: Array<{ eventDefinitionId: string; stepOrder: number; label: string | null; eventDefinition: { name: string } }>; outcomes: Array<{ id: string; code: string; label: string; description: string | null; displayOrder: number; positive: boolean | null }>; aliases: Array<{ alias: string }> }) {
+  return { patternId: pattern.id, name: pattern.name, slug: pattern.slug, description: pattern.description ?? undefined, phase: pattern.phase, focusArea: pattern.focusArea, requiresLocation: pattern.requiresLocation, contexts: pattern.contexts, steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes, aliases: pattern.aliases.map((alias) => alias.alias) }
+}

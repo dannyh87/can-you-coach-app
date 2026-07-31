@@ -25,6 +25,7 @@ import {
 import { canManageMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { createAssignmentLinkedSubmission } from '@/lib/matchTrackingSubmissions'
+import { setMatchTrackingTaskPatterns } from '@/lib/trackingPatterns'
 
 export type MatchTrackingActionResult<T = undefined> =
   | { ok: true; data: T }
@@ -143,6 +144,16 @@ export async function setTrackingTaskEventsAction(formData: FormData): Promise<M
   return ok(undefined)
 }
 
+export async function setTrackingTaskPatternsAction(formData: FormData): Promise<MatchTrackingActionResult> {
+  const user = await getCurrentUser()
+  const trackingTaskId = getText(formData, 'trackingTaskId')
+  const matchDayId = await getTaskMatchDayId(trackingTaskId)
+  const result = await setMatchTrackingTaskPatterns({ actorUserId: user.id, trackingTaskId, patternIds: getSelectedIds(formData, 'patternId') })
+  if (!result.ok) return mapDomainFailure(result.reason)
+  await revalidateTrackingPaths(matchDayId)
+  return ok(undefined)
+}
+
 export async function markTrackingTaskReadyAction(formData: FormData): Promise<MatchTrackingActionResult> {
   const user = await getCurrentUser()
   const trackingTaskId = getText(formData, 'trackingTaskId')
@@ -163,11 +174,12 @@ export async function archiveTrackingTaskAction(formData: FormData): Promise<Mat
   return ok(undefined)
 }
 
-export async function copyTrackingTaskAction(formData: FormData): Promise<MatchTrackingActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[] }>> {
+export async function copyTrackingTaskAction(formData: FormData): Promise<MatchTrackingActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
   const user = await getCurrentUser()
   const destinationMatchDayId = getText(formData, 'destinationMatchDayId')
   const result = await copyMatchTrackingTask({ actorUserId: user.id, sourceTaskId: getText(formData, 'sourceTaskId'), destinationMatchDayId, destinationPlayerId: getOptionalText(formData, 'destinationPlayerId') })
   if (!result.ok && result.missingEventIds) return fail('EVENT_NOT_SELECTED', result.reason, { missingEventIds: result.missingEventIds })
+  if (!result.ok && result.missingPatternIds) return fail('PATTERN_NOT_SELECTED', result.reason, { missingPatternIds: result.missingPatternIds })
   if (!result.ok) return mapDomainFailure(result.reason)
   await revalidateTrackingPaths(destinationMatchDayId)
   return ok(result.value)

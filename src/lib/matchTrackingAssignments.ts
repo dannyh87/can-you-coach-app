@@ -18,8 +18,9 @@ import {
   notifyGroupOfferClaimed,
   notifyGroupOfferCreated,
 } from '@/lib/notifications'
+import { copyTrackingTaskPatterns } from '@/lib/trackingPatterns'
 
-type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; missingEventIds?: string[] }
+type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; missingEventIds?: string[]; missingPatternIds?: string[] }
 
 type Db = typeof prisma
 
@@ -36,6 +37,7 @@ type TaskRecord = TaskScopeInput & {
   matchDayId: string
   status: MatchTrackingTaskStatus
   events?: unknown[]
+  patterns?: unknown[]
 }
 
 type AssignmentRecord = {
@@ -128,12 +130,14 @@ export async function validateTaskCanBeReady(db: Db, task: TaskRecord): Promise<
     if (!player.ok) return player
   }
   const eventCount = task.events?.length ?? await db.matchTrackingTaskEvent.count({ where: { trackingTaskId: task.id } })
-  if (eventCount === 0) return { ok: false, reason: 'Tracking tasks require at least one selected event before they can be readied.' }
+  const patternDelegate = (db as Db & { matchTrackingTaskPattern?: { count: (args: { where: { trackingTaskId: string } }) => Promise<number> } }).matchTrackingTaskPattern
+  const patternCount = task.patterns?.length ?? (patternDelegate ? await patternDelegate.count({ where: { trackingTaskId: task.id } }) : 0)
+  if (eventCount + patternCount === 0) return { ok: false, reason: 'Tracking tasks require at least one selected event or pattern before they can be readied.' }
   return { ok: true, value: true }
 }
 
 async function getReadyTaskForAssignment(db: Db, trackingTaskId: string): Promise<Result<TaskRecord>> {
-  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, include: { events: true } })
+  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, include: { events: true, patterns: true } })
   if (!task) return { ok: false, reason: 'Tracking task was not found.' }
   if (task.status !== 'READY') return { ok: false, reason: 'Tracking task must be ready before assignment.' }
   const ready = await validateTaskCanBeReady(db, task)
@@ -206,7 +210,7 @@ export async function setMatchTrackingTaskEvents({ db = prisma, actorUserId, tra
 }
 
 export async function markMatchTrackingTaskReady({ db = prisma, actorUserId, trackingTaskId }: { db?: Db; actorUserId: string; trackingTaskId: string }): Promise<Result> {
-  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, include: { events: true } })
+  const task = await db.matchTrackingTask.findUnique({ where: { id: trackingTaskId }, include: { events: true, patterns: true } })
   if (!task) return { ok: false, reason: 'Tracking task was not found.' }
   const permission = await assertCanManageTask(db, actorUserId, task.matchDayId)
   if (!permission.ok) return permission
@@ -440,8 +444,8 @@ export async function declineGroupOffer({ db = prisma, assignmentId, actorUserId
   return updated.count === 1 ? { ok: true, value: true } : { ok: false, reason: 'This group offer cannot be declined.' }
 }
 
-export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTaskId, destinationMatchDayId, destinationPlayerId }: { db?: Db; actorUserId: string; sourceTaskId: string; destinationMatchDayId: string; destinationPlayerId?: string | null }): Promise<Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[] }>> {
-  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } } } })
+export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTaskId, destinationMatchDayId, destinationPlayerId }: { db?: Db; actorUserId: string; sourceTaskId: string; destinationMatchDayId: string; destinationPlayerId?: string | null }): Promise<Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
+  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } } } })
   if (!sourceTask) return { ok: false, reason: 'Source tracking task was not found.' }
   const permission = await assertCanManageTask(db, actorUserId, destinationMatchDayId)
   if (!permission.ok) return permission
@@ -463,10 +467,22 @@ export async function copyMatchTrackingTask({ db = prisma, actorUserId, sourceTa
   })
   const missingEventIds = sourceTask.events.filter((_, index) => !mappedEvents[index]).map((event) => event.matchDayEventTypeId)
   if (missingEventIds.length > 0) return { ok: false, reason: 'One or more task events are not selected for the destination match.', missingEventIds }
+  const destinationMatch = await db.matchDay.findUnique({ where: { id: destinationMatchDayId }, select: { team: { select: { clubId: true } } } })
+  if (!destinationMatch) return { ok: false, reason: 'Destination match was not found.' }
+  const sourcePatterns = sourceTask.patterns ?? []
+  const patternDefinitionDelegate = (db as Db & { trackingPatternDefinition?: { findMany: (args: Prisma.TrackingPatternDefinitionFindManyArgs) => Promise<Array<{ id: string }>> } }).trackingPatternDefinition
+  const destinationPatterns = sourcePatterns.length > 0 && patternDefinitionDelegate ? await patternDefinitionDelegate.findMany({ where: { id: { in: sourcePatterns.map((pattern) => pattern.patternId) }, active: true, OR: [{ ownerScope: 'GLOBAL' }, { ownerScope: 'CLUB', clubId: destinationMatch.team.clubId }] }, select: { id: true } }) : []
+  const destinationPatternIds = new Set(destinationPatterns.map((pattern) => pattern.id))
+  const missingPatternIds = sourcePatterns.filter((pattern) => !destinationPatternIds.has(pattern.patternId)).map((pattern) => pattern.patternId)
+  if (missingPatternIds.length > 0) return { ok: false, reason: 'One or more task patterns are not available for the destination match.', missingEventIds: [], missingPatternIds }
   const created = await db.$transaction(async (tx) => {
     const task = await tx.matchTrackingTask.create({ data: { matchDayId: destinationMatchDayId, createdByUserId: actorUserId, topicId: sourceTask.topicId, scopeType: sourceTask.scopeType, playerId, unitKey: sourceTask.unitKey, unitLabel: sourceTask.unitLabel, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'DRAFT' }, select: { id: true } })
     await tx.matchTrackingTaskEvent.createMany({ data: mappedEvents.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event!.id, displayOrder: index })) })
+    if (sourcePatterns.length > 0) {
+      const copiedPatterns = await copyTrackingTaskPatterns({ db: tx, sourceTaskId: sourceTask.id, destinationTaskId: task.id, destinationClubId: destinationMatch.team.clubId })
+      if (!copiedPatterns.ok) throw new Error(copiedPatterns.reason)
+    }
     return task
   })
-  return { ok: true, value: { id: created.id, requiresPlayerSelection, missingEventIds: [] } }
+  return { ok: true, value: { id: created.id, requiresPlayerSelection, missingEventIds: [], missingPatternIds: [] } }
 }

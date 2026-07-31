@@ -180,7 +180,7 @@ async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<
   })))
 }
 
-async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[] }>> {
+async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
   'use server'
 
   const user = await requireV2User()

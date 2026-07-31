@@ -441,6 +441,53 @@ const trackingTopics = [
   { name: 'Set-piece outcomes', phase: 'ATTACKING_SET_PIECES', focusArea: 'SET_PIECES', contexts: [['TEAM', 'WHOLE_TEAM']], events: ['Goal', 'Shot on target', 'Shot off target', 'Assist'], aliases: ['set pieces', 'corners and free kicks'] },
 ]
 
+const passLocationOutcomes = [
+  ['TARGET_REACHED', 'Target reached', true],
+  ['POSSESSION_RETAINED', 'Possession retained', true],
+  ['POSSESSION_LOST', 'Possession lost', false],
+  ['OUT_OF_PLAY', 'Out of play', false],
+]
+const directStrikerOutcomes = [
+  ['CLEAN_POSSESSION_SECURED', 'Clean possession secured', true],
+  ['FLICK_ON_FOUND_TEAMMATE', 'Flick-on found teammate', true],
+  ['SECOND_BALL_RECOVERED', 'Second ball recovered', true],
+  ['POSSESSION_LOST', 'Possession lost', false],
+]
+const combinationOutcomes = [
+  ['BROKE_DEFENSIVE_LINE', 'Broke the defensive line', true],
+  ['PROGRESSED_PLAY', 'Progressed play', true],
+  ['RETAINED_WITHOUT_PROGRESSION', 'Retained possession without progression', null],
+  ['BROKE_DOWN', 'Combination broke down', false],
+]
+const pressingOutcomes = [
+  ['POSSESSION_WON', 'Possession won', true],
+  ['FORCED_BACKWARDS', 'Forced backwards', true],
+  ['FORCED_LONG', 'Forced long', true],
+  ['OPPONENT_PLAYED_THROUGH', 'Opponent played through', false],
+]
+
+const trackingPatterns = [
+  { name: 'Pass behind opposition left-back', phase: 'IN_POSSESSION', focusArea: 'PROGRESSION', requiresLocation: true, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'ATTACKING_UNIT']], steps: ['Forward pass', 'Pass complete'], outcomes: passLocationOutcomes, aliases: ['pass behind left back', 'ball behind left full back'], topics: ['Runs in behind', 'Final-third entries'] },
+  { name: 'Pass behind opposition right-back', phase: 'IN_POSSESSION', focusArea: 'PROGRESSION', requiresLocation: true, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'ATTACKING_UNIT']], steps: ['Forward pass', 'Pass complete'], outcomes: passLocationOutcomes, aliases: ['pass behind right back', 'ball behind right full back'], topics: ['Runs in behind', 'Final-third entries'] },
+  { name: 'Ground pass between centre-backs', phase: 'IN_POSSESSION', focusArea: 'PROGRESSION', requiresLocation: true, contexts: [['TEAM', 'WHOLE_TEAM'], ['PLAYER', 'CENTRE_FORWARD']], steps: ['Forward pass', 'Pass complete'], outcomes: passLocationOutcomes, aliases: ['split centre backs', 'pass through centre backs'], topics: ['Runs in behind', 'Final-third entries'] },
+  { name: 'Pass into the channel', phase: 'IN_POSSESSION', focusArea: 'PROGRESSION', requiresLocation: true, contexts: [['TEAM', 'WHOLE_TEAM'], ['PLAYER', 'WIDE_PLAYER'], ['PLAYER', 'CENTRE_FORWARD']], steps: ['Forward pass', 'Pass complete'], outcomes: passLocationOutcomes, aliases: ['channel pass', 'ball into channel'], topics: ['Runs in behind', 'Final-third entries'] },
+  { name: 'Direct pass towards striker’s head', phase: 'IN_POSSESSION', focusArea: 'AERIAL_PLAY', requiresLocation: false, contexts: [['PLAYER', 'CENTRE_FORWARD'], ['TEAM', 'WHOLE_TEAM']], steps: ['Forward pass'], outcomes: directStrikerOutcomes, aliases: ['direct ball to striker head', 'flick-on', 'target man header'], topics: ['Centre-forward link play'] },
+  { name: 'Direct pass into striker’s feet', phase: 'IN_POSSESSION', focusArea: 'LINK_PLAY', requiresLocation: false, contexts: [['PLAYER', 'CENTRE_FORWARD'], ['TEAM', 'WHOLE_TEAM']], steps: ['Forward pass', 'Touch', 'Pass complete'], outcomes: directStrikerOutcomes, aliases: ['into striker feet', 'feet to striker', 'target player feet'], topics: ['Centre-forward link play', 'Receiving into feet'] },
+  { name: 'Striker receives and sets', phase: 'IN_POSSESSION', focusArea: 'LINK_PLAY', requiresLocation: false, contexts: [['PLAYER', 'CENTRE_FORWARD']], steps: ['Touch', 'Pass complete'], outcomes: combinationOutcomes, aliases: ['set and spin', 'bounce pass', 'striker set'], topics: ['Centre-forward link play', 'Receiving into feet'] },
+  { name: 'Third-player combination', phase: 'IN_POSSESSION', focusArea: 'COMBINATION_PLAY', requiresLocation: false, contexts: [['UNIT', 'ATTACKING_UNIT'], ['TEAM', 'WHOLE_TEAM']], steps: ['Pass complete', 'Touch', 'Key pass'], outcomes: combinationOutcomes, aliases: ['third man', 'third-player run', 'third-player combination'], topics: ['Attacking unit combination play'] },
+  { name: 'Wall pass', phase: 'IN_POSSESSION', focusArea: 'COMBINATION_PLAY', requiresLocation: false, contexts: [['PLAYER', 'WIDE_PLAYER'], ['UNIT', 'ATTACKING_UNIT']], steps: ['Pass complete', 'Touch', 'Pass complete'], outcomes: combinationOutcomes, aliases: ['one two', 'give and go'], topics: ['Attacking unit combination play'] },
+  { name: 'Flick-on to supporting runner', phase: 'IN_POSSESSION', focusArea: 'AERIAL_PLAY', requiresLocation: false, contexts: [['PLAYER', 'CENTRE_FORWARD'], ['UNIT', 'ATTACKING_UNIT']], steps: ['Touch', 'Pass complete'], outcomes: directStrikerOutcomes, aliases: ['flick-on runner', 'header flick'], topics: ['Centre-forward link play'] },
+  { name: 'Wide combination and overlap', phase: 'IN_POSSESSION', focusArea: 'COMBINATION_PLAY', requiresLocation: true, contexts: [['UNIT', 'LEFT_SIDE_UNIT'], ['UNIT', 'RIGHT_SIDE_UNIT'], ['UNIT', 'ATTACKING_UNIT']], steps: ['Pass complete', 'Cross', 'Cutback'], outcomes: combinationOutcomes, aliases: ['overlap', 'wide overlap', 'ball around the corner'], topics: ['Attacking unit combination play', 'Final-third entries'] },
+  { name: 'First action after regaining possession', phase: 'ATTACKING_TRANSITION', focusArea: 'ATTACKING_TRANSITION', requiresLocation: false, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'MIDFIELD_UNIT']], steps: ['Possession gained', 'Forward pass'], outcomes: combinationOutcomes, aliases: ['first pass after regain', 'first action regain'], topics: ['Counter-attacking effectiveness'] },
+  { name: 'Regain and progress forward', phase: 'ATTACKING_TRANSITION', focusArea: 'ATTACKING_TRANSITION', requiresLocation: false, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'PRESSING_UNIT']], steps: ['Possession gained', 'Forward pass', 'Carry'], outcomes: combinationOutcomes, aliases: ['regain progress', 'win it and play forward'], topics: ['Counter-attacking effectiveness'] },
+  { name: 'Counter-attack reaches final third', phase: 'ATTACKING_TRANSITION', focusArea: 'ATTACKING_TRANSITION', requiresLocation: false, contexts: [['TEAM', 'WHOLE_TEAM']], steps: ['Possession gained', 'Forward pass', 'Key pass'], outcomes: combinationOutcomes, aliases: ['counter reaches final third', 'fast break final third'], topics: ['Counter-attacking effectiveness'] },
+  { name: 'Defensive transition delays attack', phase: 'DEFENSIVE_TRANSITION', focusArea: 'DEFENSIVE_TRANSITION', requiresLocation: false, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'DEFENSIVE_UNIT']], steps: ['Possession lost', 'Tackle won'], outcomes: pressingOutcomes, aliases: ['delay counter attack', 'defensive delay'], topics: ['Defensive transition'] },
+  { name: 'Defensive line protects space behind', phase: 'OUT_OF_POSSESSION', focusArea: 'PROTECTING_SPACE_BEHIND', requiresLocation: false, contexts: [['UNIT', 'DEFENSIVE_UNIT'], ['TEAM', 'WHOLE_TEAM']], steps: ['Interception', 'Possession gained'], outcomes: pressingOutcomes, aliases: ['protect space behind', 'defensive line depth'], topics: ['Defensive unit protecting space behind'] },
+  { name: 'Full-back supported against overload', phase: 'OUT_OF_POSSESSION', focusArea: 'DEFENDING_WIDE_AREAS', requiresLocation: false, contexts: [['PLAYER', 'FULL_BACK'], ['UNIT', 'LEFT_SIDE_UNIT'], ['UNIT', 'RIGHT_SIDE_UNIT']], steps: ['Tackle won', 'Interception'], outcomes: pressingOutcomes, aliases: ['full back support', 'wide overload support'], topics: ['Defending one-versus-one'] },
+  { name: 'Midfield screen prevents central progression', phase: 'OUT_OF_POSSESSION', focusArea: 'DEFENDING', requiresLocation: false, contexts: [['UNIT', 'MIDFIELD_UNIT'], ['TEAM', 'WHOLE_TEAM']], steps: ['Interception', 'Possession gained'], outcomes: pressingOutcomes, aliases: ['midfield screen', 'block central progression'], topics: ['Pressing unit forcing play backwards'] },
+  { name: 'Press forces play backwards', phase: 'OUT_OF_POSSESSION', focusArea: 'PRESSING', requiresLocation: false, contexts: [['TEAM', 'WHOLE_TEAM'], ['UNIT', 'PRESSING_UNIT'], ['PLAYER', 'CENTRE_FORWARD']], steps: ['Possession gained', 'Interception', 'Tackle won'], outcomes: pressingOutcomes, aliases: ['team press backwards', 'force backwards', 'press trap'], topics: ['Team pressing', 'Pressing unit forcing play backwards', 'Pressing from the front'] },
+]
+
 async function main() {
   const user = await prisma.user.upsert({
     where: { email: localUser.email },
@@ -598,6 +645,7 @@ async function main() {
 
   const eventDefinitionsByName = new Map((await prisma.eventDefinition.findMany({ where: { scope: 'GLOBAL' } })).map((eventDefinition) => [eventDefinition.name, eventDefinition]))
   const missingTopicEventDefinitions = new Set()
+  const savedTopicsByName = new Map()
   for (const topic of trackingTopics) {
     const slug = createEventDefinitionSlug(topic.name)
     const data = {
@@ -615,6 +663,7 @@ async function main() {
       archivedAt: null,
     }
     const savedTopic = await prisma.eventTopic.upsert({ where: { slug }, update: data, create: data })
+    savedTopicsByName.set(topic.name, savedTopic)
     await prisma.eventTopicContext.deleteMany({ where: { topicId: savedTopic.id } })
     await prisma.eventTopicAlias.deleteMany({ where: { topicId: savedTopic.id } })
     await prisma.eventTopicEvent.deleteMany({ where: { topicId: savedTopic.id } })
@@ -631,6 +680,59 @@ async function main() {
     if (linkedEvents.length > 0) await prisma.eventTopicEvent.createMany({ data: linkedEvents, skipDuplicates: true })
   }
   if (missingTopicEventDefinitions.size > 0) console.warn('Tracking topic seed skipped missing event definitions:', Array.from(missingTopicEventDefinitions).join(', '))
+
+  const missingPatternEventDefinitions = new Set()
+  const missingPatternTopics = new Set()
+  for (const pattern of trackingPatterns) {
+    const slug = createEventDefinitionSlug(pattern.name)
+    const data = {
+      ownerScope: 'GLOBAL',
+      clubId: null,
+      name: pattern.name,
+      slug,
+      normalizedName: normalizeTrackingSearch(pattern.name),
+      description: `${pattern.name} tactical pattern with controlled outcomes.`,
+      phase: pattern.phase,
+      focusArea: pattern.focusArea,
+      active: true,
+      requiresLocation: pattern.requiresLocation,
+    }
+    const savedPattern = await prisma.trackingPatternDefinition.upsert({ where: { slug }, update: data, create: data })
+    await prisma.trackingPatternContext.deleteMany({ where: { patternId: savedPattern.id } })
+    await prisma.trackingPatternAlias.deleteMany({ where: { patternId: savedPattern.id } })
+    await prisma.trackingPatternStep.deleteMany({ where: { patternId: savedPattern.id } })
+    await prisma.eventTopicPattern.deleteMany({ where: { patternId: savedPattern.id } })
+
+    await prisma.trackingPatternContext.createMany({ data: pattern.contexts.map(([scopeType, targetContext], index) => ({ patternId: savedPattern.id, scopeType, targetContext, recommended: index === 0, displayOrder: index })) })
+    await prisma.trackingPatternAlias.createMany({ data: Array.from(new Set(pattern.aliases.map((alias) => normalizeTrackingSearch(alias)))).map((normalizedAlias) => ({ patternId: savedPattern.id, alias: pattern.aliases.find((alias) => normalizeTrackingSearch(alias) === normalizedAlias) ?? normalizedAlias, normalizedAlias })), skipDuplicates: true })
+    const stepRows = pattern.steps.flatMap((eventName, index) => {
+      const eventDefinition = eventDefinitionsByName.get(eventName)
+      if (!eventDefinition) {
+        missingPatternEventDefinitions.add(`${pattern.name}: ${eventName}`)
+        return []
+      }
+      return [{ patternId: savedPattern.id, eventDefinitionId: eventDefinition.id, stepOrder: index, label: eventName, required: true }]
+    })
+    if (stepRows.length > 0) await prisma.trackingPatternStep.createMany({ data: stepRows })
+    for (const [index, [code, label, positive]] of pattern.outcomes.entries()) {
+      await prisma.trackingPatternOutcome.upsert({
+        where: { patternId_code: { patternId: savedPattern.id, code } },
+        update: { label, displayOrder: index, positive },
+        create: { patternId: savedPattern.id, code, label, displayOrder: index, positive },
+      })
+    }
+    const topicRows = pattern.topics.flatMap((topicName, index) => {
+      const topic = savedTopicsByName.get(topicName)
+      if (!topic) {
+        missingPatternTopics.add(`${pattern.name}: ${topicName}`)
+        return []
+      }
+      return [{ topicId: topic.id, patternId: savedPattern.id, displayOrder: index, recommended: index === 0, observerLoadWeight: pattern.requiresLocation ? 3 : 2 }]
+    })
+    if (topicRows.length > 0) await prisma.eventTopicPattern.createMany({ data: topicRows, skipDuplicates: true })
+  }
+  if (missingPatternEventDefinitions.size > 0) console.warn('Tracking pattern seed skipped missing event definitions:', Array.from(missingPatternEventDefinitions).join(', '))
+  if (missingPatternTopics.size > 0) console.warn('Tracking pattern seed skipped missing topics:', Array.from(missingPatternTopics).join(', '))
 }
 
 main()

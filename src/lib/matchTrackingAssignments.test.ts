@@ -13,6 +13,7 @@ import {
   setMatchTrackingTaskEvents,
   startContributorAssignment,
   validateAssignmentTransition,
+  validateTaskCanBeReady,
   validateTrackingTaskScope,
 } from '@/lib/matchTrackingAssignments'
 
@@ -69,6 +70,13 @@ function createDb(overrides: Record<string, unknown> = {}) {
       create: async () => ({ id: 'task-event-new' }),
       createMany: async () => ({ count: 1 }),
     },
+    matchTrackingTaskPattern: {
+      count: async () => 0,
+      createMany: async () => ({ count: 0 }),
+    },
+    trackingPatternDefinition: {
+      findMany: async () => [],
+    },
     matchDayEventType: {
       findMany: async () => [{ id: 'selected-1', matchDayId: 'match-1', eventDefinitionId: 'definition-1', eventType: 'GOAL' }],
     },
@@ -104,6 +112,22 @@ describe('tracking task validation', () => {
     expect(validateTrackingTaskScope({ scopeType: 'UNIT', playerId: 'p1', unitKey: 'def', unitLabel: 'Defence' }).ok).toBe(false)
     expect(validateTrackingTaskScope({ scopeType: 'UNIT', unitKey: null, unitLabel: 'Defence' }).ok).toBe(false)
     expect(validateTrackingTaskScope({ scopeType: 'TEAM', playerId: 'p1' }).ok).toBe(false)
+  })
+
+  it('allows ready tasks with only patterns', async () => {
+    const db = createDb({
+      matchTrackingTaskEvent: { count: async () => 0 },
+      matchTrackingTaskPattern: { count: async () => 1 },
+    })
+    await expect(validateTaskCanBeReady(db, { ...baseTask, events: [], patterns: undefined })).resolves.toMatchObject({ ok: true })
+  })
+
+  it('rejects empty ready tasks without events or patterns', async () => {
+    const db = createDb({
+      matchTrackingTaskEvent: { count: async () => 0 },
+      matchTrackingTaskPattern: { count: async () => 0 },
+    })
+    await expect(validateTaskCanBeReady(db, { ...baseTask, events: [], patterns: undefined })).resolves.toMatchObject({ ok: false })
   })
 
   it('rejects task events from another match and duplicate event ids', async () => {

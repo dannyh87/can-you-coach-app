@@ -26,6 +26,7 @@ export type TrackingResolverContext = {
   clubId?: string
   agePhase?: EventDefinitionAgePhase
   selectedEventDefinitionIds?: string[]
+  selectedPatternIds?: string[]
   mode?: TrackingSetupMode
 }
 
@@ -61,10 +62,22 @@ export type ResolvedTrackingTopic = {
     requiresLocation: boolean
     benchmarkable: boolean
   }>
+  patterns: ResolvedTrackingPattern[]
+}
+
+export type ResolvedTrackingPattern = {
+  patternId: string
+  name: string
+  description?: string
+  recommended: boolean
+  displayOrder: number
+  requiresLocation: boolean
+  steps: Array<{ order: number; eventDefinitionId: string; label: string }>
+  outcomes: Array<{ id: string; code: string; label: string }>
 }
 
 export type TrackingValidationResult =
-  | { ok: true; mode: Exclude<TrackingSetupMode, 'CUSTOM'>; topicId?: string; eventDefinitionIds: string[] }
+  | { ok: true; mode: Exclude<TrackingSetupMode, 'CUSTOM'>; topicId?: string; eventDefinitionIds: string[]; patternIds: string[] }
   | { ok: false; errors: Array<{ field: string; message: string }> }
 
 const scopeLabels: Record<MatchTrackingScope, string> = { PLAYER: 'Player', UNIT: 'Unit', TEAM: 'Whole team' }
@@ -197,10 +210,13 @@ export async function getAvailableTopics(context: TrackingResolverContext, db: D
 export async function getRecommendedEventsForTopic(topicId: string, context: TrackingResolverContext = {}, db: Db = prisma): Promise<ResolvedTrackingTopic | null> {
   const topic = await db.eventTopic.findFirst({
     where: { id: topicId, ...topicWhere({ ...context, topicId: undefined }) },
-    include: { events: { include: { eventDefinition: true }, orderBy: [{ displayOrder: 'asc' }] }, contexts: true },
+    include: { events: { include: { eventDefinition: true }, orderBy: [{ displayOrder: 'asc' }] }, patterns: { include: { pattern: { include: { contexts: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } } } } }, orderBy: { displayOrder: 'asc' } }, contexts: true },
   })
   if (!topic) return null
   const events = topic.events.filter((event) => event.eventDefinition.isActive && !event.eventDefinition.archivedAt)
+  const targetContext = getEffectiveTargetContext(context)
+  const topicPatterns = 'patterns' in topic && Array.isArray(topic.patterns) ? topic.patterns : []
+  const patterns = topicPatterns.filter((topicPattern) => topicPattern.pattern.active && topicPattern.pattern.contexts.some((candidate) => !context.scope || (candidate.scopeType === context.scope && (candidate.targetContext === null || candidate.targetContext === targetContext))))
   return {
     topicId: topic.id,
     name: topic.name,
@@ -215,6 +231,7 @@ export async function getRecommendedEventsForTopic(topicId: string, context: Tra
     suggestedMaxEvents: topic.suggestedMaxEvents,
     workloadMessage: `Recommended: ${events.filter((event) => event.recommended).length} events. Tracking more than ${topic.suggestedMaxEvents + 2} events may be difficult for one observer.`,
     events: events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, description: event.eventDefinition.description ?? undefined, recommended: event.recommended, displayOrder: event.displayOrder, guidance: event.guidance ?? undefined, requiresLocation: event.eventDefinition.requiresLocation, benchmarkable: event.eventDefinition.benchmarkable })),
+    patterns: patterns.map((topicPattern) => ({ patternId: topicPattern.patternId, name: topicPattern.pattern.name, description: topicPattern.pattern.description ?? undefined, recommended: topicPattern.recommended, displayOrder: topicPattern.displayOrder, requiresLocation: topicPattern.pattern.requiresLocation, steps: topicPattern.pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: topicPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })),
   }
 }
 
@@ -253,6 +270,26 @@ export async function getAdvancedCompatibleEvents(context: TrackingResolverConte
   return definitions.map((event) => ({ eventDefinitionId: event.id, name: event.name, description: event.description ?? undefined, requiresLocation: event.requiresLocation, benchmarkable: event.benchmarkable, recommendedByTopic: topicEventIds.has(event.id), outsideChosenTopic: Boolean(context.topicId && !topicEventIds.has(event.id)) }))
 }
 
+export async function getAdvancedCompatibleTrackingItems(context: TrackingResolverContext, db: Db = prisma) {
+  const topic = context.topicId ? await getRecommendedEventsForTopic(context.topicId, context, db) : null
+  const events = await getAdvancedCompatibleEvents(context, db)
+  const topicPatternIds = new Set(topic?.patterns.map((pattern) => pattern.patternId) ?? [])
+  const targetContext = getEffectiveTargetContext(context)
+  const patternDelegate = (db as Db & { trackingPatternDefinition?: { findMany: (args: Prisma.TrackingPatternDefinitionFindManyArgs) => Promise<Array<{ id: string; name: string; description: string | null; requiresLocation: boolean; aliases: Array<{ alias: string }>; steps: Array<{ stepOrder: number; eventDefinitionId: string; label: string | null; eventDefinition: { name: string } }>; outcomes: Array<{ id: string; code: string; label: string }> }>> } }).trackingPatternDefinition
+  const patterns = patternDelegate ? await patternDelegate.findMany({
+    where: {
+      active: true,
+      OR: [{ ownerScope: 'GLOBAL' }, ...(context.clubId ? [{ ownerScope: 'CLUB' as const, clubId: context.clubId }] : [])],
+      ...(context.phase ? { phase: context.phase } : {}),
+      ...(context.focusArea ? { focusArea: context.focusArea } : {}),
+      ...(context.scope ? { contexts: { some: { scopeType: context.scope, OR: [{ targetContext }, { targetContext: null }] } } } : {}),
+    },
+    include: { aliases: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } } },
+    orderBy: [{ phase: 'asc' }, { focusArea: 'asc' }, { name: 'asc' }],
+  }) : []
+  return { context, events, patterns: patterns.map((pattern) => ({ patternId: pattern.id, name: pattern.name, description: pattern.description ?? undefined, requiresLocation: pattern.requiresLocation, recommendedByTopic: topicPatternIds.has(pattern.id), outsideChosenTopic: Boolean(context.topicId && !topicPatternIds.has(pattern.id)), aliases: pattern.aliases.map((alias) => alias.alias), steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })) }
+}
+
 export async function validateTrackingSetup(context: TrackingResolverContext, db: Db = prisma): Promise<TrackingValidationResult> {
   const errors: Array<{ field: string; message: string }> = []
   if (!context.scope) errors.push({ field: 'scope', message: 'Choose a tracking scope.' })
@@ -260,7 +297,7 @@ export async function validateTrackingSetup(context: TrackingResolverContext, db
   if (context.scope === 'UNIT' && !getEffectiveTargetContext(context)) errors.push({ field: 'targetContext', message: 'Choose a unit type.' })
   if (!context.phase) errors.push({ field: 'phase', message: 'Choose a phase of play.' })
   if (!context.focusArea) errors.push({ field: 'focusArea', message: 'Choose a focus area.' })
-  if (!context.selectedEventDefinitionIds?.length) errors.push({ field: 'eventDefinitionIds', message: 'Choose at least one event.' })
+  if (!context.selectedEventDefinitionIds?.length && !context.selectedPatternIds?.length) errors.push({ field: 'trackingItems', message: 'Choose at least one event or pattern.' })
   if (context.mode === 'CUSTOM') errors.push({ field: 'mode', message: 'Custom tracking setups are not supported in this phase.' })
   if (errors.length > 0) return { ok: false, errors }
 
@@ -269,36 +306,43 @@ export async function validateTrackingSetup(context: TrackingResolverContext, db
   const compatibleEvents = await getAdvancedCompatibleEvents(context, db)
   const compatibleIds = new Set(compatibleEvents.map((event) => event.eventDefinitionId))
   const selectedIds = Array.from(new Set(context.selectedEventDefinitionIds ?? []))
+  const compatibleItems = await getAdvancedCompatibleTrackingItems(context, db)
+  const compatiblePatternIds = new Set(compatibleItems.patterns.map((pattern) => pattern.patternId))
+  const selectedPatternIds = Array.from(new Set(context.selectedPatternIds ?? []))
   const invalidEventId = selectedIds.find((id) => !compatibleIds.has(id))
+  const invalidPatternId = selectedPatternIds.find((id) => !compatiblePatternIds.has(id))
   if (invalidEventId) errors.push({ field: 'eventDefinitionIds', message: 'One or more selected events are not compatible or accessible.' })
+  if (invalidPatternId) errors.push({ field: 'patternIds', message: 'One or more selected patterns are not compatible or accessible.' })
   if (mode === 'STANDARD_GUIDED') {
     const topic = await getRecommendedEventsForTopic(context.topicId!, context, db)
     if (!topic) errors.push({ field: 'topicId', message: 'Topic is not compatible with this context.' })
     else {
       const topicEventIds = new Set(topic.events.map((event) => event.eventDefinitionId))
+      const topicPatternIds = new Set(topic.patterns.map((pattern) => pattern.patternId))
       if (selectedIds.some((id) => !topicEventIds.has(id))) errors.push({ field: 'eventDefinitionIds', message: 'Guided setup events must belong to the selected topic.' })
+      if (selectedPatternIds.some((id) => !topicPatternIds.has(id))) errors.push({ field: 'patternIds', message: 'Guided setup patterns must belong to the selected topic.' })
     }
   }
-  return errors.length > 0 ? { ok: false, errors } : { ok: true, mode, topicId: context.topicId, eventDefinitionIds: selectedIds }
+  return errors.length > 0 ? { ok: false, errors } : { ok: true, mode, topicId: context.topicId, eventDefinitionIds: selectedIds, patternIds: selectedPatternIds }
 }
 
 export async function reconcileTrackingSelections(previous: TrackingResolverContext, next: TrackingResolverContext, db: Db = prisma) {
   const preserved: TrackingResolverContext = { ...previous, ...next }
   const invalidated: string[] = []
   if (previous.scope !== preserved.scope) {
-    delete preserved.targetContext; delete preserved.playerRole; delete preserved.unitType; delete preserved.phase; delete preserved.focusArea; delete preserved.topicId; delete preserved.selectedEventDefinitionIds
-    invalidated.push('targetContext', 'phase', 'focusArea', 'topicId', 'selectedEventDefinitionIds')
+    delete preserved.targetContext; delete preserved.playerRole; delete preserved.unitType; delete preserved.phase; delete preserved.focusArea; delete preserved.topicId; delete preserved.selectedEventDefinitionIds; delete preserved.selectedPatternIds
+    invalidated.push('targetContext', 'phase', 'focusArea', 'topicId', 'selectedEventDefinitionIds', 'selectedPatternIds')
   }
   if (previous.targetContext !== preserved.targetContext || previous.playerRole !== preserved.playerRole || previous.unitType !== preserved.unitType) {
     const topics = await findTopics(db, preserved)
     if (preserved.topicId && !topics.some((topic) => topic.id === preserved.topicId)) {
-      delete preserved.topicId; delete preserved.selectedEventDefinitionIds
-      invalidated.push('topicId', 'selectedEventDefinitionIds')
+      delete preserved.topicId; delete preserved.selectedEventDefinitionIds; delete preserved.selectedPatternIds
+      invalidated.push('topicId', 'selectedEventDefinitionIds', 'selectedPatternIds')
     }
   }
   if (previous.phase !== preserved.phase || previous.focusArea !== preserved.focusArea) {
-    delete preserved.topicId; delete preserved.selectedEventDefinitionIds
-    invalidated.push('topicId', 'selectedEventDefinitionIds')
+    delete preserved.topicId; delete preserved.selectedEventDefinitionIds; delete preserved.selectedPatternIds
+    invalidated.push('topicId', 'selectedEventDefinitionIds', 'selectedPatternIds')
   }
   return { preserved, invalidated: Array.from(new Set(invalidated)), nextStep: await getNextTrackingQuestion(preserved, db) }
 }
