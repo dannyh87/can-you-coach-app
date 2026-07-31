@@ -187,7 +187,7 @@ async function validateClubEventForm(formData: FormData, userId: string, existin
     fourCorner: fourCorner as (typeof fourCornerValues)[number],
     positionRelevance,
     enabledByDefault: formData.get('enabledByDefault') === 'on',
-    benchmarkable: formData.get('benchmarkable') === 'on',
+    benchmarkable: false,
     requiresLocation: formData.get('requiresLocation') === 'on',
   }
 }

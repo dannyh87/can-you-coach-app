@@ -8,34 +8,37 @@ datasource db {
 }
 
 model User {
-  id                           String                                @id @default(cuid())
-  clerkUserId                  String?                               @unique
-  email                        String                                @unique
-  passwordHash                 String?
-  onboardingCompletedAt        DateTime?
-  onboardingRole               OnboardingRole?
-  createdAt                    DateTime                              @default(now())
-  updatedAt                    DateTime                              @updatedAt
-  clubs                        Club[]
-  fitnessTestTypes             FitnessTestType[]
-  invitationsSent              Invitation[]                          @relation("InvitationsSent")
-  invitationsAccepted          Invitation[]                          @relation("InvitationsAccepted")
-  memberships                  ClubMembership[]
-  spectatorAccess              SpectatorAccess[]
-  submittedMatchEvents         SubmittedMatchEvent[]                 @relation("SubmittedMatchEvents")
-  acceptedSubmittedMatchEvents SubmittedMatchEvent[]                 @relation("AcceptedSubmittedMatchEvents")
-  submittedPatternObservations SubmittedTrackingPatternObservation[] @relation("SubmittedPatternObservations")
-  reviewedPatternObservations  SubmittedTrackingPatternObservation[] @relation("ReviewedPatternObservations")
-  matchTrackingTasksCreated    MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
-  officialPatternObservations  MatchTrackingPatternObservation[]     @relation("OfficialPatternObservations")
-  assignmentsAssigned          MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
-  assignmentsAssignedBy        MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
-  assignmentRecipients         MatchContributorAssignmentRecipient[]
-  notifications                Notification[]
-  trackingTemplatesOwned       TrackingSetupTemplate[]               @relation("TrackingTemplatesOwned")
-  trackingTemplatesCreated     TrackingSetupTemplate[]               @relation("TrackingTemplatesCreated")
-  trackingTemplatesUpdated     TrackingSetupTemplate[]               @relation("TrackingTemplatesUpdated")
-  trackingTemplateApplications TrackingSetupTemplateApplication[]
+  id                              String                                @id @default(cuid())
+  clerkUserId                     String?                               @unique
+  email                           String                                @unique
+  passwordHash                    String?
+  onboardingCompletedAt           DateTime?
+  onboardingRole                  OnboardingRole?
+  createdAt                       DateTime                              @default(now())
+  updatedAt                       DateTime                              @updatedAt
+  clubs                           Club[]
+  fitnessTestTypes                FitnessTestType[]
+  invitationsSent                 Invitation[]                          @relation("InvitationsSent")
+  invitationsAccepted             Invitation[]                          @relation("InvitationsAccepted")
+  memberships                     ClubMembership[]
+  spectatorAccess                 SpectatorAccess[]
+  submittedMatchEvents            SubmittedMatchEvent[]                 @relation("SubmittedMatchEvents")
+  acceptedSubmittedMatchEvents    SubmittedMatchEvent[]                 @relation("AcceptedSubmittedMatchEvents")
+  submittedPatternObservations    SubmittedTrackingPatternObservation[] @relation("SubmittedPatternObservations")
+  reviewedPatternObservations     SubmittedTrackingPatternObservation[] @relation("ReviewedPatternObservations")
+  clubTrackingDefinitionsCreated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsCreated")
+  clubTrackingDefinitionsApproved ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsApproved")
+  clubTrackingDefinitionsUpdated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsUpdated")
+  matchTrackingTasksCreated       MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
+  officialPatternObservations     MatchTrackingPatternObservation[]     @relation("OfficialPatternObservations")
+  assignmentsAssigned             MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
+  assignmentsAssignedBy           MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
+  assignmentRecipients            MatchContributorAssignmentRecipient[]
+  notifications                   Notification[]
+  trackingTemplatesOwned          TrackingSetupTemplate[]               @relation("TrackingTemplatesOwned")
+  trackingTemplatesCreated        TrackingSetupTemplate[]               @relation("TrackingTemplatesCreated")
+  trackingTemplatesUpdated        TrackingSetupTemplate[]               @relation("TrackingTemplatesUpdated")
+  trackingTemplateApplications    TrackingSetupTemplateApplication[]
 }
 
 enum OnboardingRole {
@@ -52,21 +55,22 @@ enum ClubRole {
 }
 
 model Club {
-  id                      String                  @id @default(cuid())
+  id                      String                   @id @default(cuid())
   userId                  String
   name                    String
   location                String?
   notes                   String?
-  sendMatchReportEmails   Boolean                 @default(true)
-  sendFitnessReportEmails Boolean                 @default(true)
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  sendMatchReportEmails   Boolean                  @default(true)
+  sendFitnessReportEmails Boolean                  @default(true)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
   invitations             Invitation[]
-  user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   teams                   Team[]
   memberships             ClubMembership[]
   spectators              SpectatorAccess[]
   trackingSetupTemplates  TrackingSetupTemplate[]
+  clubTrackingDefinitions ClubTrackingDefinition[]
 }
 
 model ClubMembership {
@@ -117,6 +121,30 @@ enum TrackingTemplateVisibility {
   PERSONAL
   TEAM
   CLUB
+}
+
+enum ClubTrackingDefinitionKind {
+  EVENT_ALIAS
+  EVENT_MAPPED
+  EVENT_CUSTOM
+  PATTERN_ALIAS
+  PATTERN_MAPPED
+}
+
+enum ClubTrackingDefinitionStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  RETIRED
+}
+
+enum ClubTrackingMappingStatus {
+  NONE
+  PROPOSED
+  CLUB_APPROVED
+  STANDARD_APPROVED
+  REJECTED
 }
 
 enum InvitationType {
@@ -491,6 +519,59 @@ model TrackingSetupTemplateApplication {
   @@index([appliedByUserId])
 }
 
+model ClubTrackingDefinition {
+  id                        String                       @id @default(cuid())
+  clubId                    String
+  kind                      ClubTrackingDefinitionKind
+  status                    ClubTrackingDefinitionStatus
+  name                      String
+  normalizedName            String
+  slug                      String
+  description               String?
+  guidance                  String?
+  scopeType                 MatchTrackingScope?
+  targetContext             TrackingTargetContext?
+  phase                     TrackingTopicPhase?
+  focusArea                 TrackingFocusArea?
+  agePhases                 EventDefinitionAgePhase[]
+  requiresLocation          Boolean                      @default(false)
+  mappedEventDefinitionId   String?
+  mappedPatternDefinitionId String?
+  mappingStatus             ClubTrackingMappingStatus    @default(NONE)
+  mappingRevision           Int                          @default(1)
+  active                    Boolean                      @default(true)
+  retiredAt                 DateTime?
+  createdByUserId           String
+  approvedByUserId          String?
+  approvedAt                DateTime?
+  updatedByUserId           String?
+  createdAt                 DateTime                     @default(now())
+  updatedAt                 DateTime                     @updatedAt
+
+  club                         Club                                  @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  mappedEventDefinition        EventDefinition?                      @relation("ClubTrackingDefinitionsMappedEvent", fields: [mappedEventDefinitionId], references: [id], onDelete: Restrict)
+  mappedPatternDefinition      TrackingPatternDefinition?            @relation("ClubTrackingDefinitionsMappedPattern", fields: [mappedPatternDefinitionId], references: [id], onDelete: Restrict)
+  createdBy                    User                                  @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  approvedBy                   User?                                 @relation("ClubTrackingDefinitionsApproved", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  updatedBy                    User?                                 @relation("ClubTrackingDefinitionsUpdated", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  submittedMatchEvents         SubmittedMatchEvent[]
+  officialMatchEvents          MatchEvent[]
+  submittedPatternObservations SubmittedTrackingPatternObservation[]
+  officialPatternObservations  MatchTrackingPatternObservation[]
+
+  @@unique([clubId, kind, normalizedName])
+  @@unique([clubId, slug])
+  @@index([clubId])
+  @@index([kind])
+  @@index([status])
+  @@index([active])
+  @@index([mappingStatus])
+  @@index([mappedEventDefinitionId])
+  @@index([mappedPatternDefinitionId])
+  @@index([createdByUserId])
+  @@index([approvedByUserId])
+}
+
 model MatchContributorAssignment {
   /// Database invariant: one active assignment per tracking task is enforced by the
   /// partial unique index "MatchContributorAssignment_one_active_per_task" for
@@ -606,55 +687,71 @@ model MatchPlayerStint {
 }
 
 model MatchEvent {
-  id                    String           @id @default(cuid())
-  matchDayId            String
-  playerId              String?
-  eventType             MatchEventType?
-  half                  MatchHalf
-  matchSecond           Int
-  ownScoreAtTime        Int
-  oppositionScoreAtTime Int
-  x                     Float?
-  y                     Float?
-  eventDefinitionId     String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-  matchDay              MatchDay         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player                Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
-  eventDefinition       EventDefinition? @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  id                                   String                     @id @default(cuid())
+  matchDayId                           String
+  playerId                             String?
+  eventType                            MatchEventType?
+  half                                 MatchHalf
+  matchSecond                          Int
+  ownScoreAtTime                       Int
+  oppositionScoreAtTime                Int
+  x                                    Float?
+  y                                    Float?
+  eventDefinitionId                    String?
+  clubTrackingDefinitionId             String?
+  standardEventDefinitionIdAtRecording String?
+  clubMappingRevisionAtRecording       Int?
+  clubMappingStatusAtRecording         ClubTrackingMappingStatus?
+  createdAt                            DateTime                   @default(now())
+  updatedAt                            DateTime                   @updatedAt
+  matchDay                             MatchDay                   @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                               Player?                    @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  eventDefinition                      EventDefinition?           @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  clubTrackingDefinition               ClubTrackingDefinition?    @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardEventDefinitionAtRecording   EventDefinition?           @relation("MatchEventStandardDefinitionSnapshot", fields: [standardEventDefinitionIdAtRecording], references: [id], onDelete: Restrict)
 
   @@index([eventDefinitionId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardEventDefinitionIdAtRecording])
 }
 
 model SubmittedMatchEvent {
-  id                    String                      @id @default(cuid())
-  matchDayId            String
-  playerId              String?
-  submittedByUserId     String
-  eventType             MatchEventType?
-  eventDefinitionId     String?
-  assignmentId          String?
-  half                  MatchHalf
-  matchSecond           Int
-  ownScoreAtTime        Int
-  oppositionScoreAtTime Int
-  x                     Float?
-  y                     Float?
-  note                  String?
-  status                SubmittedMatchEventStatus   @default(PENDING)
-  acceptedAt            DateTime?
-  acceptedByUserId      String?
-  createdAt             DateTime                    @default(now())
-  updatedAt             DateTime                    @updatedAt
-  matchDay              MatchDay                    @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  player                Player?                     @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  eventDefinition       EventDefinition?            @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
-  assignment            MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  submittedBy           User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
-  acceptedBy            User?                       @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  id                                   String                      @id @default(cuid())
+  matchDayId                           String
+  playerId                             String?
+  submittedByUserId                    String
+  eventType                            MatchEventType?
+  eventDefinitionId                    String?
+  clubTrackingDefinitionId             String?
+  standardEventDefinitionIdAtRecording String?
+  clubMappingRevisionAtRecording       Int?
+  clubMappingStatusAtRecording         ClubTrackingMappingStatus?
+  assignmentId                         String?
+  half                                 MatchHalf
+  matchSecond                          Int
+  ownScoreAtTime                       Int
+  oppositionScoreAtTime                Int
+  x                                    Float?
+  y                                    Float?
+  note                                 String?
+  status                               SubmittedMatchEventStatus   @default(PENDING)
+  acceptedAt                           DateTime?
+  acceptedByUserId                     String?
+  createdAt                            DateTime                    @default(now())
+  updatedAt                            DateTime                    @updatedAt
+  matchDay                             MatchDay                    @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  player                               Player?                     @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  eventDefinition                      EventDefinition?            @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  clubTrackingDefinition               ClubTrackingDefinition?     @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardEventDefinitionAtRecording   EventDefinition?            @relation("SubmittedMatchEventStandardDefinitionSnapshot", fields: [standardEventDefinitionIdAtRecording], references: [id], onDelete: Restrict)
+  assignment                           MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  submittedBy                          User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  acceptedBy                           User?                       @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
 
   @@index([matchDayId, playerId])
   @@index([eventDefinitionId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardEventDefinitionIdAtRecording])
   @@index([assignmentId])
   @@index([submittedByUserId])
   @@index([status])
@@ -675,15 +772,18 @@ model TrackingPatternDefinition {
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 
-  contexts              TrackingPatternContext[]
-  steps                 TrackingPatternStep[]
-  outcomes              TrackingPatternOutcome[]
-  aliases               TrackingPatternAlias[]
-  topicPatterns         EventTopicPattern[]
-  taskPatterns          MatchTrackingTaskPattern[]
-  templateTaskPatterns  TrackingSetupTemplateTaskPattern[]
-  submittedObservations SubmittedTrackingPatternObservation[]
-  officialObservations  MatchTrackingPatternObservation[]
+  contexts                              TrackingPatternContext[]
+  steps                                 TrackingPatternStep[]
+  outcomes                              TrackingPatternOutcome[]
+  aliases                               TrackingPatternAlias[]
+  topicPatterns                         EventTopicPattern[]
+  taskPatterns                          MatchTrackingTaskPattern[]
+  templateTaskPatterns                  TrackingSetupTemplateTaskPattern[]
+  clubTrackingDefinitionsMapped         ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsMappedPattern")
+  submittedObservations                 SubmittedTrackingPatternObservation[]
+  submittedObservationsStandardSnapshot SubmittedTrackingPatternObservation[] @relation("SubmittedPatternStandardDefinitionSnapshot")
+  officialObservations                  MatchTrackingPatternObservation[]
+  officialObservationsStandardSnapshot  MatchTrackingPatternObservation[]     @relation("OfficialPatternStandardDefinitionSnapshot")
 
   @@unique([ownerScope, clubId, normalizedName])
   @@index([ownerScope])
@@ -759,36 +859,42 @@ model TrackingPatternAlias {
 }
 
 model SubmittedTrackingPatternObservation {
-  id                    String                    @id @default(cuid())
-  matchDayId            String
-  trackingTaskId        String
-  assignmentId          String
-  submittedByUserId     String
-  playerId              String?
-  patternId             String
-  outcomeId             String
-  half                  MatchHalf
-  matchSecond           Int
-  ownScoreAtTime        Int
-  oppositionScoreAtTime Int
-  x                     Float?
-  y                     Float?
-  note                  String?
-  status                SubmittedMatchEventStatus @default(PENDING)
-  reviewedAt            DateTime?
-  reviewedByUserId      String?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  id                                     String                     @id @default(cuid())
+  matchDayId                             String
+  trackingTaskId                         String
+  assignmentId                           String
+  submittedByUserId                      String
+  playerId                               String?
+  patternId                              String
+  outcomeId                              String
+  clubTrackingDefinitionId               String?
+  standardPatternDefinitionIdAtRecording String?
+  clubMappingRevisionAtRecording         Int?
+  clubMappingStatusAtRecording           ClubTrackingMappingStatus?
+  half                                   MatchHalf
+  matchSecond                            Int
+  ownScoreAtTime                         Int
+  oppositionScoreAtTime                  Int
+  x                                      Float?
+  y                                      Float?
+  note                                   String?
+  status                                 SubmittedMatchEventStatus  @default(PENDING)
+  reviewedAt                             DateTime?
+  reviewedByUserId                       String?
+  createdAt                              DateTime                   @default(now())
+  updatedAt                              DateTime                   @updatedAt
 
-  matchDay            MatchDay                         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  trackingTask        MatchTrackingTask                @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
-  assignment          MatchContributorAssignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-  submittedBy         User                             @relation("SubmittedPatternObservations", fields: [submittedByUserId], references: [id], onDelete: Cascade)
-  reviewedBy          User?                            @relation("ReviewedPatternObservations", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  player              Player?                          @relation(fields: [playerId], references: [id], onDelete: SetNull)
-  pattern             TrackingPatternDefinition        @relation(fields: [patternId], references: [id], onDelete: Restrict)
-  outcome             TrackingPatternOutcome           @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
-  officialObservation MatchTrackingPatternObservation?
+  matchDay                             MatchDay                         @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  trackingTask                         MatchTrackingTask                @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
+  assignment                           MatchContributorAssignment       @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  submittedBy                          User                             @relation("SubmittedPatternObservations", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  reviewedBy                           User?                            @relation("ReviewedPatternObservations", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  player                               Player?                          @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  pattern                              TrackingPatternDefinition        @relation(fields: [patternId], references: [id], onDelete: Restrict)
+  outcome                              TrackingPatternOutcome           @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  clubTrackingDefinition               ClubTrackingDefinition?          @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardPatternDefinitionAtRecording TrackingPatternDefinition?       @relation("SubmittedPatternStandardDefinitionSnapshot", fields: [standardPatternDefinitionIdAtRecording], references: [id], onDelete: Restrict)
+  officialObservation                  MatchTrackingPatternObservation?
 
   @@index([matchDayId])
   @@index([trackingTaskId])
@@ -797,37 +903,45 @@ model SubmittedTrackingPatternObservation {
   @@index([playerId])
   @@index([patternId])
   @@index([outcomeId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardPatternDefinitionIdAtRecording])
   @@index([status])
 }
 
 model MatchTrackingPatternObservation {
-  id                     String    @id @default(cuid())
-  submittedObservationId String?   @unique
-  matchDayId             String
-  trackingTaskId         String
-  assignmentId           String?
-  submittedByUserId      String?
-  playerId               String?
-  patternId              String
-  outcomeId              String
-  half                   MatchHalf
-  matchSecond            Int
-  ownScoreAtTime         Int
-  oppositionScoreAtTime  Int
-  x                      Float?
-  y                      Float?
-  note                   String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  id                                     String                     @id @default(cuid())
+  submittedObservationId                 String?                    @unique
+  matchDayId                             String
+  trackingTaskId                         String
+  assignmentId                           String?
+  submittedByUserId                      String?
+  playerId                               String?
+  patternId                              String
+  outcomeId                              String
+  clubTrackingDefinitionId               String?
+  standardPatternDefinitionIdAtRecording String?
+  clubMappingRevisionAtRecording         Int?
+  clubMappingStatusAtRecording           ClubTrackingMappingStatus?
+  half                                   MatchHalf
+  matchSecond                            Int
+  ownScoreAtTime                         Int
+  oppositionScoreAtTime                  Int
+  x                                      Float?
+  y                                      Float?
+  note                                   String?
+  createdAt                              DateTime                   @default(now())
+  updatedAt                              DateTime                   @updatedAt
 
-  submittedObservation SubmittedTrackingPatternObservation? @relation(fields: [submittedObservationId], references: [id], onDelete: SetNull)
-  matchDay             MatchDay                             @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  trackingTask         MatchTrackingTask                    @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
-  assignment           MatchContributorAssignment?          @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  submittedBy          User?                                @relation("OfficialPatternObservations", fields: [submittedByUserId], references: [id], onDelete: SetNull)
-  player               Player?                              @relation(fields: [playerId], references: [id], onDelete: SetNull)
-  pattern              TrackingPatternDefinition            @relation(fields: [patternId], references: [id], onDelete: Restrict)
-  outcome              TrackingPatternOutcome               @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  submittedObservation                 SubmittedTrackingPatternObservation? @relation(fields: [submittedObservationId], references: [id], onDelete: SetNull)
+  matchDay                             MatchDay                             @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  trackingTask                         MatchTrackingTask                    @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
+  assignment                           MatchContributorAssignment?          @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  submittedBy                          User?                                @relation("OfficialPatternObservations", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  player                               Player?                              @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  pattern                              TrackingPatternDefinition            @relation(fields: [patternId], references: [id], onDelete: Restrict)
+  outcome                              TrackingPatternOutcome               @relation(fields: [outcomeId], references: [id], onDelete: Restrict)
+  clubTrackingDefinition               ClubTrackingDefinition?              @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardPatternDefinitionAtRecording TrackingPatternDefinition?           @relation("OfficialPatternStandardDefinitionSnapshot", fields: [standardPatternDefinitionIdAtRecording], references: [id], onDelete: Restrict)
 
   @@index([matchDayId])
   @@index([trackingTaskId])
@@ -836,39 +950,44 @@ model MatchTrackingPatternObservation {
   @@index([playerId])
   @@index([patternId])
   @@index([outcomeId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardPatternDefinitionIdAtRecording])
 }
 
 model EventDefinition {
-  id                   String                           @id @default(cuid())
-  scope                EventDefinitionScope             @default(GLOBAL)
-  clubId               String?
-  createdByUserId      String?
-  legacyEventType      MatchEventType?                  @unique
-  name                 String
-  slug                 String
-  normalizedName       String
-  description          String?
-  videoUrl             String?
-  matchPhase           EventDefinitionMatchPhase
-  category             EventDefinitionCategory
-  subcategory          String?
-  matchDayGroup        EventDefinitionMatchDayGroup?
-  agePhases            EventDefinitionAgePhase[]
-  fourCorner           EventDefinitionFourCorner
-  positionRelevance    EventDefinitionPosition[]
-  enabledByDefault     Boolean                          @default(false)
-  benchmarkable        Boolean                          @default(false)
-  requiresLocation     Boolean                          @default(false)
-  isActive             Boolean                          @default(true)
-  archivedAt           DateTime?
-  createdAt            DateTime                         @default(now())
-  updatedAt            DateTime                         @updatedAt
-  matchEvents          MatchEvent[]
-  matchDayEventTypes   MatchDayEventType[]
-  submittedMatchEvents SubmittedMatchEvent[]
-  topicEvents          EventTopicEvent[]
-  patternSteps         TrackingPatternStep[]
-  templateTaskEvents   TrackingSetupTemplateTaskEvent[]
+  id                                   String                           @id @default(cuid())
+  scope                                EventDefinitionScope             @default(GLOBAL)
+  clubId                               String?
+  createdByUserId                      String?
+  legacyEventType                      MatchEventType?                  @unique
+  name                                 String
+  slug                                 String
+  normalizedName                       String
+  description                          String?
+  videoUrl                             String?
+  matchPhase                           EventDefinitionMatchPhase
+  category                             EventDefinitionCategory
+  subcategory                          String?
+  matchDayGroup                        EventDefinitionMatchDayGroup?
+  agePhases                            EventDefinitionAgePhase[]
+  fourCorner                           EventDefinitionFourCorner
+  positionRelevance                    EventDefinitionPosition[]
+  enabledByDefault                     Boolean                          @default(false)
+  benchmarkable                        Boolean                          @default(false)
+  requiresLocation                     Boolean                          @default(false)
+  isActive                             Boolean                          @default(true)
+  archivedAt                           DateTime?
+  createdAt                            DateTime                         @default(now())
+  updatedAt                            DateTime                         @updatedAt
+  matchEvents                          MatchEvent[]
+  matchDayEventTypes                   MatchDayEventType[]
+  submittedMatchEvents                 SubmittedMatchEvent[]
+  topicEvents                          EventTopicEvent[]
+  patternSteps                         TrackingPatternStep[]
+  templateTaskEvents                   TrackingSetupTemplateTaskEvent[]
+  clubTrackingDefinitionsMapped        ClubTrackingDefinition[]         @relation("ClubTrackingDefinitionsMappedEvent")
+  submittedMatchEventsStandardSnapshot SubmittedMatchEvent[]            @relation("SubmittedMatchEventStandardDefinitionSnapshot")
+  matchEventsStandardSnapshot          MatchEvent[]                     @relation("MatchEventStandardDefinitionSnapshot")
 
   @@unique([scope, clubId, normalizedName])
   @@unique([scope, clubId, slug])
