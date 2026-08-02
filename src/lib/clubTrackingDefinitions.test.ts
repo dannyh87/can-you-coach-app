@@ -8,10 +8,12 @@ import {
   getClubTrackingReportingIdentity,
   normalizeClubTrackingDefinitionName,
   proposeClubTrackingDefinitionMapping,
+  rejectClubTrackingDefinition,
   retireClubTrackingDefinition,
   restoreClubTrackingDefinition,
   searchExistingTrackingDefinitions,
   submitClubTrackingDefinitionForReview,
+  updateClubTrackingDefinition,
 } from '@/lib/clubTrackingDefinitions'
 
 vi.mock('@/lib/auth', () => ({ isClerkEnabled: () => false }))
@@ -29,7 +31,10 @@ function createDb(overrides: Record<string, unknown> = {}) {
   }
   const db = {
     state,
-    clubMembership: { findUnique: vi.fn(async () => state.membershipRole ? { role: state.membershipRole, teamAssignments: [{ teamId: 'team-1' }] } : null) },
+    clubMembership: {
+      findUnique: vi.fn(async () => state.membershipRole ? { role: state.membershipRole, teamAssignments: [{ teamId: 'team-1' }] } : null),
+      findMany: vi.fn(async () => state.membershipRole ? [{ role: state.membershipRole, club: { id: 'club-1', name: 'Club 1' }, createdAt: new Date('2026-01-01') }] : []),
+    },
     eventDefinition: {
       findMany: vi.fn(async () => [standardEvent]),
       findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
@@ -96,6 +101,33 @@ describe('club tracking definitions governance', () => {
     const submitted = await submitClubTrackingDefinitionForReview({ db, userId: 'coach-1', definitionId: 'definition-1' })
     expect(submitted.ok).toBe(true)
     expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].status).toBe('PENDING_REVIEW')
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].submittedAt).toBeInstanceOf(Date)
+  })
+
+  it('requires rejection feedback and stores rejection audit fields', async () => {
+    const db = createDb()
+    const searchToken = await tokenFor(db, 'COACH', 'Lock the six')
+    await createClubTrackingDefinitionDraft({ db, userId: 'coach-1', input: { clubId: 'club-1', kind: 'EVENT_CUSTOM', name: 'Lock the six', searchToken, proposalType: 'EVENT' } })
+    await submitClubTrackingDefinitionForReview({ db, userId: 'coach-1', definitionId: 'definition-1' })
+    ;(db as { state: { membershipRole: string } }).state.membershipRole = 'OWNER'
+    await expect(rejectClubTrackingDefinition({ db, userId: 'owner-1', definitionId: 'definition-1', reason: '' })).resolves.toMatchObject({ ok: false })
+    await expect(rejectClubTrackingDefinition({ db, userId: 'owner-1', definitionId: 'definition-1', reason: 'Too broad for one event.' })).resolves.toMatchObject({ ok: true })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0]).toMatchObject({ status: 'REJECTED', rejectedByUserId: 'owner-1', rejectionReason: 'Too broad for one event.' })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].rejectedAt).toBeInstanceOf(Date)
+  })
+
+  it('lets a coach edit and resubmit their rejected definition', async () => {
+    const db = createDb()
+    const searchToken = await tokenFor(db, 'COACH', 'Lock the six')
+    await createClubTrackingDefinitionDraft({ db, userId: 'coach-1', input: { clubId: 'club-1', kind: 'EVENT_CUSTOM', name: 'Lock the six', searchToken, proposalType: 'EVENT' } })
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].status = 'REJECTED'
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].rejectionReason = 'Needs clearer wording.'
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].rejectedByUserId = 'owner-1'
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].rejectedAt = new Date('2026-01-01')
+    await expect(updateClubTrackingDefinition({ db, userId: 'coach-1', definitionId: 'definition-1', updates: { guidance: 'One observable event only.' } })).resolves.toMatchObject({ ok: true })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0]).toMatchObject({ guidance: 'One observable event only.', rejectionReason: null, rejectedByUserId: null, rejectedAt: null })
+    await expect(submitClubTrackingDefinitionForReview({ db, userId: 'coach-1', definitionId: 'definition-1' })).resolves.toMatchObject({ ok: true })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0]).toMatchObject({ status: 'PENDING_REVIEW', rejectionReason: null })
   })
 
   it('lets owners create approved definitions directly and approve drafts', async () => {

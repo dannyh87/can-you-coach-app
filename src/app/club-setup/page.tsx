@@ -6,6 +6,7 @@ import { getCurrentUser, isClerkEnabled } from '@/lib/auth'
 import { matchDayGroupOptions } from '@/lib/eventDefinitions'
 import { createEventDefinitionSlug, normalizeEventDefinitionName } from '@/lib/eventDefinitionSimilarity'
 import { ensureDefaultClub } from '@/lib/localUser'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
@@ -620,6 +621,11 @@ export default async function ClubSetupPage() {
       { name: 'asc' },
     ],
   })
+  const trackingLibraryEnabled = isMatchDayTrackingV2Enabled()
+  const trackingDefinitions = trackingLibraryEnabled ? await prisma.clubTrackingDefinition.findMany({
+    where: { clubId: { in: clubs.map((club) => club.id) } },
+    select: { clubId: true, status: true, createdByUserId: true },
+  }) : []
 
   const clubRows = clubs.map((club) => ({
     id: club.id,
@@ -696,6 +702,13 @@ export default async function ClubSetupPage() {
           requiresLocation: eventDefinition.requiresLocation,
           isActive: eventDefinition.isActive,
           usedCount: eventDefinition._count.matchDayEventTypes + eventDefinition._count.matchEvents,
+        }))}
+        trackingLibraryEnabled={trackingLibraryEnabled}
+        trackingLibrarySummaries={clubRows.map((club) => ({
+          clubId: club.id,
+          approved: trackingDefinitions.filter((definition) => definition.clubId === club.id && definition.status === 'APPROVED').length,
+          pending: trackingDefinitions.filter((definition) => definition.clubId === club.id && definition.status === 'PENDING_REVIEW').length,
+          myDrafts: trackingDefinitions.filter((definition) => definition.clubId === club.id && definition.createdByUserId === user.id && definition.status === 'DRAFT').length,
         }))}
         canCreateFirstClub={totalMembershipCount === 0 && spectatorAccessCount === 0}
         matchPhaseOptions={matchPhaseOptions}

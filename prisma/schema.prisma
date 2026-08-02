@@ -28,6 +28,7 @@ model User {
   reviewedPatternObservations     SubmittedTrackingPatternObservation[] @relation("ReviewedPatternObservations")
   clubTrackingDefinitionsCreated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsCreated")
   clubTrackingDefinitionsApproved ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsApproved")
+  clubTrackingDefinitionsRejected ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsRejected")
   clubTrackingDefinitionsUpdated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsUpdated")
   matchTrackingTasksCreated       MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
   officialPatternObservations     MatchTrackingPatternObservation[]     @relation("OfficialPatternObservations")
@@ -542,8 +543,12 @@ model ClubTrackingDefinition {
   active                    Boolean                      @default(true)
   retiredAt                 DateTime?
   createdByUserId           String
+  submittedAt               DateTime?
   approvedByUserId          String?
   approvedAt                DateTime?
+  rejectedByUserId          String?
+  rejectedAt                DateTime?
+  rejectionReason           String?
   updatedByUserId           String?
   createdAt                 DateTime                     @default(now())
   updatedAt                 DateTime                     @updatedAt
@@ -553,6 +558,7 @@ model ClubTrackingDefinition {
   mappedPatternDefinition      TrackingPatternDefinition?            @relation("ClubTrackingDefinitionsMappedPattern", fields: [mappedPatternDefinitionId], references: [id], onDelete: Restrict)
   createdBy                    User                                  @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
   approvedBy                   User?                                 @relation("ClubTrackingDefinitionsApproved", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  rejectedBy                   User?                                 @relation("ClubTrackingDefinitionsRejected", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
   updatedBy                    User?                                 @relation("ClubTrackingDefinitionsUpdated", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   submittedMatchEvents         SubmittedMatchEvent[]
   officialMatchEvents          MatchEvent[]
@@ -570,6 +576,7 @@ model ClubTrackingDefinition {
   @@index([mappedPatternDefinitionId])
   @@index([createdByUserId])
   @@index([approvedByUserId])
+  @@index([rejectedByUserId])
 }
 
 model MatchContributorAssignment {

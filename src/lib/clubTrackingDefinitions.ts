@@ -3,6 +3,7 @@ import type {
   ClubTrackingDefinitionKind,
   ClubTrackingDefinitionStatus,
   ClubTrackingMappingStatus,
+  ClubRole,
   EventDefinitionAgePhase,
   MatchTrackingScope,
   Prisma,
@@ -36,7 +37,10 @@ export type ClubTrackingDefinitionInput = {
   nearDuplicateAcknowledged?: boolean
   proposalType: 'EVENT' | 'PATTERN'
   patternConfigurationProvided?: boolean
+  createAsDraft?: boolean
 }
+
+export type TrackingLibraryRole = Extract<ClubRole, 'OWNER' | 'COACH' | 'ASSISTANT_COACH'>
 
 export type ClubTrackingReportingIdentity = {
   identityType: 'STANDARD' | 'CLUB_ALIAS' | 'CLUB_MAPPED' | 'CLUB_SPECIFIC'
@@ -91,6 +95,12 @@ async function canManageClubDefinitions(userId: string, clubId: string, db: Db) 
 
 async function canViewClubDefinitions(userId: string, clubId: string, db: Db) {
   return Boolean(await getMembership(userId, clubId, db))
+}
+
+async function getTrackingLibraryMembership(userId: string, clubId: string, db: Db) {
+  const membership = await getMembership(userId, clubId, db)
+  if (!membership || !['OWNER', 'COACH', 'ASSISTANT_COACH'].includes(membership.role)) return null
+  return membership as typeof membership & { role: TrackingLibraryRole }
 }
 
 async function createUniqueSlug(db: Db, clubId: string, name: string, excludeId?: string) {
@@ -148,7 +158,7 @@ export async function createClubTrackingDefinitionDraft({ db = prisma, userId, i
   if (duplicates.exact.length > 0) return { ok: false, reason: 'This matches an existing tracking definition.', fieldErrors: { name: duplicates.exact.map((item) => `${item.source}: ${item.name}`) } }
   const warnings = buildPatternLikeWarnings(input)
   if (warnings.length && !input.nearDuplicateAcknowledged) return { ok: false, reason: 'Review warnings before creating this definition.', fieldErrors: { warnings } }
-  const status: ClubTrackingDefinitionStatus = owner ? 'APPROVED' : 'DRAFT'
+  const status: ClubTrackingDefinitionStatus = owner && !input.createAsDraft ? 'APPROVED' : 'DRAFT'
   const mappingStatus = input.mappingStatus ?? (input.kind === 'EVENT_CUSTOM' ? 'NONE' : owner ? 'CLUB_APPROVED' : 'PROPOSED')
   const created = await db.clubTrackingDefinition.create({ data: { clubId: input.clubId, kind: input.kind, status, name: input.name.trim(), normalizedName: duplicates.normalized, slug: await createUniqueSlug(db, input.clubId, input.name), description: normalizeOptionalText(input.description), guidance: normalizeOptionalText(input.guidance), scopeType: input.scopeType ?? null, targetContext: input.targetContext ?? null, phase: input.phase ?? null, focusArea: input.focusArea ?? null, agePhases: input.agePhases ?? [], requiresLocation: Boolean(input.requiresLocation), mappedEventDefinitionId: input.mappedEventDefinitionId ?? null, mappedPatternDefinitionId: input.mappedPatternDefinitionId ?? null, mappingStatus, createdByUserId: userId, approvedByUserId: status === 'APPROVED' ? userId : null, approvedAt: status === 'APPROVED' ? new Date() : null }, select: { id: true } })
   return { ok: true, value: { id: created.id, status, warnings } }
@@ -158,8 +168,8 @@ export async function submitClubTrackingDefinitionForReview({ db = prisma, userI
   const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true, createdByUserId: true, status: true } })
   if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
   if (definition.createdByUserId !== userId && !(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'You cannot submit this definition for review.' }
-  if (definition.status !== 'DRAFT') return { ok: false, reason: 'Only draft definitions can be submitted for review.' }
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'PENDING_REVIEW', updatedByUserId: userId } })
+  if (!['DRAFT', 'REJECTED'].includes(definition.status)) return { ok: false, reason: 'Only draft or rejected definitions can be submitted for review.' }
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'PENDING_REVIEW', submittedAt: new Date(), rejectedByUserId: null, rejectedAt: null, rejectionReason: null, updatedByUserId: userId } })
   return { ok: true, value: true }
 }
 
@@ -168,7 +178,7 @@ export async function approveClubTrackingDefinition({ db = prisma, userId, defin
   if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
   if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can approve tracking definitions.' }
   if (!['DRAFT', 'PENDING_REVIEW', 'REJECTED'].includes(definition.status)) return { ok: false, reason: 'This definition cannot be approved.' }
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'APPROVED', active: true, retiredAt: null, mappingStatus: definition.kind === 'EVENT_CUSTOM' ? 'NONE' : definition.mappingStatus === 'NONE' ? 'CLUB_APPROVED' : definition.mappingStatus, approvedByUserId: userId, approvedAt: new Date(), updatedByUserId: userId } })
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'APPROVED', active: true, retiredAt: null, mappingStatus: definition.kind === 'EVENT_CUSTOM' ? 'NONE' : definition.mappingStatus === 'NONE' ? 'CLUB_APPROVED' : definition.mappingStatus, approvedByUserId: userId, approvedAt: new Date(), rejectedByUserId: null, rejectedAt: null, rejectionReason: null, updatedByUserId: userId } })
   return { ok: true, value: true }
 }
 
@@ -176,19 +186,57 @@ export async function rejectClubTrackingDefinition({ db = prisma, userId, defini
   const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true } })
   if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
   if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can reject tracking definitions.' }
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'REJECTED', guidance: normalizeOptionalText(reason) ?? undefined, updatedByUserId: userId } })
+  const rejectionReason = normalizeOptionalText(reason)
+  if (!rejectionReason) return { ok: false, reason: 'Rejection feedback is required.', fieldErrors: { rejectionReason: ['Rejection feedback is required.'] } }
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'REJECTED', rejectedByUserId: userId, rejectedAt: new Date(), rejectionReason, updatedByUserId: userId } })
   return { ok: true, value: true }
 }
 
 export async function updateClubTrackingDefinition({ db = prisma, userId, definitionId, updates }: { db?: Db; userId: string; definitionId: string; updates: Partial<Omit<ClubTrackingDefinitionInput, 'clubId' | 'searchToken' | 'proposalType'>> }): Promise<Result> {
   const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId } })
   if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
-  if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can edit tracking definitions.' }
+  const owner = await canManageClubDefinitions(userId, definition.clubId, db)
+  const ownEditableDraft = definition.createdByUserId === userId && ['DRAFT', 'REJECTED'].includes(definition.status)
+  if (!owner && !ownEditableDraft) return { ok: false, reason: 'You cannot edit this tracking definition.' }
   const usage = await getClubTrackingDefinitionUsage({ db, userId, definitionId, enforceAccess: false })
   const hasUsage = usage.ok && usage.value.totalReferences > 0
   if (hasUsage && semanticFields.some((field) => field in updates && updates[field] !== undefined && updates[field] !== definition[field])) return { ok: false, reason: 'This definition has usage. Create a new definition for semantic changes and retire this one.' }
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { name: updates.name?.trim() ?? undefined, normalizedName: updates.name ? normalizeClubTrackingDefinitionName(updates.name) : undefined, slug: updates.name ? await createUniqueSlug(db, definition.clubId, updates.name, definition.id) : undefined, description: updates.description === undefined ? undefined : normalizeOptionalText(updates.description), guidance: updates.guidance === undefined ? undefined : normalizeOptionalText(updates.guidance), requiresLocation: updates.requiresLocation ?? undefined, updatedByUserId: userId } })
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { name: updates.name?.trim() ?? undefined, normalizedName: updates.name ? normalizeClubTrackingDefinitionName(updates.name) : undefined, slug: updates.name ? await createUniqueSlug(db, definition.clubId, updates.name, definition.id) : undefined, description: updates.description === undefined ? undefined : normalizeOptionalText(updates.description), guidance: updates.guidance === undefined ? undefined : normalizeOptionalText(updates.guidance), scopeType: updates.scopeType === undefined ? undefined : updates.scopeType, targetContext: updates.targetContext === undefined ? undefined : updates.targetContext, phase: updates.phase === undefined ? undefined : updates.phase, focusArea: updates.focusArea === undefined ? undefined : updates.focusArea, agePhases: updates.agePhases ?? undefined, requiresLocation: updates.requiresLocation ?? undefined, mappedEventDefinitionId: updates.mappedEventDefinitionId === undefined ? undefined : updates.mappedEventDefinitionId, mappedPatternDefinitionId: updates.mappedPatternDefinitionId === undefined ? undefined : updates.mappedPatternDefinitionId, rejectedByUserId: definition.status === 'REJECTED' ? null : undefined, rejectedAt: definition.status === 'REJECTED' ? null : undefined, rejectionReason: definition.status === 'REJECTED' ? null : undefined, updatedByUserId: userId } })
   return { ok: true, value: true }
+}
+
+export async function getTrackingLibraryForUser({ db = prisma, userId, clubId, includeRetired = false, query }: { db?: Db; userId: string; clubId: string; includeRetired?: boolean; query?: string }) {
+  const membership = await getTrackingLibraryMembership(userId, clubId, db)
+  if (!membership) return { ok: false as const, reason: 'You cannot access the tracking library for this club.' }
+  const normalizedQuery = query ? normalizeClubTrackingDefinitionName(query) : ''
+  const textWhere = normalizedQuery ? { OR: [{ normalizedName: { contains: normalizedQuery, mode: 'insensitive' as const } }, { name: { contains: query, mode: 'insensitive' as const } }, { description: { contains: query, mode: 'insensitive' as const } }, { guidance: { contains: query, mode: 'insensitive' as const } }, { mappedEventDefinition: { name: { contains: query, mode: 'insensitive' as const } } }, { mappedPatternDefinition: { name: { contains: query, mode: 'insensitive' as const } } }, { createdBy: { email: { contains: query, mode: 'insensitive' as const } } }] } : {}
+  const visibilityWhere = membership.role === 'OWNER'
+    ? {}
+    : membership.role === 'COACH'
+      ? { OR: [{ status: 'APPROVED' as const, active: true }, { createdByUserId: userId, status: { in: ['DRAFT', 'PENDING_REVIEW', 'REJECTED'] as ClubTrackingDefinitionStatus[] } }, ...(includeRetired ? [{ createdByUserId: userId, status: 'RETIRED' as const }] : [])] }
+      : { status: 'APPROVED' as const, active: true }
+  const definitions = await db.clubTrackingDefinition.findMany({
+    where: { AND: [{ clubId }, includeRetired ? {} : { status: { not: 'RETIRED' as const } }, visibilityWhere, textWhere] },
+    include: { club: { select: { id: true, name: true } }, createdBy: { select: { id: true, email: true } }, approvedBy: { select: { id: true, email: true } }, rejectedBy: { select: { id: true, email: true } }, mappedEventDefinition: true, mappedPatternDefinition: { include: { steps: { orderBy: { stepOrder: 'asc' }, include: { eventDefinition: true } }, outcomes: { orderBy: { displayOrder: 'asc' } } } } },
+    orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }, { name: 'asc' }],
+  })
+  return { ok: true as const, value: { role: membership.role, definitions } }
+}
+
+export async function getTrackingLibraryClubsForUser({ db = prisma, userId }: { db?: Db; userId: string }) {
+  const memberships = await db.clubMembership.findMany({ where: { userId, role: { in: ['OWNER', 'COACH', 'ASSISTANT_COACH'] } }, include: { club: true }, orderBy: { createdAt: 'asc' } })
+  return memberships.map((membership) => ({ id: membership.club.id, name: membership.club.name, role: membership.role as TrackingLibraryRole }))
+}
+
+export async function getProductionClubTrackingDefinition({ db = prisma, userId, definitionId }: { db?: Db; userId: string; definitionId: string }) {
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, include: { club: true, createdBy: { select: { id: true, email: true } }, approvedBy: { select: { id: true, email: true } }, rejectedBy: { select: { id: true, email: true } }, mappedEventDefinition: true, mappedPatternDefinition: { include: { steps: { orderBy: { stepOrder: 'asc' }, include: { eventDefinition: true } }, outcomes: { orderBy: { displayOrder: 'asc' } } } } } })
+  if (!definition) return null
+  const membership = await getTrackingLibraryMembership(userId, definition.clubId, db)
+  if (!membership) return null
+  if (membership.role === 'OWNER') return { role: membership.role, definition }
+  if (membership.role === 'COACH' && (definition.status === 'APPROVED' && definition.active || definition.createdByUserId === userId && ['DRAFT', 'PENDING_REVIEW', 'REJECTED'].includes(definition.status))) return { role: membership.role, definition }
+  if (membership.role === 'ASSISTANT_COACH' && definition.status === 'APPROVED' && definition.active) return { role: membership.role, definition }
+  return null
 }
 
 export async function proposeClubTrackingDefinitionMapping({ db = prisma, userId, definitionId, mappedEventDefinitionId, mappedPatternDefinitionId }: { db?: Db; userId: string; definitionId: string; mappedEventDefinitionId?: string | null; mappedPatternDefinitionId?: string | null }): Promise<Result> {

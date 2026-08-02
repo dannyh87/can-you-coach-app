@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
@@ -50,11 +51,20 @@ type ClubRow = {
   teams: TeamRow[]
 }
 
+type TrackingLibrarySummary = {
+  clubId: string
+  approved: number
+  pending: number
+  myDrafts: number
+}
+
 type ModalMode = 'clubDetail' | 'editClub' | 'addTeam' | 'teamDetail' | 'editTeam' | 'deleteTeam' | null
 
 type ClubSetupClientProps = {
   clubs: ClubRow[]
   clubEvents: ClubEventRow[]
+  trackingLibraryEnabled: boolean
+  trackingLibrarySummaries: TrackingLibrarySummary[]
   canCreateFirstClub: boolean
   matchPhaseOptions: readonly Option[]
   categoryOptions: readonly Option[]
@@ -88,6 +98,8 @@ const footballPyramidStepOptions = [
 export default function ClubSetupClient({
   clubs,
   clubEvents,
+  trackingLibraryEnabled,
+  trackingLibrarySummaries,
   canCreateFirstClub,
   matchPhaseOptions,
   categoryOptions,
@@ -116,6 +128,7 @@ export default function ClubSetupClient({
     clubs.find((club) => club.id === selectedClubId) ?? clubs[0] ?? null
   const teams = selectedClub?.teams ?? []
   const selectedClubEvents = selectedClub ? clubEvents.filter((event) => event.clubId === selectedClub.id) : []
+  const trackingSummary = selectedClub ? trackingLibrarySummaries.find((summary) => summary.clubId === selectedClub.id) : null
   const totalPlayers = teams.reduce((total, team) => total + team.playerCount, 0)
   const totalFitnessSessions = teams.reduce(
     (total, team) => total + team.fitnessSessionCount,
@@ -344,6 +357,21 @@ export default function ClubSetupClient({
         onSubmit={submitAction}
       />
 
+      {trackingLibraryEnabled && selectedClub && (
+        <SectionCard
+          className="mb-6"
+          title="Tracking Library"
+          description="Create and manage club terminology, aliases and mapped coaching definitions. Legacy club events remain available during transition."
+          actions={<Link href={`/club-setup/tracking-library?clubId=${selectedClub.id}`} className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800">Open Tracking Library</Link>}
+        >
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3"><dt className="font-bold text-slate-500">Approved</dt><dd className="mt-1 text-2xl font-extrabold">{trackingSummary?.approved ?? 0}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-3"><dt className="font-bold text-slate-500">Pending review</dt><dd className="mt-1 text-2xl font-extrabold">{trackingSummary?.pending ?? 0}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-3"><dt className="font-bold text-slate-500">My drafts</dt><dd className="mt-1 text-2xl font-extrabold">{trackingSummary?.myDrafts ?? 0}</dd></div>
+          </dl>
+        </SectionCard>
+      )}
+
       <SectionCard
         title="Teams"
         description={`Teams belonging to ${selectedClub.name}.`}
@@ -458,6 +486,7 @@ export default function ClubSetupClient({
         updateClubEventAction={updateClubEventAction}
         archiveClubEventAction={archiveClubEventAction}
         restoreClubEventAction={restoreClubEventAction}
+        trackingLibraryEnabled={trackingLibraryEnabled}
       />
 
       {modalMode && (

@@ -58,6 +58,7 @@ type ClubEventsSectionProps = {
   updateClubEventAction: SetupAction
   archiveClubEventAction: SetupAction
   restoreClubEventAction: SetupAction
+  trackingLibraryEnabled?: boolean
 }
 
 const getOptionLabel = (options: readonly Option[], value: string) =>
@@ -76,6 +77,7 @@ export default function ClubEventsSection({
   updateClubEventAction,
   archiveClubEventAction,
   restoreClubEventAction,
+  trackingLibraryEnabled = false,
 }: ClubEventsSectionProps) {
   const router = useRouter()
   const [modalMode, setModalMode] = useState<'addClubEvent' | 'editClubEvent' | null>(null)
@@ -132,6 +134,12 @@ export default function ClubEventsSection({
         )}
         bodyClassName="p-0"
       >
+        {trackingLibraryEnabled && (
+          <div className="m-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+            <p className="font-bold">Legacy club-event workflow</p>
+            <p className="mt-1">New governed tracking definitions are managed in the Tracking Library. This legacy club-event section remains available during the transition.</p>
+          </div>
+        )}
         {events.length === 0 ? (
           <p className="p-4 text-sm text-gray-500">No club-specific events yet.</p>
         ) : (
