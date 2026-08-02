@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   approveClubTrackingDefinition,
+  approveClubTrackingStandardMapping,
   approveStandardMapping,
   createClubTrackingDefinitionDraft,
   deleteUnusedClubTrackingDefinitionDraft,
@@ -9,6 +10,7 @@ import {
   normalizeClubTrackingDefinitionName,
   proposeClubTrackingDefinitionMapping,
   rejectClubTrackingDefinition,
+  rejectClubTrackingStandardMapping,
   retireClubTrackingDefinition,
   restoreClubTrackingDefinition,
   searchExistingTrackingDefinitions,
@@ -184,6 +186,34 @@ describe('club tracking definitions governance', () => {
     const after = await getClubTrackingReportingIdentity({ db, clubTrackingDefinitionId: 'definition-1' })
     expect(after).toMatchObject({ ok: true, value: { contributesToStandardReporting: true, benchmarkEligible: true } })
     expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].mappingRevision).toBeGreaterThan(1)
+  })
+
+  it('production standard approval records reviewer and timestamp', async () => {
+    const db = createDb()
+    const searchToken = await tokenFor(db)
+    await createClubTrackingDefinitionDraft({ db, userId: 'owner-1', input: { clubId: 'club-1', kind: 'EVENT_MAPPED', name: 'Break the line', mappedEventDefinitionId: 'event-1', searchToken, proposalType: 'EVENT', scopeType: 'TEAM', targetContext: 'WHOLE_TEAM', phase: 'IN_POSSESSION', focusArea: 'PASSING' } })
+    const result = await approveClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 1, expectedMappingStatus: 'CLUB_APPROVED' })
+    expect(result).toMatchObject({ ok: true, value: { contributesToStandardReporting: true } })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0]).toMatchObject({ mappingStatus: 'STANDARD_APPROVED', standardMappingReviewedByUserId: 'admin-1', standardMappingRejectionReason: null, standardMappingRejectionCategory: null })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0].standardMappingReviewedAt).toBeInstanceOf(Date)
+  })
+
+  it('production standard rejection requires category and reason', async () => {
+    const db = createDb()
+    const searchToken = await tokenFor(db)
+    await createClubTrackingDefinitionDraft({ db, userId: 'owner-1', input: { clubId: 'club-1', kind: 'EVENT_MAPPED', name: 'Break the line', mappedEventDefinitionId: 'event-1', searchToken, proposalType: 'EVENT', scopeType: 'TEAM', targetContext: 'WHOLE_TEAM', phase: 'IN_POSSESSION', focusArea: 'PASSING' } })
+    await expect(rejectClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 1, expectedMappingStatus: 'CLUB_APPROVED', reason: 'Too broad.' })).resolves.toMatchObject({ ok: false, code: 'categoryRequired' })
+    await expect(rejectClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 1, expectedMappingStatus: 'CLUB_APPROVED', category: 'NOT_EQUIVALENT', reason: '' })).resolves.toMatchObject({ ok: false, code: 'reasonRequired' })
+    await expect(rejectClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 1, expectedMappingStatus: 'CLUB_APPROVED', category: 'NOT_EQUIVALENT', reason: 'Too broad.' })).resolves.toMatchObject({ ok: true })
+    expect((db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions[0]).toMatchObject({ mappingStatus: 'REJECTED', standardMappingReviewedByUserId: 'admin-1', standardMappingRejectionCategory: 'NOT_EQUIVALENT', standardMappingRejectionReason: 'Too broad.', status: 'APPROVED' })
+  })
+
+  it('rejects stale mapping review submissions', async () => {
+    const db = createDb()
+    const searchToken = await tokenFor(db)
+    await createClubTrackingDefinitionDraft({ db, userId: 'owner-1', input: { clubId: 'club-1', kind: 'EVENT_MAPPED', name: 'Break the line', mappedEventDefinitionId: 'event-1', searchToken, proposalType: 'EVENT', scopeType: 'TEAM', targetContext: 'WHOLE_TEAM', phase: 'IN_POSSESSION', focusArea: 'PASSING' } })
+    await expect(approveClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 99, expectedMappingStatus: 'CLUB_APPROVED' })).resolves.toMatchObject({ ok: false, code: 'staleRevision' })
+    await expect(approveClubTrackingStandardMapping({ db, actorEmail: 'admin@example.com', actorUserId: 'admin-1', definitionId: 'definition-1', expectedMappingRevision: 1, expectedMappingStatus: 'PROPOSED' })).resolves.toMatchObject({ ok: false, code: 'notReviewable' })
   })
 
   it('keeps proposed mappings out of standard reporting but aliases contribute through the standard identity', async () => {

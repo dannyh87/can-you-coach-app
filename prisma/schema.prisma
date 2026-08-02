@@ -8,38 +8,39 @@ datasource db {
 }
 
 model User {
-  id                              String                                @id @default(cuid())
-  clerkUserId                     String?                               @unique
-  email                           String                                @unique
-  passwordHash                    String?
-  onboardingCompletedAt           DateTime?
-  onboardingRole                  OnboardingRole?
-  createdAt                       DateTime                              @default(now())
-  updatedAt                       DateTime                              @updatedAt
-  clubs                           Club[]
-  fitnessTestTypes                FitnessTestType[]
-  invitationsSent                 Invitation[]                          @relation("InvitationsSent")
-  invitationsAccepted             Invitation[]                          @relation("InvitationsAccepted")
-  memberships                     ClubMembership[]
-  spectatorAccess                 SpectatorAccess[]
-  submittedMatchEvents            SubmittedMatchEvent[]                 @relation("SubmittedMatchEvents")
-  acceptedSubmittedMatchEvents    SubmittedMatchEvent[]                 @relation("AcceptedSubmittedMatchEvents")
-  submittedPatternObservations    SubmittedTrackingPatternObservation[] @relation("SubmittedPatternObservations")
-  reviewedPatternObservations     SubmittedTrackingPatternObservation[] @relation("ReviewedPatternObservations")
-  clubTrackingDefinitionsCreated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsCreated")
-  clubTrackingDefinitionsApproved ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsApproved")
-  clubTrackingDefinitionsRejected ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsRejected")
-  clubTrackingDefinitionsUpdated  ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsUpdated")
-  matchTrackingTasksCreated       MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
-  officialPatternObservations     MatchTrackingPatternObservation[]     @relation("OfficialPatternObservations")
-  assignmentsAssigned             MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
-  assignmentsAssignedBy           MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
-  assignmentRecipients            MatchContributorAssignmentRecipient[]
-  notifications                   Notification[]
-  trackingTemplatesOwned          TrackingSetupTemplate[]               @relation("TrackingTemplatesOwned")
-  trackingTemplatesCreated        TrackingSetupTemplate[]               @relation("TrackingTemplatesCreated")
-  trackingTemplatesUpdated        TrackingSetupTemplate[]               @relation("TrackingTemplatesUpdated")
-  trackingTemplateApplications    TrackingSetupTemplateApplication[]
+  id                                   String                                @id @default(cuid())
+  clerkUserId                          String?                               @unique
+  email                                String                                @unique
+  passwordHash                         String?
+  onboardingCompletedAt                DateTime?
+  onboardingRole                       OnboardingRole?
+  createdAt                            DateTime                              @default(now())
+  updatedAt                            DateTime                              @updatedAt
+  clubs                                Club[]
+  fitnessTestTypes                     FitnessTestType[]
+  invitationsSent                      Invitation[]                          @relation("InvitationsSent")
+  invitationsAccepted                  Invitation[]                          @relation("InvitationsAccepted")
+  memberships                          ClubMembership[]
+  spectatorAccess                      SpectatorAccess[]
+  submittedMatchEvents                 SubmittedMatchEvent[]                 @relation("SubmittedMatchEvents")
+  acceptedSubmittedMatchEvents         SubmittedMatchEvent[]                 @relation("AcceptedSubmittedMatchEvents")
+  submittedPatternObservations         SubmittedTrackingPatternObservation[] @relation("SubmittedPatternObservations")
+  reviewedPatternObservations          SubmittedTrackingPatternObservation[] @relation("ReviewedPatternObservations")
+  clubTrackingDefinitionsCreated       ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsCreated")
+  clubTrackingDefinitionsApproved      ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsApproved")
+  clubTrackingDefinitionsRejected      ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsRejected")
+  clubTrackingStandardMappingsReviewed ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionStandardMappingReviewer")
+  clubTrackingDefinitionsUpdated       ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsUpdated")
+  matchTrackingTasksCreated            MatchTrackingTask[]                   @relation("MatchTrackingTasksCreated")
+  officialPatternObservations          MatchTrackingPatternObservation[]     @relation("OfficialPatternObservations")
+  assignmentsAssigned                  MatchContributorAssignment[]          @relation("MatchAssignmentsAssigned")
+  assignmentsAssignedBy                MatchContributorAssignment[]          @relation("MatchAssignmentsAssignedBy")
+  assignmentRecipients                 MatchContributorAssignmentRecipient[]
+  notifications                        Notification[]
+  trackingTemplatesOwned               TrackingSetupTemplate[]               @relation("TrackingTemplatesOwned")
+  trackingTemplatesCreated             TrackingSetupTemplate[]               @relation("TrackingTemplatesCreated")
+  trackingTemplatesUpdated             TrackingSetupTemplate[]               @relation("TrackingTemplatesUpdated")
+  trackingTemplateApplications         TrackingSetupTemplateApplication[]
 }
 
 enum OnboardingRole {
@@ -146,6 +147,18 @@ enum ClubTrackingMappingStatus {
   CLUB_APPROVED
   STANDARD_APPROVED
   REJECTED
+}
+
+enum ClubTrackingStandardMappingRejectionCategory {
+  NOT_EQUIVALENT
+  EVENT_PATTERN_MISMATCH
+  SCOPE_CONTEXT_MISMATCH
+  OUTCOME_MISMATCH
+  BENCHMARK_INCOMPATIBLE
+  BETTER_STANDARD_EXISTS
+  NEEDS_CLARIFICATION
+  DUPLICATE_MAPPING
+  OTHER
 }
 
 enum InvitationType {
@@ -521,37 +534,41 @@ model TrackingSetupTemplateApplication {
 }
 
 model ClubTrackingDefinition {
-  id                        String                       @id @default(cuid())
-  clubId                    String
-  kind                      ClubTrackingDefinitionKind
-  status                    ClubTrackingDefinitionStatus
-  name                      String
-  normalizedName            String
-  slug                      String
-  description               String?
-  guidance                  String?
-  scopeType                 MatchTrackingScope?
-  targetContext             TrackingTargetContext?
-  phase                     TrackingTopicPhase?
-  focusArea                 TrackingFocusArea?
-  agePhases                 EventDefinitionAgePhase[]
-  requiresLocation          Boolean                      @default(false)
-  mappedEventDefinitionId   String?
-  mappedPatternDefinitionId String?
-  mappingStatus             ClubTrackingMappingStatus    @default(NONE)
-  mappingRevision           Int                          @default(1)
-  active                    Boolean                      @default(true)
-  retiredAt                 DateTime?
-  createdByUserId           String
-  submittedAt               DateTime?
-  approvedByUserId          String?
-  approvedAt                DateTime?
-  rejectedByUserId          String?
-  rejectedAt                DateTime?
-  rejectionReason           String?
-  updatedByUserId           String?
-  createdAt                 DateTime                     @default(now())
-  updatedAt                 DateTime                     @updatedAt
+  id                               String                                        @id @default(cuid())
+  clubId                           String
+  kind                             ClubTrackingDefinitionKind
+  status                           ClubTrackingDefinitionStatus
+  name                             String
+  normalizedName                   String
+  slug                             String
+  description                      String?
+  guidance                         String?
+  scopeType                        MatchTrackingScope?
+  targetContext                    TrackingTargetContext?
+  phase                            TrackingTopicPhase?
+  focusArea                        TrackingFocusArea?
+  agePhases                        EventDefinitionAgePhase[]
+  requiresLocation                 Boolean                                       @default(false)
+  mappedEventDefinitionId          String?
+  mappedPatternDefinitionId        String?
+  mappingStatus                    ClubTrackingMappingStatus                     @default(NONE)
+  mappingRevision                  Int                                           @default(1)
+  standardMappingReviewedByUserId  String?
+  standardMappingReviewedAt        DateTime?
+  standardMappingRejectionReason   String?
+  standardMappingRejectionCategory ClubTrackingStandardMappingRejectionCategory?
+  active                           Boolean                                       @default(true)
+  retiredAt                        DateTime?
+  createdByUserId                  String
+  submittedAt                      DateTime?
+  approvedByUserId                 String?
+  approvedAt                       DateTime?
+  rejectedByUserId                 String?
+  rejectedAt                       DateTime?
+  rejectionReason                  String?
+  updatedByUserId                  String?
+  createdAt                        DateTime                                      @default(now())
+  updatedAt                        DateTime                                      @updatedAt
 
   club                         Club                                  @relation(fields: [clubId], references: [id], onDelete: Cascade)
   mappedEventDefinition        EventDefinition?                      @relation("ClubTrackingDefinitionsMappedEvent", fields: [mappedEventDefinitionId], references: [id], onDelete: Restrict)
@@ -559,6 +576,7 @@ model ClubTrackingDefinition {
   createdBy                    User                                  @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
   approvedBy                   User?                                 @relation("ClubTrackingDefinitionsApproved", fields: [approvedByUserId], references: [id], onDelete: SetNull)
   rejectedBy                   User?                                 @relation("ClubTrackingDefinitionsRejected", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+  standardMappingReviewedBy    User?                                 @relation("ClubTrackingDefinitionStandardMappingReviewer", fields: [standardMappingReviewedByUserId], references: [id], onDelete: SetNull)
   updatedBy                    User?                                 @relation("ClubTrackingDefinitionsUpdated", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   submittedMatchEvents         SubmittedMatchEvent[]
   officialMatchEvents          MatchEvent[]
@@ -577,6 +595,8 @@ model ClubTrackingDefinition {
   @@index([createdByUserId])
   @@index([approvedByUserId])
   @@index([rejectedByUserId])
+  @@index([standardMappingReviewedByUserId])
+  @@index([mappingStatus, kind])
 }
 
 model MatchContributorAssignment {

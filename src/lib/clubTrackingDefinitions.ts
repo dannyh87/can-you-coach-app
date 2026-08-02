@@ -3,6 +3,7 @@ import type {
   ClubTrackingDefinitionKind,
   ClubTrackingDefinitionStatus,
   ClubTrackingMappingStatus,
+  ClubTrackingStandardMappingRejectionCategory,
   ClubRole,
   EventDefinitionAgePhase,
   MatchTrackingScope,
@@ -17,6 +18,7 @@ import { prisma } from '@/lib/prisma'
 
 type Db = typeof prisma | Prisma.TransactionClient
 type Result<T = true> = { ok: true; value: T } | { ok: false; reason: string; fieldErrors?: Record<string, string[]> }
+type StructuredResult<T = true> = { ok: true; value: T } | { ok: false; reason: string; code?: string; fieldErrors?: Record<string, string[]> }
 
 export type ClubTrackingDefinitionInput = {
   clubId: string
@@ -55,9 +57,11 @@ export type ClubTrackingReportingIdentity = {
 }
 
 const mappingKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_ALIAS', 'EVENT_MAPPED', 'PATTERN_ALIAS', 'PATTERN_MAPPED'])
+const reviewableMappingKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_MAPPED', 'PATTERN_MAPPED'])
 const eventKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_ALIAS', 'EVENT_MAPPED', 'EVENT_CUSTOM'])
 const patternKinds = new Set<ClubTrackingDefinitionKind>(['PATTERN_ALIAS', 'PATTERN_MAPPED'])
 const semanticFields = ['kind', 'scopeType', 'targetContext', 'phase', 'focusArea', 'requiresLocation', 'mappedEventDefinitionId', 'mappedPatternDefinitionId'] as const
+const reviewableStandardMappingStatuses = new Set<ClubTrackingMappingStatus>(['CLUB_APPROVED'])
 
 export function normalizeClubTrackingDefinitionName(value: string) {
   return value
@@ -201,7 +205,9 @@ export async function updateClubTrackingDefinition({ db = prisma, userId, defini
   const usage = await getClubTrackingDefinitionUsage({ db, userId, definitionId, enforceAccess: false })
   const hasUsage = usage.ok && usage.value.totalReferences > 0
   if (hasUsage && semanticFields.some((field) => field in updates && updates[field] !== undefined && updates[field] !== definition[field])) return { ok: false, reason: 'This definition has usage. Create a new definition for semantic changes and retire this one.' }
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { name: updates.name?.trim() ?? undefined, normalizedName: updates.name ? normalizeClubTrackingDefinitionName(updates.name) : undefined, slug: updates.name ? await createUniqueSlug(db, definition.clubId, updates.name, definition.id) : undefined, description: updates.description === undefined ? undefined : normalizeOptionalText(updates.description), guidance: updates.guidance === undefined ? undefined : normalizeOptionalText(updates.guidance), scopeType: updates.scopeType === undefined ? undefined : updates.scopeType, targetContext: updates.targetContext === undefined ? undefined : updates.targetContext, phase: updates.phase === undefined ? undefined : updates.phase, focusArea: updates.focusArea === undefined ? undefined : updates.focusArea, agePhases: updates.agePhases ?? undefined, requiresLocation: updates.requiresLocation ?? undefined, mappedEventDefinitionId: updates.mappedEventDefinitionId === undefined ? undefined : updates.mappedEventDefinitionId, mappedPatternDefinitionId: updates.mappedPatternDefinitionId === undefined ? undefined : updates.mappedPatternDefinitionId, rejectedByUserId: definition.status === 'REJECTED' ? null : undefined, rejectedAt: definition.status === 'REJECTED' ? null : undefined, rejectionReason: definition.status === 'REJECTED' ? null : undefined, updatedByUserId: userId } })
+  const semanticChanged = semanticFields.some((field) => field in updates && updates[field] !== undefined && updates[field] !== definition[field])
+  const resetStandardReview = semanticChanged && reviewableMappingKinds.has(definition.kind)
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { name: updates.name?.trim() ?? undefined, normalizedName: updates.name ? normalizeClubTrackingDefinitionName(updates.name) : undefined, slug: updates.name ? await createUniqueSlug(db, definition.clubId, updates.name, definition.id) : undefined, description: updates.description === undefined ? undefined : normalizeOptionalText(updates.description), guidance: updates.guidance === undefined ? undefined : normalizeOptionalText(updates.guidance), scopeType: updates.scopeType === undefined ? undefined : updates.scopeType, targetContext: updates.targetContext === undefined ? undefined : updates.targetContext, phase: updates.phase === undefined ? undefined : updates.phase, focusArea: updates.focusArea === undefined ? undefined : updates.focusArea, agePhases: updates.agePhases ?? undefined, requiresLocation: updates.requiresLocation ?? undefined, mappedEventDefinitionId: updates.mappedEventDefinitionId === undefined ? undefined : updates.mappedEventDefinitionId, mappedPatternDefinitionId: updates.mappedPatternDefinitionId === undefined ? undefined : updates.mappedPatternDefinitionId, mappingStatus: resetStandardReview && definition.status === 'APPROVED' ? 'CLUB_APPROVED' : undefined, mappingRevision: resetStandardReview ? { increment: 1 } : undefined, standardMappingReviewedByUserId: resetStandardReview ? null : undefined, standardMappingReviewedAt: resetStandardReview ? null : undefined, standardMappingRejectionReason: resetStandardReview ? null : undefined, standardMappingRejectionCategory: resetStandardReview ? null : undefined, rejectedByUserId: definition.status === 'REJECTED' ? null : undefined, rejectedAt: definition.status === 'REJECTED' ? null : undefined, rejectionReason: definition.status === 'REJECTED' ? null : undefined, updatedByUserId: userId } })
   return { ok: true, value: true }
 }
 
@@ -248,8 +254,133 @@ export async function proposeClubTrackingDefinitionMapping({ db = prisma, userId
   const valid = await validateMappingTarget(db, next.kind, next.mappedEventDefinitionId, next.mappedPatternDefinitionId)
   if (!valid.ok) return valid
   const changed = definition.mappedEventDefinitionId !== next.mappedEventDefinitionId || definition.mappedPatternDefinitionId !== next.mappedPatternDefinitionId
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { mappedEventDefinitionId: next.mappedEventDefinitionId, mappedPatternDefinitionId: next.mappedPatternDefinitionId, mappingStatus: 'CLUB_APPROVED', mappingRevision: changed ? { increment: 1 } : undefined, updatedByUserId: userId } })
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { mappedEventDefinitionId: next.mappedEventDefinitionId, mappedPatternDefinitionId: next.mappedPatternDefinitionId, mappingStatus: 'CLUB_APPROVED', mappingRevision: changed ? { increment: 1 } : undefined, standardMappingReviewedByUserId: changed ? null : undefined, standardMappingReviewedAt: changed ? null : undefined, standardMappingRejectionReason: changed ? null : undefined, standardMappingRejectionCategory: changed ? null : undefined, updatedByUserId: userId } })
   return { ok: true, value: true }
+}
+
+export type StandardMappingReviewFilters = {
+  status?: 'AWAITING' | 'STANDARD_APPROVED' | 'REJECTED' | 'ALL'
+  type?: 'ALL' | 'EVENTS' | 'PATTERNS'
+  clubQuery?: string
+  risk?: 'ALL' | 'NO_USAGE' | 'USED' | 'BENCHMARKABLE' | 'REVISION_CHANGED' | 'SIMILAR_STANDARDS'
+  sort?: 'NEWEST' | 'OLDEST' | 'LONGEST_WAITING'
+}
+
+export async function getStandardMappingReviewQueue({ db = prisma, filters = {} }: { db?: Db; filters?: StandardMappingReviewFilters } = {}) {
+  const status = filters.status ?? 'AWAITING'
+  const mappingStatus = status === 'AWAITING' ? ['CLUB_APPROVED' as const] : status === 'ALL' ? ['PROPOSED' as const, 'CLUB_APPROVED' as const, 'STANDARD_APPROVED' as const, 'REJECTED' as const] : [status]
+  const kind = filters.type === 'EVENTS' ? ['EVENT_MAPPED' as const] : filters.type === 'PATTERNS' ? ['PATTERN_MAPPED' as const] : ['EVENT_MAPPED' as const, 'PATTERN_MAPPED' as const]
+  const rows = await db.clubTrackingDefinition.findMany({
+    where: { kind: { in: kind }, mappingStatus: { in: mappingStatus }, ...(status === 'AWAITING' ? { status: 'APPROVED' as const, active: true } : {}), ...(filters.clubQuery ? { club: { name: { contains: filters.clubQuery, mode: 'insensitive' as const } } } : {}) },
+    include: { club: true, createdBy: { select: { email: true } }, approvedBy: { select: { email: true } }, mappedEventDefinition: true, mappedPatternDefinition: { include: { outcomes: true } }, submittedMatchEvents: { select: { id: true } }, officialMatchEvents: { select: { id: true } }, submittedPatternObservations: { select: { id: true } }, officialPatternObservations: { select: { id: true } } },
+    orderBy: filters.sort === 'OLDEST' || filters.sort === 'LONGEST_WAITING' ? [{ updatedAt: 'asc' }] : [{ updatedAt: 'desc' }],
+  })
+  return rows.map((definition) => {
+    const usageCount = definition.submittedMatchEvents.length + definition.officialMatchEvents.length + definition.submittedPatternObservations.length + definition.officialPatternObservations.length
+    const benchmarkable = Boolean(definition.mappedEventDefinition?.benchmarkable)
+    return { definition, usageCount, benchmarkable, warnings: buildMappingReviewWarnings(definition, usageCount) }
+  }).filter((row) => {
+    if (!filters.risk || filters.risk === 'ALL') return true
+    if (filters.risk === 'NO_USAGE') return row.usageCount === 0
+    if (filters.risk === 'USED') return row.usageCount > 0
+    if (filters.risk === 'BENCHMARKABLE') return row.benchmarkable
+    if (filters.risk === 'REVISION_CHANGED') return Boolean(row.definition.standardMappingReviewedAt && row.definition.mappingStatus === 'CLUB_APPROVED')
+    if (filters.risk === 'SIMILAR_STANDARDS') return row.warnings.some((warning) => warning.includes('Similar'))
+    return true
+  })
+}
+
+export async function getStandardMappingReviewDetail({ db = prisma, definitionId }: { db?: Db; definitionId: string }) {
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, include: { club: true, createdBy: { select: { email: true } }, approvedBy: { select: { email: true } }, mappedEventDefinition: true, mappedPatternDefinition: { include: { contexts: true, aliases: true, steps: { orderBy: { stepOrder: 'asc' }, include: { eventDefinition: true } }, outcomes: { orderBy: { displayOrder: 'asc' } } } }, submittedMatchEvents: { select: { id: true, createdAt: true } }, officialMatchEvents: { select: { id: true, createdAt: true } }, submittedPatternObservations: { select: { id: true, createdAt: true } }, officialPatternObservations: { select: { id: true, createdAt: true } } } })
+  if (!definition || !reviewableMappingKinds.has(definition.kind)) return null
+  const usageCount = definition.submittedMatchEvents.length + definition.officialMatchEvents.length + definition.submittedPatternObservations.length + definition.officialPatternObservations.length
+  const standardAliases = definition.mappedEventDefinitionId ? await db.eventTopicAlias.findMany({ where: { topic: { events: { some: { eventDefinitionId: definition.mappedEventDefinitionId } } } }, take: 20 }) : []
+  const similarStandards = await getSimilarStandardCandidates(db, definition)
+  const similarClubMappings = await db.clubTrackingDefinition.findMany({ where: { id: { not: definition.id }, kind: definition.kind, OR: [{ mappedEventDefinitionId: definition.mappedEventDefinitionId ?? undefined }, { mappedPatternDefinitionId: definition.mappedPatternDefinitionId ?? undefined }, { normalizedName: { contains: definition.normalizedName.split(' ')[0] ?? '', mode: 'insensitive' } }] }, include: { club: { select: { name: true } }, mappedEventDefinition: true, mappedPatternDefinition: true }, take: 12 })
+  return { definition, usageCount, standardAliases, similarStandards, similarClubMappings, checks: buildCompatibilityChecks(definition), eligibility: getStandardMappingReviewEligibility(definition) }
+}
+
+export async function approveClubTrackingStandardMapping({ db = prisma, actorEmail, actorUserId, definitionId, expectedMappingRevision, expectedMappingStatus }: { db?: Db; actorEmail: string; actorUserId: string; definitionId: string; expectedMappingRevision: number; expectedMappingStatus: ClubTrackingMappingStatus }): Promise<StructuredResult<ClubTrackingReportingIdentity>> {
+  if (!canManageGlobalEventLibrary({ email: actorEmail })) return { ok: false, reason: 'Only super admins can approve standard mappings.', code: 'forbidden' }
+  return runTransaction(db, async (tx) => {
+    const validation = await validateStandardMappingReviewState(tx, definitionId, expectedMappingRevision, expectedMappingStatus)
+    if (!validation.ok) return validation
+    await tx.clubTrackingDefinition.update({ where: { id: definitionId }, data: { mappingStatus: 'STANDARD_APPROVED', standardMappingReviewedByUserId: actorUserId, standardMappingReviewedAt: new Date(), standardMappingRejectionReason: null, standardMappingRejectionCategory: null } })
+    const identity = await getClubTrackingReportingIdentity({ db: tx, clubTrackingDefinitionId: definitionId })
+    return identity.ok ? { ok: true as const, value: identity.value } : identity
+  })
+}
+
+export async function rejectClubTrackingStandardMapping({ db = prisma, actorEmail, actorUserId, definitionId, expectedMappingRevision, expectedMappingStatus, category, reason }: { db?: Db; actorEmail: string; actorUserId: string; definitionId: string; expectedMappingRevision: number; expectedMappingStatus: ClubTrackingMappingStatus; category?: ClubTrackingStandardMappingRejectionCategory | null; reason?: string | null }): Promise<StructuredResult> {
+  if (!canManageGlobalEventLibrary({ email: actorEmail })) return { ok: false, reason: 'Only super admins can reject standard mappings.', code: 'forbidden' }
+  if (!category) return { ok: false, reason: 'Select a rejection category.', code: 'categoryRequired', fieldErrors: { category: ['Select a rejection category.'] } }
+  const rejectionReason = normalizeOptionalText(reason)
+  if (!rejectionReason) return { ok: false, reason: 'Rejection feedback is required.', code: 'reasonRequired', fieldErrors: { reason: ['Rejection feedback is required.'] } }
+  return runTransaction(db, async (tx) => {
+    const validation = await validateStandardMappingReviewState(tx, definitionId, expectedMappingRevision, expectedMappingStatus)
+    if (!validation.ok) return validation
+    await tx.clubTrackingDefinition.update({ where: { id: definitionId }, data: { mappingStatus: 'REJECTED', standardMappingReviewedByUserId: actorUserId, standardMappingReviewedAt: new Date(), standardMappingRejectionCategory: category, standardMappingRejectionReason: rejectionReason } })
+    return { ok: true as const, value: true }
+  })
+}
+
+async function runTransaction<T>(db: Db, callback: (tx: Db) => Promise<T>) {
+  if ('$transaction' in db && typeof db.$transaction === 'function') return db.$transaction((tx) => callback(tx))
+  return callback(db)
+}
+
+async function validateStandardMappingReviewState(db: Db, definitionId: string, expectedMappingRevision: number, expectedMappingStatus: ClubTrackingMappingStatus): Promise<StructuredResult> {
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, include: { mappedEventDefinition: true, mappedPatternDefinition: { include: { outcomes: true } } } })
+  if (!definition) return { ok: false, reason: 'Tracking definition was not found.', code: 'notFound' }
+  if (!reviewableMappingKinds.has(definition.kind)) return { ok: false, reason: 'Only mapped event and mapped pattern definitions can be reviewed.', code: 'notReviewable' }
+  if (definition.status !== 'APPROVED') return { ok: false, reason: 'Club definition must be approved before standard mapping review.', code: 'clubLifecycleNotApproved' }
+  if (!definition.active || definition.retiredAt) return { ok: false, reason: 'Retired or inactive definitions cannot be standard approved.', code: 'definitionRetired' }
+  if (definition.mappingRevision !== expectedMappingRevision) return { ok: false, reason: 'Mapping revision changed. Reload before reviewing.', code: 'staleRevision' }
+  if (definition.mappingStatus !== expectedMappingStatus) return { ok: false, reason: 'Mapping status changed. Reload before reviewing.', code: 'notReviewable' }
+  if (!reviewableStandardMappingStatuses.has(definition.mappingStatus)) return { ok: false, reason: 'This mapping is not awaiting standard review.', code: 'notReviewable' }
+  const target = await validateMappingTarget(db, definition.kind, definition.mappedEventDefinitionId, definition.mappedPatternDefinitionId)
+  if (!target.ok) return { ok: false, reason: target.reason, code: target.reason.includes('pattern') ? 'patternOutcomesMissing' : 'standardInactive' }
+  const checks = buildCompatibilityChecks(definition)
+  const blocking = checks.find((check) => check.level === 'BLOCKING')
+  if (blocking) return { ok: false, reason: blocking.message, code: blocking.code }
+  return { ok: true, value: true }
+}
+
+function buildCompatibilityChecks(definition: { kind: ClubTrackingDefinitionKind; scopeType: MatchTrackingScope | null; targetContext: TrackingTargetContext | null; phase: TrackingTopicPhase | null; focusArea: TrackingFocusArea | null; requiresLocation: boolean; guidance: string | null; description: string | null; mappedEventDefinitionId: string | null; mappedPatternDefinitionId: string | null; mappedEventDefinition?: { isActive: boolean; scope: string; requiresLocation: boolean; benchmarkable: boolean } | null; mappedPatternDefinition?: { active: boolean; requiresLocation: boolean; outcomes: Array<unknown> } | null }) {
+  const isEvent = definition.kind === 'EVENT_MAPPED'
+  const text = `${definition.description ?? ''} ${definition.guidance ?? ''}`.toLowerCase()
+  const impliesCustomOutcome = ['custom outcome', 'score as', 'outcome:', 'successful if', 'unsuccessful if'].some((word) => text.includes(word))
+  const impliesSequenceForEvent = isEvent && [' then ', 'combination', 'third player', 'set and spin', 'trigger'].some((word) => text.includes(word))
+  return [
+    { label: 'Matching item type', level: isEvent && definition.mappedEventDefinitionId || !isEvent && definition.mappedPatternDefinitionId ? 'COMPATIBLE' as const : 'BLOCKING' as const, code: 'typeMismatch', message: 'Club definition and mapped standard type do not match.' },
+    { label: 'Standard active state', level: definition.mappedEventDefinition?.isActive === false || definition.mappedPatternDefinition?.active === false ? 'BLOCKING' as const : 'COMPATIBLE' as const, code: 'standardInactive', message: 'Mapped standard is inactive.' },
+    { label: 'Club lifecycle state', level: 'COMPATIBLE' as const, code: 'ok', message: 'Club lifecycle is checked before mutation.' },
+    { label: 'Scope compatibility', level: definition.scopeType ? 'COMPATIBLE' as const : 'REVIEW' as const, code: 'mappingIncompatible', message: 'Scope is not specified; confirm standard comparability.' },
+    { label: 'Target-context compatibility', level: definition.targetContext ? 'COMPATIBLE' as const : 'REVIEW' as const, code: 'mappingIncompatible', message: 'Target context is not specified; confirm standard comparability.' },
+    { label: 'Phase compatibility', level: definition.phase ? 'COMPATIBLE' as const : 'REVIEW' as const, code: 'mappingIncompatible', message: 'Phase is not specified; confirm standard comparability.' },
+    { label: 'Focus compatibility', level: definition.focusArea ? 'COMPATIBLE' as const : 'REVIEW' as const, code: 'mappingIncompatible', message: 'Focus area is not specified; confirm standard comparability.' },
+    { label: 'Location compatibility', level: definition.requiresLocation === Boolean(definition.mappedEventDefinition?.requiresLocation ?? definition.mappedPatternDefinition?.requiresLocation ?? definition.requiresLocation) ? 'COMPATIBLE' as const : 'REVIEW' as const, code: 'mappingIncompatible', message: 'Location requirement differs from the mapped standard.' },
+    { label: 'Pattern outcome compatibility', level: !isEvent && definition.mappedPatternDefinition?.outcomes.length === 0 ? 'BLOCKING' as const : impliesCustomOutcome ? 'BLOCKING' as const : 'COMPATIBLE' as const, code: 'patternOutcomesMissing', message: impliesCustomOutcome ? 'Club wording implies unsupported custom outcomes.' : 'Mapped pattern must have standard outcomes.' },
+    { label: 'Observable event check', level: impliesSequenceForEvent ? 'REVIEW' as const : 'COMPATIBLE' as const, code: 'mappingIncompatible', message: 'Club event wording may imply a sequence or tactical pattern.' },
+    { label: 'Benchmark implication', level: definition.mappedEventDefinition?.benchmarkable ? 'REVIEW' as const : 'COMPATIBLE' as const, code: 'mappingIncompatible', message: 'Mapped standard is benchmarkable; confirm equivalence before approving.' },
+  ]
+}
+
+function getStandardMappingReviewEligibility(definition: Parameters<typeof buildCompatibilityChecks>[0] & { status: ClubTrackingDefinitionStatus; active: boolean; retiredAt: Date | null; mappingStatus: ClubTrackingMappingStatus; mappingRevision: number }) {
+  const checks = buildCompatibilityChecks(definition)
+  const blocking = checks.filter((check) => check.level === 'BLOCKING')
+  return { canApprove: definition.status === 'APPROVED' && definition.active && !definition.retiredAt && definition.mappingStatus === 'CLUB_APPROVED' && blocking.length === 0, blocking }
+}
+
+function buildMappingReviewWarnings(definition: { mappingStatus: ClubTrackingMappingStatus; standardMappingReviewedAt: Date | null; mappedEventDefinition?: { benchmarkable: boolean } | null; mappedPatternDefinition?: { outcomes: Array<unknown> } | null }, usageCount: number) {
+  return [usageCount > 0 ? 'Used locally' : null, definition.mappedEventDefinition?.benchmarkable ? 'Benchmarkable standard' : null, definition.mappingStatus === 'CLUB_APPROVED' && definition.standardMappingReviewedAt ? 'Revision changed after previous review' : null, definition.mappedPatternDefinition && definition.mappedPatternDefinition.outcomes.length === 0 ? 'Pattern has no standard outcomes' : null].filter((warning): warning is string => Boolean(warning))
+}
+
+async function getSimilarStandardCandidates(db: Db, definition: { kind: ClubTrackingDefinitionKind; normalizedName: string; mappedEventDefinitionId: string | null; mappedPatternDefinitionId: string | null }) {
+  const token = definition.normalizedName.split(' ')[0] ?? ''
+  if (!token) return []
+  if (definition.kind === 'EVENT_MAPPED') return db.eventDefinition.findMany({ where: { scope: 'GLOBAL', id: { not: definition.mappedEventDefinitionId ?? undefined }, OR: [{ normalizedName: { contains: token, mode: 'insensitive' } }, { name: { contains: token, mode: 'insensitive' } }] }, take: 8 })
+  return db.trackingPatternDefinition.findMany({ where: { ownerScope: 'GLOBAL', id: { not: definition.mappedPatternDefinitionId ?? undefined }, OR: [{ normalizedName: { contains: token, mode: 'insensitive' } }, { name: { contains: token, mode: 'insensitive' } }, { aliases: { some: { normalizedAlias: { contains: token, mode: 'insensitive' } } } }] }, take: 8 })
 }
 
 export async function approveStandardMapping({ db = prisma, actorEmail, definitionId }: { db?: Db; actorEmail: string; definitionId: string }): Promise<Result> {
@@ -259,13 +390,13 @@ export async function approveStandardMapping({ db = prisma, actorEmail, definiti
   if (!mappingKinds.has(definition.kind)) return { ok: false, reason: 'Custom definitions cannot be standard approved.' }
   const valid = await validateMappingTarget(db, definition.kind, definition.mappedEventDefinitionId, definition.mappedPatternDefinitionId)
   if (!valid.ok) return valid
-  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { mappingStatus: 'STANDARD_APPROVED', mappingRevision: { increment: 1 } } })
+  await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { mappingStatus: 'STANDARD_APPROVED', mappingRevision: { increment: 1 }, standardMappingReviewedAt: new Date(), standardMappingRejectionReason: null, standardMappingRejectionCategory: null } })
   return { ok: true, value: true }
 }
 
 export async function rejectStandardMapping({ db = prisma, actorEmail, definitionId }: { db?: Db; actorEmail: string; definitionId: string }): Promise<Result> {
   if (!canManageGlobalEventLibrary({ email: actorEmail })) return { ok: false, reason: 'Only super admins can reject standard mappings.' }
-  await db.clubTrackingDefinition.update({ where: { id: definitionId }, data: { mappingStatus: 'REJECTED', mappingRevision: { increment: 1 } } })
+  await db.clubTrackingDefinition.update({ where: { id: definitionId }, data: { mappingStatus: 'REJECTED', mappingRevision: { increment: 1 }, standardMappingReviewedAt: new Date(), standardMappingRejectionCategory: 'OTHER', standardMappingRejectionReason: 'Rejected in the development explorer.' } })
   return { ok: true, value: true }
 }
 

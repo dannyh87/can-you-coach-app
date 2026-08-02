@@ -22,6 +22,7 @@ const getText = (formData: FormData, key: string) => {
 const optional = <T extends string>(value: string) => value ? value as T : null
 const getAges = (formData: FormData) => formData.getAll('agePhase').filter((value): value is EventDefinitionAgePhase => typeof value === 'string' && ['FOUNDATION', 'YOUTH', 'ADULT'].includes(value))
 type ProductionDefinition = NonNullable<Awaited<ReturnType<typeof getProductionClubTrackingDefinition>>>['definition']
+const formatMappingRejectionCategory = (value: string | null) => value ? value.toLowerCase().replace(/_/g, ' ') : 'Not set'
 
 async function runTransition(formData: FormData) {
   'use server'
@@ -87,6 +88,7 @@ export default async function DefinitionDetailPage({ params, searchParams }: { p
   const canRetire = role === 'OWNER' && definition.status === 'APPROVED'
   const canRestore = role === 'OWNER' && definition.status === 'RETIRED'
   const showRejection = Boolean(definition.rejectionReason && (role === 'OWNER' || definition.createdByUserId === user.id))
+  const showMappingRejection = Boolean(definition.mappingStatus === 'REJECTED' && definition.standardMappingRejectionReason && (role === 'OWNER' || definition.createdByUserId === user.id))
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:p-6">
@@ -107,10 +109,12 @@ export default async function DefinitionDetailPage({ params, searchParams }: { p
           <Info label="Event or pattern" value={isPatternKind(definition.kind) ? 'Tactical pattern' : 'Observable event'} />
           <Info label="Mapped standard" value={standardName(definition) ?? 'None'} />
           <Info label="Mapping revision" value={String(definition.mappingRevision)} />
+          <Info label="Standard review date" value={displayDate(definition.standardMappingReviewedAt)} />
           <Info label="Standard reporting" value={identity.ok && identity.value.contributesToStandardReporting ? 'Included in standard reporting' : 'Excluded from standard reporting'} />
           <Info label="Club reporting" value={identity.ok && identity.value.contributesToClubReporting ? 'Included in club reporting' : 'Not a club reporting identity'} />
           <Info label="Benchmark eligibility" value={identity.ok && identity.value.benchmarkEligible ? 'Benchmark eligible' : 'Not benchmark eligible'} />
         </dl>
+        {showMappingRejection && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"><p className="font-bold">Standard mapping rejection</p><p className="mt-1">Category: {formatMappingRejectionCategory(definition.standardMappingRejectionCategory)}</p><p className="mt-1">Review date: {displayDate(definition.standardMappingReviewedAt)}</p><p className="mt-1">Feedback: {definition.standardMappingRejectionReason}</p></div>}
       </SectionCard>
 
       {showRejection && <Alert variant="error" className="mt-5"><span className="font-bold">Rejection feedback:</span> {definition.rejectionReason}</Alert>}

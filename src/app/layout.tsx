@@ -7,6 +7,7 @@ import { getCurrentAccessSummary } from '@/lib/accessSummary'
 import { prisma } from '@/lib/prisma'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
+import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import MobileNav from '@/components/MobileNav'
 import NotificationBell from '@/components/NotificationBell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
@@ -138,7 +139,10 @@ export default async function RootLayout({
     getNavigationProfile(user),
   ])
   const adminNavigationLinks = user && canManageGlobalEventLibrary(user)
-    ? [{ href: '/super-admin/events', label: 'Super Admin' }]
+    ? [
+        { href: '/super-admin/events', label: 'Event Library' },
+        ...(isMatchDayTrackingV2Enabled() ? [{ href: '/super-admin/tracking-mappings', label: 'Mapping Review' }] : []),
+      ]
     : []
   const navigationGroups = [
     { title: 'Main', links: navigationProfile.mainLinks },
