@@ -6,9 +6,9 @@ import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { acceptDirectAssignment, claimGroupOffer, declineDirectAssignment, declineGroupOffer, markContributorAssignmentSubmitted, startContributorAssignment } from '@/lib/matchTrackingAssignments'
-import { createAssignmentLinkedSubmission } from '@/lib/matchTrackingSubmissions'
+import { createAssignmentLinkedSubmission, recordAssignedClubEvent } from '@/lib/matchTrackingSubmissions'
 import { prisma } from '@/lib/prisma'
-import { createPatternObservation, getPatternObservationLabel } from '@/lib/trackingPatterns'
+import { createPatternObservation, getPatternObservationLabel, recordAssignedClubPattern } from '@/lib/trackingPatterns'
 
 type ActionResult = { ok: true } | { ok: false; reason: string }
 type UndoActionResult = { ok: true; type: 'event' | 'pattern'; label: string; timestamp: string } | { ok: false; reason: string }
@@ -124,6 +124,36 @@ export async function recordAssignmentPatternObservationAction(formData: FormDat
   return result.ok ? { ok: true } : { ok: false, reason: result.reason }
 }
 
+export async function recordAssignedClubEventAction(formData: FormData): Promise<ActionResult> {
+  if (!isMatchDayTrackingV2Enabled()) return { ok: false, reason: 'Match Day tracking is not available.' }
+  const user = await getCurrentUser()
+  const assignmentId = getText(formData, 'assignmentId')
+  const matchDayId = getText(formData, 'matchDayId')
+  const x = getOptionalNumber(formData, 'x')
+  const y = getOptionalNumber(formData, 'y')
+  if (Number.isNaN(x) || Number.isNaN(y)) return { ok: false, reason: 'Pitch location must be valid.' }
+  const result = await recordAssignedClubEvent({ assignmentId, actorUserId: user.id, taskClubDefinitionId: getText(formData, 'taskClubDefinitionId'), playerId: getText(formData, 'playerId') || null, note: getText(formData, 'note'), x, y })
+  revalidatePath(`/my-assignments/${assignmentId}`)
+  revalidatePath(`/my-assignments/${assignmentId}/track`)
+  if (result.ok) revalidatePath(`/match-day/${matchDayId}`)
+  return result.ok ? { ok: true } : { ok: false, reason: result.message }
+}
+
+export async function recordAssignedClubPatternAction(formData: FormData): Promise<ActionResult> {
+  if (!isMatchDayTrackingV2Enabled()) return { ok: false, reason: 'Match Day tracking is not available.' }
+  const user = await getCurrentUser()
+  const assignmentId = getText(formData, 'assignmentId')
+  const matchDayId = getText(formData, 'matchDayId')
+  const x = getOptionalNumber(formData, 'x')
+  const y = getOptionalNumber(formData, 'y')
+  if (Number.isNaN(x) || Number.isNaN(y)) return { ok: false, reason: 'Pitch location must be valid.' }
+  const result = await recordAssignedClubPattern({ assignmentId, actorUserId: user.id, taskClubDefinitionId: getText(formData, 'taskClubDefinitionId'), outcomeId: getText(formData, 'outcomeId'), playerId: getText(formData, 'playerId') || null, note: getText(formData, 'note'), x, y })
+  revalidatePath(`/my-assignments/${assignmentId}`)
+  revalidatePath(`/my-assignments/${assignmentId}/track`)
+  if (result.ok) revalidatePath(`/match-day/${matchDayId}`)
+  return result.ok ? { ok: true } : { ok: false, reason: result.message }
+}
+
 export async function undoAssignmentObservationAction(formData: FormData): Promise<UndoActionResult> {
   if (!isMatchDayTrackingV2Enabled()) return { ok: false, reason: 'Match Day tracking is not available.' }
   const user = await getCurrentUser()
@@ -132,8 +162,8 @@ export async function undoAssignmentObservationAction(formData: FormData): Promi
   if (!assignment) return { ok: false, reason: 'Assignment was not found.' }
   if (assignment.status === 'SUBMITTED') return { ok: false, reason: 'Submitted assignments cannot be changed.' }
   const [event, pattern] = await Promise.all([
-    prisma.submittedMatchEvent.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { eventDefinition: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
-    prisma.submittedTrackingPatternObservation.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { pattern: true, outcome: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    prisma.submittedMatchEvent.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { eventDefinition: true, clubTrackingDefinition: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
+    prisma.submittedTrackingPatternObservation.findFirst({ where: { assignmentId, submittedByUserId: user.id, status: 'PENDING' }, include: { pattern: true, outcome: true, clubTrackingDefinition: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] }),
   ])
   const latest = !pattern || (event && (event.createdAt > pattern.createdAt || (event.createdAt.getTime() === pattern.createdAt.getTime() && event.id > pattern.id))) ? event && { type: 'event' as const, value: event } : { type: 'pattern' as const, value: pattern }
   if (!latest) return { ok: false, reason: 'Pending observation was not found.' }
@@ -142,7 +172,7 @@ export async function undoAssignmentObservationAction(formData: FormData): Promi
   revalidatePath(`/my-assignments/${assignmentId}`)
   revalidatePath(`/my-assignments/${assignmentId}/track`)
   revalidatePath(`/match-day/${assignment.trackingTask.matchDayId}`)
-  return { ok: true, type: latest.type, label: latest.type === 'event' ? latest.value.eventDefinition?.name ?? latest.value.eventType ?? 'Event observation' : getPatternObservationLabel(latest.value), timestamp: latest.value.createdAt.toISOString() }
+  return { ok: true, type: latest.type, label: latest.type === 'event' ? latest.value.clubTrackingDefinition?.name ?? latest.value.eventDefinition?.name ?? latest.value.eventType ?? 'Event observation' : latest.value.clubTrackingDefinition?.name ?? getPatternObservationLabel(latest.value), timestamp: latest.value.createdAt.toISOString() }
 }
 
 export async function finishAssignmentTrackingAction(formData: FormData): Promise<ActionResult> {

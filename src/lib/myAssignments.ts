@@ -29,6 +29,7 @@ const assignmentInclude = {
       player: { select: { firstName: true, surname: true } },
       events: { include: { matchDayEventType: { include: { eventDefinition: true } } }, orderBy: { displayOrder: 'asc' as const } },
       patterns: { include: { pattern: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } }, orderBy: { displayOrder: 'asc' as const } },
+      clubDefinitions: { include: { clubTrackingDefinition: { include: { mappedEventDefinition: true, mappedPatternDefinition: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } } }, standardEventDefinitionAtSelection: true, standardPatternDefinitionAtSelection: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } }, orderBy: { displayOrder: 'asc' as const } },
       matchDay: { include: { team: { include: { club: true } } } },
     },
   },
@@ -81,13 +82,13 @@ export async function getTrackableAssignmentForUser(userId: string, assignmentId
     include: {
       submittedMatchEvents: {
         where: { submittedByUserId: userId },
-        include: { eventDefinition: true, player: { select: { firstName: true, surname: true, squadNumber: true } } },
+        include: { eventDefinition: true, clubTrackingDefinition: true, standardEventDefinitionAtRecording: true, player: { select: { firstName: true, surname: true, squadNumber: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       },
       submittedPatterns: {
         where: { submittedByUserId: userId },
-        include: { pattern: true, outcome: true, player: { select: { firstName: true, surname: true, squadNumber: true } } },
+        include: { pattern: true, outcome: true, clubTrackingDefinition: true, standardPatternDefinitionAtRecording: true, player: { select: { firstName: true, surname: true, squadNumber: true } } },
         orderBy: { createdAt: 'desc' },
         take: 20,
       },
@@ -96,6 +97,7 @@ export async function getTrackableAssignmentForUser(userId: string, assignmentId
           player: { select: { id: true, firstName: true, surname: true, squadNumber: true } },
           events: { include: { matchDayEventType: { include: { eventDefinition: true } } }, orderBy: { displayOrder: 'asc' as const } },
           patterns: { include: { pattern: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } }, orderBy: { displayOrder: 'asc' as const } },
+          clubDefinitions: { include: { clubTrackingDefinition: { include: { mappedEventDefinition: true, mappedPatternDefinition: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } } }, standardEventDefinitionAtSelection: true, standardPatternDefinitionAtSelection: { include: { outcomes: { orderBy: { displayOrder: 'asc' as const } }, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' as const } } } } }, orderBy: { displayOrder: 'asc' as const } },
           matchDay: { include: { team: { include: { club: true } } } },
         },
       },

@@ -13,6 +13,7 @@ import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
 import TouchMap from '@/components/TouchMap'
 import { getCurrentUser } from '@/lib/auth'
+import { observationContributesToStandardReporting } from '@/lib/clubTrackingDefinitions'
 import {
   getActiveRecordableEventDefinitions,
   getEventDisplayName,
@@ -1288,11 +1289,12 @@ export default async function MatchDayDetailPage({
         include: {
           player: true,
           eventDefinition: true,
+          clubTrackingDefinition: true,
         },
         orderBy: { createdAt: 'asc' },
       },
       patternObservations: {
-        include: { pattern: true, outcome: true, player: true, trackingTask: { include: { topic: true } } },
+        include: { pattern: true, outcome: true, player: true, clubTrackingDefinition: true, trackingTask: { include: { topic: true } } },
         orderBy: { createdAt: 'asc' },
       },
       matchDayEventTypes: {
@@ -1500,6 +1502,7 @@ export default async function MatchDayDetailPage({
     new Set(selectedEventOptions.map((eventOption) => eventOption.label))
   ).sort((firstLabel, secondLabel) => firstLabel.localeCompare(secondLabel))
   const eventLabelsByKey = new Map<string, string>()
+  const standardReportEvents = match.matchEvents.filter((event) => observationContributesToStandardReporting({ clubTrackingDefinitionId: event.clubTrackingDefinitionId, clubDefinitionKind: event.clubTrackingDefinition?.kind, mappingStatusAtRecording: event.clubMappingStatusAtRecording, eventDefinitionId: event.eventDefinitionId }))
   for (const event of match.matchEvents) {
     eventLabelsByKey.set(getMatchEventIdentity(event), getMatchEventLabel(event))
   }
@@ -1526,7 +1529,7 @@ export default async function MatchDayDetailPage({
     }))
     .sort((firstPlayer, secondPlayer) => secondPlayer.minutesPlayed - firstPlayer.minutesPlayed)
   const teamEventTotalMap = new Map<string, number>()
-  for (const event of match.matchEvents) {
+  for (const event of standardReportEvents) {
     const eventKey = getMatchEventIdentity(event)
     teamEventTotalMap.set(eventKey, (teamEventTotalMap.get(eventKey) ?? 0) + 1)
   }
@@ -1540,7 +1543,7 @@ export default async function MatchDayDetailPage({
     { playerId: string; playerName: string; eventCounts: Map<string, number> }
   >()
 
-  for (const event of match.matchEvents) {
+  for (const event of standardReportEvents) {
     if (!event.playerId) continue
     const playerId = event.playerId
     const playerName = event.player
@@ -1626,7 +1629,7 @@ export default async function MatchDayDetailPage({
     matchType: matchTypeLabel,
     finalScore,
   }
-  const eventCsvRows = match.matchEvents.map((event) => ({
+  const eventCsvRows = standardReportEvents.map((event) => ({
     half: formatHalfLabel(event.half),
     matchTime: formatMatchTime(event.matchSecond),
     playerName: event.player
@@ -1635,7 +1638,7 @@ export default async function MatchDayDetailPage({
     event: getMatchEventLabel(event),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
   }))
-  const patternCsvRows = match.patternObservations.map((observation) => ({
+  const patternCsvRows = match.patternObservations.filter((observation) => observationContributesToStandardReporting({ clubTrackingDefinitionId: observation.clubTrackingDefinitionId, clubDefinitionKind: observation.clubTrackingDefinition?.kind, mappingStatusAtRecording: observation.clubMappingStatusAtRecording, patternId: observation.patternId })).map((observation) => ({
     observationType: 'Tactical pattern',
     pattern: observation.pattern.name,
     outcome: observation.outcome.label,

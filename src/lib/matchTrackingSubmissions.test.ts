@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createAssignmentLinkedSubmission, validateAssignmentSubmissionContext } from '@/lib/matchTrackingSubmissions'
+import { createAssignmentLinkedSubmission, recordAssignedClubEvent, validateAssignmentSubmissionContext } from '@/lib/matchTrackingSubmissions'
 
 const liveMatch = {
   id: 'match-1',
@@ -59,6 +59,31 @@ const assignment = {
   },
 }
 
+const clubAssignment = {
+  id: 'assignment-1',
+  assignedUserId: 'user-1',
+  status: 'IN_PROGRESS',
+  trackingTaskId: 'task-1',
+  trackingTask: {
+    id: 'task-1',
+    matchDayId: 'match-1',
+    status: 'READY',
+    scopeType: 'PLAYER',
+    playerId: 'player-1',
+    unitKey: null,
+    matchDay: { ...liveMatch, team: { clubId: 'club-1' } },
+    clubDefinitions: [{
+      id: 'task-club-1',
+      selectedKind: 'EVENT_ALIAS',
+      standardEventDefinitionIdAtSelection: 'definition-1',
+      clubTrackingDefinition: {
+        id: 'club-definition-1', clubId: 'club-1', kind: 'EVENT_ALIAS', status: 'APPROVED', active: true, retiredAt: null, name: 'Break the line', requiresLocation: false, mappedEventDefinitionId: 'definition-1', mappedPatternDefinitionId: null, mappingStatus: 'STANDARD_APPROVED', mappingRevision: 2, standardMappingRejectionCategory: null, scopeType: 'PLAYER', targetContext: null, phase: null, focusArea: null,
+        mappedEventDefinition: { id: 'definition-1', requiresLocation: false, legacyEventType: 'PASS_COMPLETE' },
+      },
+    }],
+  },
+}
+
 function createDb(overrides: Record<string, unknown> = {}) {
     const db = {
       matchContributorAssignment: { findUnique: async () => assignment },
@@ -68,6 +93,18 @@ function createDb(overrides: Record<string, unknown> = {}) {
       findFirst: async () => null,
       create: async () => ({ id: 'submission-1' }),
     },
+    $transaction: async (fn: (tx: unknown) => unknown) => fn(db),
+    ...overrides,
+  }
+  return db as never
+}
+
+function createClubDb(overrides: Record<string, unknown> = {}) {
+  const db = {
+    matchContributorAssignment: { findUnique: async () => clubAssignment },
+    matchDayPlayer: { findFirst: async () => ({ id: 'match-player-1' }) },
+    matchPlayerStint: { findFirst: async () => ({ id: 'stint-1' }) },
+    submittedMatchEvent: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `submission:${data.clubTrackingDefinitionId}` }) },
     $transaction: async (fn: (tx: unknown) => unknown) => fn(db),
     ...overrides,
   }
@@ -114,5 +151,28 @@ describe('assignment-aware submission validation', () => {
   it('creates assignment-linked definition-backed and legacy submissions', async () => {
     expect((await createAssignmentLinkedSubmission({ db: createDb(), assignmentId: 'assignment-1', actorUserId: 'user-1', matchDayId: 'match-1', playerId: 'player-1', matchDayEventTypeId: 'selected-definition' })).ok).toBe(true)
     expect((await createAssignmentLinkedSubmission({ db: createDb(), assignmentId: 'assignment-1', actorUserId: 'user-1', matchDayId: 'match-1', playerId: 'player-1', matchDayEventTypeId: 'selected-legacy' })).ok).toBe(true)
+  })
+
+  it('records club event alias provenance with standard identity', async () => {
+    let createdData = {} as Record<string, unknown>
+    const result = await recordAssignedClubEvent({ db: createClubDb({ submittedMatchEvent: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'submission-1' } } } }), assignmentId: 'assignment-1', actorUserId: 'user-1', taskClubDefinitionId: 'task-club-1', playerId: 'player-1' })
+
+    expect(result).toMatchObject({ ok: true, observationId: 'submission-1' })
+    expect(createdData).toMatchObject({ eventDefinitionId: 'definition-1', standardEventDefinitionIdAtRecording: 'definition-1', clubTrackingDefinitionId: 'club-definition-1', clubMappingRevisionAtRecording: 2, clubMappingStatusAtRecording: 'STANDARD_APPROVED' })
+  })
+
+  it('records custom club events without fake standard identity', async () => {
+    let createdData = {} as Record<string, unknown>
+    const customAssignment = { ...clubAssignment, trackingTask: { ...clubAssignment.trackingTask, clubDefinitions: [{ ...clubAssignment.trackingTask.clubDefinitions[0], selectedKind: 'EVENT_CUSTOM', standardEventDefinitionIdAtSelection: null, clubTrackingDefinition: { ...clubAssignment.trackingTask.clubDefinitions[0].clubTrackingDefinition, kind: 'EVENT_CUSTOM', mappedEventDefinitionId: null, mappedEventDefinition: null, mappingStatus: 'NONE' } }] } }
+    const result = await recordAssignedClubEvent({ db: createClubDb({ matchContributorAssignment: { findUnique: async () => customAssignment }, submittedMatchEvent: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'submission-1' } } } }), assignmentId: 'assignment-1', actorUserId: 'user-1', taskClubDefinitionId: 'task-club-1', playerId: 'player-1' })
+
+    expect(result.ok).toBe(true)
+    expect(createdData).toMatchObject({ eventDefinitionId: null, eventType: null, standardEventDefinitionIdAtRecording: null, clubMappingStatusAtRecording: 'NONE' })
+  })
+
+  it('blocks stale club event target changes and rapid duplicates', async () => {
+    const staleAssignment = { ...clubAssignment, trackingTask: { ...clubAssignment.trackingTask, clubDefinitions: [{ ...clubAssignment.trackingTask.clubDefinitions[0], standardEventDefinitionIdAtSelection: 'old-definition' }] } }
+    await expect(recordAssignedClubEvent({ db: createClubDb({ matchContributorAssignment: { findUnique: async () => staleAssignment } }), assignmentId: 'assignment-1', actorUserId: 'user-1', taskClubDefinitionId: 'task-club-1', playerId: 'player-1' })).resolves.toMatchObject({ ok: false, reason: 'taskDefinitionStale' })
+    await expect(recordAssignedClubEvent({ db: createClubDb({ submittedMatchEvent: { findFirst: async () => ({ id: 'duplicate' }) } }), assignmentId: 'assignment-1', actorUserId: 'user-1', taskClubDefinitionId: 'task-club-1', playerId: 'player-1' })).resolves.toMatchObject({ ok: false, reason: 'duplicateSubmission' })
   })
 })

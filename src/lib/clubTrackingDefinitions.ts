@@ -128,6 +128,26 @@ export function getClubDefinitionLocalSelectionEligibility(definition: { kind: C
   return { selectable: false, reason: 'This club tracking definition is not locally selectable.' }
 }
 
+export function observationContributesToStandardReporting(input: {
+  clubTrackingDefinitionId?: string | null
+  clubDefinitionKind?: ClubTrackingDefinitionKind | null
+  mappingStatusAtRecording?: ClubTrackingMappingStatus | null
+  eventDefinitionId?: string | null
+  patternId?: string | null
+}) {
+  if (!input.clubTrackingDefinitionId) return Boolean(input.eventDefinitionId || input.patternId)
+  if (input.clubDefinitionKind === 'EVENT_ALIAS' || input.clubDefinitionKind === 'PATTERN_ALIAS') return true
+  if (input.clubDefinitionKind === 'EVENT_MAPPED' || input.clubDefinitionKind === 'PATTERN_MAPPED') return input.mappingStatusAtRecording === 'STANDARD_APPROVED'
+  return false
+}
+
+export function getClubTrackingIdentityLabel(input: { kind: ClubTrackingDefinitionKind; mappingStatus?: ClubTrackingMappingStatus | null }) {
+  if (input.kind === 'EVENT_ALIAS' || input.kind === 'PATTERN_ALIAS') return 'Club alias'
+  if (input.kind === 'EVENT_CUSTOM') return 'Club specific'
+  if (input.mappingStatus === 'STANDARD_APPROVED') return 'Club mapped'
+  return 'Club tracking'
+}
+
 function getDefinitionScopeCompatibility(definition: { scopeType: MatchTrackingScope | null }) {
   return definition.scopeType ? [definition.scopeType] : (['PLAYER', 'UNIT', 'TEAM'] as MatchTrackingScope[])
 }

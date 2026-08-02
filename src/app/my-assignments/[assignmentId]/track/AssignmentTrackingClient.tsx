@@ -10,9 +10,14 @@ type ActionResult = { ok: true } | { ok: false; reason: string }
 type UndoActionResult = { ok: true; type: 'event' | 'pattern'; label: string; timestamp: string } | { ok: false; reason: string }
 
 type TrackingEvent = {
+  source: 'STANDARD_EVENT' | 'CLUB_EVENT'
   id: string
+  matchDayEventTypeId?: string
+  taskClubDefinitionId?: string
   label: string
   description: string | null
+  standardDisplayName: string | null
+  identityLabel: string | null
   requiresLocation: boolean
 }
 
@@ -31,9 +36,14 @@ type RecentObservation = {
 }
 
 type TrackingPattern = {
+  source: 'STANDARD_PATTERN' | 'CLUB_PATTERN'
   id: string
+  patternId?: string
+  taskClubDefinitionId?: string
   name: string
   description: string | null
+  standardDisplayName: string | null
+  identityLabel: string | null
   requiresLocation: boolean
   pendingCount: number
   steps: Array<{ order: number; label: string }>
@@ -54,6 +64,8 @@ type AssignmentTrackingClientProps = {
   patternObservationCount: number
   recordAssignmentObservationAction: (formData: FormData) => Promise<ActionResult>
   recordAssignmentPatternObservationAction: (formData: FormData) => Promise<ActionResult>
+  recordAssignedClubEventAction: (formData: FormData) => Promise<ActionResult>
+  recordAssignedClubPatternAction: (formData: FormData) => Promise<ActionResult>
   undoAssignmentObservationAction: (formData: FormData) => Promise<UndoActionResult>
   finishAssignmentTrackingAction: (formData: FormData) => Promise<ActionResult>
 }
@@ -78,6 +90,8 @@ export default function AssignmentTrackingClient({
   patternObservationCount,
   recordAssignmentObservationAction,
   recordAssignmentPatternObservationAction,
+  recordAssignedClubEventAction,
+  recordAssignedClubPatternAction,
   undoAssignmentObservationAction,
   finishAssignmentTrackingAction,
 }: AssignmentTrackingClientProps) {
@@ -97,7 +111,8 @@ export default function AssignmentTrackingClient({
     const formData = new FormData()
     formData.set('assignmentId', assignmentId)
     formData.set('matchDayId', matchDayId)
-    formData.set('matchDayEventTypeId', event.id)
+    if (event.source === 'CLUB_EVENT') formData.set('taskClubDefinitionId', event.taskClubDefinitionId ?? event.id)
+    else formData.set('matchDayEventTypeId', event.matchDayEventTypeId ?? event.id)
     if (playerId) formData.set('playerId', playerId)
     if (note.trim()) formData.set('note', note.trim())
     if (location) {
@@ -119,7 +134,7 @@ export default function AssignmentTrackingClient({
     setPendingAction(event.id)
     setMessage(null)
     setError(null)
-    const result = await recordAssignmentObservationAction(buildFormData(event, location))
+    const result = event.source === 'CLUB_EVENT' ? await recordAssignedClubEventAction(buildFormData(event, location)) : await recordAssignmentObservationAction(buildFormData(event, location))
     if (result.ok) {
       setMessage(`${event.label} recorded.`)
       setNote('')
@@ -147,7 +162,8 @@ export default function AssignmentTrackingClient({
     const formData = new FormData()
     formData.set('assignmentId', assignmentId)
     formData.set('matchDayId', matchDayId)
-    formData.set('patternId', pendingPattern.id)
+    if (pendingPattern.source === 'CLUB_PATTERN') formData.set('taskClubDefinitionId', pendingPattern.taskClubDefinitionId ?? pendingPattern.id)
+    else formData.set('patternId', pendingPattern.patternId ?? pendingPattern.id)
     formData.set('outcomeId', selectedOutcomeId)
     if (playerId) formData.set('playerId', playerId)
     if (note.trim()) formData.set('note', note.trim())
@@ -155,7 +171,7 @@ export default function AssignmentTrackingClient({
       formData.set('x', String(patternLocation.x))
       formData.set('y', String(patternLocation.y))
     }
-    const result = await recordAssignmentPatternObservationAction(formData)
+    const result = pendingPattern.source === 'CLUB_PATTERN' ? await recordAssignedClubPatternAction(formData) : await recordAssignmentPatternObservationAction(formData)
     if (result.ok) {
       setMessage(`${pendingPattern.name} recorded.`)
       setNote('')
@@ -231,6 +247,8 @@ export default function AssignmentTrackingClient({
               {events.length === 0 ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No event buttons in this assignment.</p> : events.map((event) => (
                 <button key={event.id} type="button" onClick={() => recordEvent(event)} disabled={!canRecord || Boolean(pendingAction)} className="min-h-28 rounded-2xl border border-emerald-200 bg-emerald-700 p-4 text-left text-white shadow-sm transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-300">
                   <span className="block text-lg font-extrabold">{event.label}</span>
+                  {event.identityLabel && <span className="mt-1 inline-block rounded-full bg-white/15 px-2 py-0.5 text-xs font-bold text-emerald-50">{event.identityLabel}</span>}
+                  {event.standardDisplayName && <span className="mt-2 block text-sm font-semibold text-emerald-50">Standard: {event.standardDisplayName}</span>}
                   <span className="mt-2 block text-sm font-semibold text-emerald-50">{event.requiresLocation ? 'Tap to pick pitch location' : event.description ?? 'Tap to record event'}</span>
                 </button>
               ))}
@@ -242,6 +260,8 @@ export default function AssignmentTrackingClient({
               {patterns.length === 0 ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No tactical patterns in this assignment.</p> : patterns.map((pattern) => (
                 <button key={pattern.id} type="button" onClick={() => { setPendingPattern(pattern); setSelectedOutcomeId(pattern.outcomes[0]?.id ?? ''); setPatternLocation(null); setMessage(null); setError(null) }} disabled={!canRecord || Boolean(pendingAction)} className="min-h-28 rounded-2xl border border-blue-200 bg-blue-700 p-4 text-left text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-300">
                   <span className="block text-lg font-extrabold">{pattern.name}</span>
+                  {pattern.identityLabel && <span className="mt-1 inline-block rounded-full bg-white/15 px-2 py-0.5 text-xs font-bold text-blue-50">{pattern.identityLabel}</span>}
+                  {pattern.standardDisplayName && <span className="mt-2 block text-sm font-semibold text-blue-50">Standard: {pattern.standardDisplayName}</span>}
                   <span className="mt-2 block text-sm font-semibold text-blue-50">{pattern.pendingCount} recorded pending · {pattern.requiresLocation ? 'Location required' : pattern.description ?? 'Tap to choose outcome'}</span>
                 </button>
               ))}

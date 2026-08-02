@@ -8,6 +8,7 @@ import {
   deleteUnusedClubTrackingDefinitionDraft,
   getClubTrackingReportingIdentity,
   getClubDefinitionLocalSelectionEligibility,
+  observationContributesToStandardReporting,
   normalizeClubTrackingDefinitionName,
   proposeClubTrackingDefinitionMapping,
   rejectClubTrackingDefinition,
@@ -232,6 +233,15 @@ describe('club tracking definitions governance', () => {
     expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'EVENT_PATTERN_MISMATCH' })).toMatchObject({ selectable: false })
     expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'OUTCOME_MISMATCH' })).toMatchObject({ selectable: false })
     expect(getClubDefinitionLocalSelectionEligibility({ ...base, active: false, standardMappingRejectionCategory: 'NOT_EQUIVALENT' })).toMatchObject({ selectable: false })
+  })
+
+  it('classifies standard reporting eligibility for club observations', () => {
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: null, eventDefinitionId: 'event-1' })).toBe(true)
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: 'club-1', clubDefinitionKind: 'EVENT_ALIAS', mappingStatusAtRecording: 'CLUB_APPROVED', eventDefinitionId: 'event-1' })).toBe(true)
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: 'club-1', clubDefinitionKind: 'EVENT_MAPPED', mappingStatusAtRecording: 'STANDARD_APPROVED', eventDefinitionId: 'event-1' })).toBe(true)
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: 'club-1', clubDefinitionKind: 'EVENT_MAPPED', mappingStatusAtRecording: 'CLUB_APPROVED', eventDefinitionId: null })).toBe(false)
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: 'club-1', clubDefinitionKind: 'PATTERN_MAPPED', mappingStatusAtRecording: 'REJECTED', patternId: 'pattern-1' })).toBe(false)
+    expect(observationContributesToStandardReporting({ clubTrackingDefinitionId: 'club-1', clubDefinitionKind: 'EVENT_CUSTOM', mappingStatusAtRecording: 'NONE' })).toBe(false)
   })
 
   it('retires and restores definitions while excluding retired rows from active lists', async () => {

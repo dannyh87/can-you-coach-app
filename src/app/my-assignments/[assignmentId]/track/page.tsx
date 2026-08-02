@@ -5,9 +5,10 @@ import AssignmentTrackingClient from '@/app/my-assignments/[assignmentId]/track/
 import PageHeader from '@/components/ui/PageHeader'
 import StatusBadge, { getStatusBadgeVariant } from '@/components/ui/StatusBadge'
 import { getCurrentUser } from '@/lib/auth'
+import { getClubTrackingIdentityLabel } from '@/lib/clubTrackingDefinitions'
 import { getEventDisplayName } from '@/lib/eventDefinitions'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
-import { finishAssignmentTrackingAction, recordAssignmentObservationAction, recordAssignmentPatternObservationAction, startAssignmentForCurrentUserAction, undoAssignmentObservationAction } from '@/lib/myAssignmentActions'
+import { finishAssignmentTrackingAction, recordAssignedClubEventAction, recordAssignedClubPatternAction, recordAssignmentObservationAction, recordAssignmentPatternObservationAction, startAssignmentForCurrentUserAction, undoAssignmentObservationAction } from '@/lib/myAssignmentActions'
 import { formatAssignmentStatus, getAssignmentForUser, getAssignmentTarget, getTrackableAssignmentForUser } from '@/lib/myAssignments'
 
 export const dynamic = 'force-dynamic'
@@ -44,38 +45,89 @@ export default async function AssignmentTrackingPage({ params }: { params: Promi
     ?? playerBlockedMessage
   const canRecord = Boolean(assignment && assignment.status === 'IN_PROGRESS' && matchRecordable && !playerBlockedMessage)
   const canFinish = Boolean(assignment && assignment.status === 'IN_PROGRESS')
-  const events = task.events.map((event) => ({
+  const clubEventLinks = task.clubDefinitions.filter((link) => ['EVENT_ALIAS', 'EVENT_MAPPED', 'EVENT_CUSTOM'].includes(link.selectedKind))
+  const clubPatternLinks = task.clubDefinitions.filter((link) => ['PATTERN_ALIAS', 'PATTERN_MAPPED'].includes(link.selectedKind))
+  const clubStandardEventIds = new Set(clubEventLinks.flatMap((link) => link.standardEventDefinitionIdAtSelection ? [link.standardEventDefinitionIdAtSelection] : []))
+  const clubStandardPatternIds = new Set(clubPatternLinks.flatMap((link) => link.standardPatternDefinitionIdAtSelection ? [link.standardPatternDefinitionIdAtSelection] : []))
+  const clubEvents = clubEventLinks.map((link) => {
+    const definition = link.clubTrackingDefinition
+    const standardName = link.standardEventDefinitionAtSelection?.name ?? definition.mappedEventDefinition?.name ?? null
+    const mappedRequiresLocation = definition.mappedEventDefinition?.requiresLocation ?? false
+    return {
+      source: 'CLUB_EVENT' as const,
+      id: link.id,
+      taskClubDefinitionId: link.id,
+      clubTrackingDefinitionId: definition.id,
+      kind: link.selectedKind as 'EVENT_ALIAS' | 'EVENT_MAPPED' | 'EVENT_CUSTOM',
+      label: definition.name,
+      description: definition.guidance ?? definition.description ?? null,
+      standardDisplayName: standardName,
+      identityLabel: getClubTrackingIdentityLabel({ kind: definition.kind, mappingStatus: definition.mappingStatus }),
+      requiresLocation: definition.kind === 'EVENT_CUSTOM' ? definition.requiresLocation : Boolean(definition.requiresLocation || mappedRequiresLocation),
+    }
+  })
+  const standardEvents = task.events.filter((event) => !event.matchDayEventType.eventDefinitionId || !clubStandardEventIds.has(event.matchDayEventType.eventDefinitionId)).map((event) => ({
+    source: 'STANDARD_EVENT' as const,
     id: event.matchDayEventTypeId,
+    matchDayEventTypeId: event.matchDayEventTypeId,
     label: getEventDisplayName(event.matchDayEventType),
     description: event.matchDayEventType.eventDefinition?.description ?? null,
+    standardDisplayName: null,
+    identityLabel: null,
     requiresLocation: event.matchDayEventType.eventDefinition?.requiresLocation ?? false,
   }))
-  const patterns = task.patterns.map((taskPattern) => ({
+  const events = [...clubEvents, ...standardEvents]
+  const clubPatterns = clubPatternLinks.map((link) => {
+    const definition = link.clubTrackingDefinition
+    const pattern = link.standardPatternDefinitionAtSelection ?? definition.mappedPatternDefinition
+    return {
+      source: 'CLUB_PATTERN' as const,
+      id: link.id,
+      taskClubDefinitionId: link.id,
+      clubTrackingDefinitionId: definition.id,
+      kind: link.selectedKind as 'PATTERN_ALIAS' | 'PATTERN_MAPPED',
+      name: definition.name,
+      description: definition.guidance ?? definition.description ?? null,
+      standardDisplayName: pattern?.name ?? null,
+      identityLabel: getClubTrackingIdentityLabel({ kind: definition.kind, mappingStatus: definition.mappingStatus }),
+      requiresLocation: Boolean(definition.requiresLocation || pattern?.requiresLocation),
+      steps: pattern?.steps.map((step) => ({ order: step.stepOrder, label: step.label ?? step.eventDefinition.name })) ?? [],
+      outcomes: pattern?.outcomes.map((outcome) => ({ id: outcome.id, label: outcome.label, positive: outcome.positive })) ?? [],
+      pendingCount: assignment?.submittedPatterns.filter((observation) => observation.clubTrackingDefinitionId === definition.id && observation.status === 'PENDING').length ?? visibleAssignment.submittedPatterns.filter((observation) => observation.status === 'PENDING').length,
+    }
+  })
+  const standardPatterns = task.patterns.filter((taskPattern) => !clubStandardPatternIds.has(taskPattern.patternId)).map((taskPattern) => ({
+    source: 'STANDARD_PATTERN' as const,
     id: taskPattern.patternId,
+    patternId: taskPattern.patternId,
     name: taskPattern.pattern.name,
     description: taskPattern.pattern.description ?? null,
+    standardDisplayName: null,
+    identityLabel: null,
     requiresLocation: taskPattern.pattern.requiresLocation,
     steps: taskPattern.pattern.steps.map((step) => ({ order: step.stepOrder, label: step.label ?? step.eventDefinition.name })),
     outcomes: taskPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, label: outcome.label, positive: outcome.positive })),
     pendingCount: assignment?.submittedPatterns.filter((observation) => observation.patternId === taskPattern.patternId && observation.status === 'PENDING').length ?? visibleAssignment.submittedPatterns.filter((observation) => observation.status === 'PENDING').length,
   }))
+  const patterns = [...clubPatterns, ...standardPatterns]
   const eventObservations = (assignment?.submittedMatchEvents ?? []).map((observation) => ({
     id: observation.id,
     type: 'event' as const,
-    label: getEventDisplayName(observation),
-    detail: null,
+    label: observation.clubTrackingDefinition?.name ?? getEventDisplayName(observation),
+    detail: observation.clubTrackingDefinition ? getClubTrackingIdentityLabel({ kind: observation.clubTrackingDefinition.kind, mappingStatus: observation.clubMappingStatusAtRecording }) : null,
     targetLabel: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : targetLabel,
     matchTime: `${formatHalf(observation.half)} ${formatMatchTime(observation.matchSecond)}`,
     createdAt: observation.createdAt.toISOString(),
     status: observation.status,
     statusLabel: formatStatus(observation.status),
     note: observation.note,
+    hasLocation: observation.x !== null && observation.y !== null,
   }))
   const patternObservations = (assignment?.submittedPatterns ?? []).map((observation) => ({
     id: observation.id,
     type: 'pattern' as const,
-    label: observation.pattern.name,
-    detail: `Outcome: ${observation.outcome.label}`,
+    label: observation.clubTrackingDefinition?.name ?? observation.pattern.name,
+    detail: `${observation.clubTrackingDefinition ? `${getClubTrackingIdentityLabel({ kind: observation.clubTrackingDefinition.kind, mappingStatus: observation.clubMappingStatusAtRecording })} · ` : ''}Outcome: ${observation.outcome.label}`,
     targetLabel: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : targetLabel,
     matchTime: `${formatHalf(observation.half)} ${formatMatchTime(observation.matchSecond)}`,
     createdAt: observation.createdAt.toISOString(),
@@ -108,7 +160,7 @@ export default async function AssignmentTrackingPage({ params }: { params: Promi
         <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-3">
           <Info label="Target" value={targetLabel} />
           <Info label="Match" value={formatStatus(match.status)} />
-          <Info label="Pending observations" value={`${assignment?.pendingObservationCount ?? visibleAssignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length}`} />
+          <Info label="Pending observations" value={`${assignment?.pendingObservationCount ?? visibleAssignment.submittedMatchEvents.filter((event) => event.status === 'PENDING').length + visibleAssignment.submittedPatterns.filter((pattern) => pattern.status === 'PENDING').length}`} />
         </dl>
         {task.instructions && <p className="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-950">{task.instructions}</p>}
         {visibleAssignment.status === 'ACCEPTED' && !nonRecordableMessage && (
@@ -127,13 +179,15 @@ export default async function AssignmentTrackingPage({ params }: { params: Promi
           canRecord={canRecord}
           canFinish={canFinish}
           blockedMessage={blockedMessage}
-           events={events}
+          events={events}
           patterns={patterns}
           observations={observations}
           eventObservationCount={eventCount}
           patternObservationCount={patternCount}
           recordAssignmentObservationAction={recordAssignmentObservationAction}
           recordAssignmentPatternObservationAction={recordAssignmentPatternObservationAction}
+          recordAssignedClubEventAction={recordAssignedClubEventAction}
+          recordAssignedClubPatternAction={recordAssignedClubPatternAction}
           undoAssignmentObservationAction={undoAssignmentObservationAction}
           finishAssignmentTrackingAction={finishAssignmentTrackingAction}
         />
