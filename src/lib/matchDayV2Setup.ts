@@ -7,6 +7,8 @@ import type {
 } from '@prisma/client'
 
 import { getMatchDayEventCategoryFallback } from '@/lib/eventDefinitions'
+import type { ClubTrackingSelectionSnapshot, SelectedClubTrackingDefinitionInput } from '@/lib/clubTrackingDefinitions'
+import { getValidatedClubTrackingSelectionSnapshots } from '@/lib/clubTrackingDefinitions'
 import {
   activeAssignmentStatuses,
   cancelContributorAssignment,
@@ -36,6 +38,34 @@ const scopes = ['PLAYER', 'UNIT', 'TEAM'] as const satisfies MatchTrackingScope[
 const normalizeOptionalText = (value: string | null | undefined) => {
   const trimmed = value?.trim() ?? ''
   return trimmed || null
+}
+
+function getCompanionEventDefinitionIds(selections: ClubTrackingSelectionSnapshot[]) {
+  return selections.flatMap((selection) => {
+    if (!selection.standardEventDefinitionIdAtSelection) return []
+    if (selection.selectedKind === 'EVENT_ALIAS') return [selection.standardEventDefinitionIdAtSelection]
+    if (selection.selectedKind === 'EVENT_MAPPED' && selection.mappingStatusAtSelection === 'STANDARD_APPROVED') return [selection.standardEventDefinitionIdAtSelection]
+    return []
+  })
+}
+
+function getCompanionPatternIds(selections: ClubTrackingSelectionSnapshot[]) {
+  return selections.flatMap((selection) => selection.standardPatternDefinitionIdAtSelection ? [selection.standardPatternDefinitionIdAtSelection] : [])
+}
+
+function validateCompanionDuplicates(eventDefinitionIds: string[], patternIds: string[], selections: ClubTrackingSelectionSnapshot[]) {
+  const errors: string[] = []
+  const standardEventIds = new Set(eventDefinitionIds)
+  const standardPatternIds = new Set(patternIds)
+  for (const selection of selections) {
+    if (selection.standardEventDefinitionIdAtSelection && standardEventIds.has(selection.standardEventDefinitionIdAtSelection)) errors.push(`${selection.displayName}: remove the duplicate underlying standard event selection.`)
+    if (selection.standardPatternDefinitionIdAtSelection && standardPatternIds.has(selection.standardPatternDefinitionIdAtSelection)) errors.push(`${selection.displayName}: remove the duplicate underlying standard pattern selection.`)
+  }
+  return errors
+}
+
+function buildTaskClubDefinitionLink(trackingTaskId: string, selection: ClubTrackingSelectionSnapshot, displayOrder: number) {
+  return { trackingTaskId, clubTrackingDefinitionId: selection.clubTrackingDefinitionId, displayOrder, selectedKind: selection.selectedKind, mappingRevisionAtSelection: selection.mappingRevisionAtSelection, mappingStatusAtSelection: selection.mappingStatusAtSelection, standardEventDefinitionIdAtSelection: selection.standardEventDefinitionIdAtSelection, standardPatternDefinitionIdAtSelection: selection.standardPatternDefinitionIdAtSelection }
 }
 
 const userCanManageTeam = async (db: Db, userId: string, teamId: string) => {
@@ -251,6 +281,7 @@ export async function createGuidedMatchTrackingTaskV2({
   topicId,
   selectedEventDefinitionIds,
   selectedPatternIds,
+  selectedClubTrackingDefinitions = [],
   playerId,
   unitKey,
   unitLabel,
@@ -267,6 +298,7 @@ export async function createGuidedMatchTrackingTaskV2({
   topicId: string
   selectedEventDefinitionIds: string[]
   selectedPatternIds?: string[]
+  selectedClubTrackingDefinitions?: SelectedClubTrackingDefinitionInput[]
   playerId?: string | null
   unitKey?: string | null
   unitLabel?: string | null
@@ -297,11 +329,22 @@ export async function createGuidedMatchTrackingTaskV2({
     clubId: match.team.clubId,
     selectedEventDefinitionIds,
     selectedPatternIds,
+    selectedClubTrackingDefinitionIds: selectedClubTrackingDefinitions.map((selection) => selection.clubTrackingDefinitionId),
     mode: 'STANDARD_GUIDED',
   }, db)
   if (!setup.ok) return { ok: false, reason: 'Tracking setup is invalid.', fieldErrors: Object.fromEntries(setup.errors.map((error) => [error.field, [error.message]])) }
 
-  const eventRows = setup.eventDefinitionIds.length > 0 ? await ensureMatchDayEventTypesForDefinitions({ db, userId, matchDayId, eventDefinitionIds: setup.eventDefinitionIds }) : { ok: true as const, value: [] }
+  const clubSelections = await getValidatedClubTrackingSelectionSnapshots({ db, actorUserId: userId, matchDayId, selections: selectedClubTrackingDefinitions, context: { scope, targetContext: scope === 'TEAM' ? 'WHOLE_TEAM' : targetContext ?? null, phase, focusArea } })
+  if (!clubSelections.ok) return { ok: false, reason: clubSelections.reason, fieldErrors: clubSelections.fieldErrors }
+  const duplicateErrors = validateCompanionDuplicates(setup.eventDefinitionIds, setup.patternIds, clubSelections.value)
+  if (duplicateErrors.length > 0) return { ok: false, reason: 'Tracking setup contains duplicate selections.', fieldErrors: { trackingItems: duplicateErrors } }
+  const companionEventDefinitionIds = getCompanionEventDefinitionIds(clubSelections.value)
+  const companionPatternIds = getCompanionPatternIds(clubSelections.value)
+  const allEventDefinitionIds = Array.from(new Set([...setup.eventDefinitionIds, ...companionEventDefinitionIds]))
+  const allPatternIds = Array.from(new Set([...setup.patternIds, ...companionPatternIds]))
+  if (allEventDefinitionIds.length + allPatternIds.length + clubSelections.value.length === 0) return { ok: false, reason: 'Choose at least one event, tactical pattern or club tracking definition.' }
+
+  const eventRows = allEventDefinitionIds.length > 0 ? await ensureMatchDayEventTypesForDefinitions({ db, userId, matchDayId, eventDefinitionIds: allEventDefinitionIds }) : { ok: true as const, value: [] }
   if (!eventRows.ok) return eventRows
   const taskTitle = title.trim()
   if (!taskTitle) return { ok: false, reason: 'Tracking task title is required.' }
@@ -327,11 +370,12 @@ export async function createGuidedMatchTrackingTaskV2({
         data: eventRows.value.map((row, index) => ({ trackingTaskId: created.id, matchDayEventTypeId: row.id, displayOrder: index })),
       })
     }
-    if (setup.patternIds.length > 0) {
+    if (allPatternIds.length > 0) {
       await tx.matchTrackingTaskPattern.createMany({
-        data: setup.patternIds.map((patternId, index) => ({ trackingTaskId: created.id, patternId, displayOrder: index })),
+        data: allPatternIds.map((patternId, index) => ({ trackingTaskId: created.id, patternId, displayOrder: index })),
       })
     }
+    if (clubSelections.value.length > 0) await tx.matchTrackingTaskClubDefinition.createMany({ data: clubSelections.value.map((selection, index) => buildTaskClubDefinitionLink(created.id, selection, index)) })
     return created
   })
 
@@ -350,7 +394,7 @@ export async function copyPreviousMatchTrackingTaskV2({
   sourceTaskId: string
   destinationMatchDayId: string
   destinationPlayerId?: string | null
-}): Promise<MatchDayV2Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
+}): Promise<MatchDayV2Result<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[]; missingClubDefinitionIds?: string[] }>> {
   const sourceTask = await db.matchTrackingTask.findUnique({
     where: { id: sourceTaskId },
     include: { events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } }, patterns: true },
@@ -362,7 +406,7 @@ export async function copyPreviousMatchTrackingTaskV2({
     if (!ensured.ok) return ensured
   }
   const copied = await copyMatchTrackingTask({ db, actorUserId: userId, sourceTaskId, destinationMatchDayId, destinationPlayerId })
-  if (!copied.ok) return { ok: false, reason: copied.reason, fieldErrors: { ...(copied.missingEventIds ? { missingEventIds: copied.missingEventIds } : {}), ...(copied.missingPatternIds ? { missingPatternIds: copied.missingPatternIds } : {}) } }
+  if (!copied.ok) return { ok: false, reason: copied.reason, fieldErrors: { ...(copied.missingEventIds ? { missingEventIds: copied.missingEventIds } : {}), ...(copied.missingPatternIds ? { missingPatternIds: copied.missingPatternIds } : {}), ...(copied.missingClubDefinitionIds ? { missingClubDefinitionIds: copied.missingClubDefinitionIds } : {}) } }
   return { ok: true, value: copied.value }
 }
 
@@ -379,7 +423,9 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
     status: string
     eventCount: number
     patternCount: number
+    clubDefinitionCount: number
     patternNames: string[]
+    clubDefinitionNames: string[]
     assignments: Array<{
       id: string
       assignmentMode: string
@@ -412,6 +458,7 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
           topic: { select: { name: true } },
           events: { select: { id: true } },
           patterns: { select: { pattern: { select: { name: true } } }, orderBy: { displayOrder: 'asc' } },
+          clubDefinitions: { select: { clubTrackingDefinition: { select: { name: true } } }, orderBy: { displayOrder: 'asc' } },
           assignments: {
             include: { recipients: { select: { id: true } }, submittedMatchEvents: { select: { status: true } }, submittedPatterns: { select: { status: true } } },
             orderBy: { createdAt: 'desc' },
@@ -447,7 +494,9 @@ export async function getMatchDayV2SetupState({ db = prisma, userId, matchDayId 
       status: task.status,
       eventCount: task.events.length,
       patternCount: task.patterns?.length ?? 0,
+      clubDefinitionCount: task.clubDefinitions?.length ?? 0,
       patternNames: task.patterns?.map((taskPattern) => taskPattern.pattern.name) ?? [],
+      clubDefinitionNames: task.clubDefinitions?.map((link) => link.clubTrackingDefinition.name) ?? [],
       assignments,
       activeAssignment: activeAssignment ? { id: activeAssignment.id, assignmentMode: activeAssignment.assignmentMode, status: activeAssignment.status, assignedUserId: activeAssignment.assignedUserId, recipientCount: activeAssignment.recipientCount } : null,
     }
@@ -502,7 +551,7 @@ export async function cancelMatchTrackingAssignmentV2({ db = prisma, userId, ass
 }
 
 export async function applyPlayerTrackingTaskToPlayersV2({ db = prisma, userId, sourceTaskId, playerIds }: { db?: Db; userId: string; sourceTaskId: string; playerIds: string[] }): Promise<MatchDayV2Result<{ ids: string[] }>> {
-  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } } } })
+  const sourceTask = await db.matchTrackingTask.findUnique({ where: { id: sourceTaskId }, include: { events: { orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } }, clubDefinitions: { orderBy: { displayOrder: 'asc' } } } })
   if (!sourceTask) return { ok: false, reason: 'Source tracking task was not found.' }
   if (sourceTask.scopeType !== 'PLAYER') return { ok: false, reason: 'Only player tasks can be applied to more players.' }
   if (!(await userCanManageMatch(db, userId, sourceTask.matchDayId))) return { ok: false, reason: 'You cannot manage this tracking task.' }
@@ -512,12 +561,16 @@ export async function applyPlayerTrackingTaskToPlayersV2({ db = prisma, userId, 
   const validIds = new Set(squadPlayers.map((player) => player.playerId))
   const invalidPlayer = destinationPlayerIds.find((playerId) => !validIds.has(playerId))
   if (invalidPlayer) return { ok: false, reason: 'One or more selected players are no longer in the match squad.' }
+  const sourceClubDefinitions = sourceTask.clubDefinitions ?? []
+  const clubSelections = sourceClubDefinitions.length > 0 ? await getValidatedClubTrackingSelectionSnapshots({ db, actorUserId: userId, matchDayId: sourceTask.matchDayId, selections: sourceClubDefinitions.map((link) => ({ clubTrackingDefinitionId: link.clubTrackingDefinitionId, expectedKind: link.selectedKind, expectedMappingRevision: link.mappingRevisionAtSelection ?? 0, expectedMappingStatus: link.mappingStatusAtSelection ?? 'NONE' })), context: { scope: 'PLAYER' } }) : { ok: true as const, value: [] }
+  if (!clubSelections.ok) return { ok: false, reason: clubSelections.reason, fieldErrors: clubSelections.fieldErrors }
   const created = await db.$transaction(async (tx) => {
     const tasks = [] as Array<{ id: string }>
     for (const playerId of destinationPlayerIds) {
       const task = await tx.matchTrackingTask.create({ data: { matchDayId: sourceTask.matchDayId, createdByUserId: userId, topicId: sourceTask.topicId, scopeType: 'PLAYER', playerId, title: sourceTask.title, instructions: sourceTask.instructions, sourceTaskId: sourceTask.id, status: 'READY' }, select: { id: true } })
       if (sourceTask.events.length > 0) await tx.matchTrackingTaskEvent.createMany({ data: sourceTask.events.map((event, index) => ({ trackingTaskId: task.id, matchDayEventTypeId: event.matchDayEventTypeId, displayOrder: index })) })
       if (sourceTask.patterns.length > 0) await tx.matchTrackingTaskPattern.createMany({ data: sourceTask.patterns.map((pattern, index) => ({ trackingTaskId: task.id, patternId: pattern.patternId, displayOrder: index })) })
+      if (clubSelections.value.length > 0) await tx.matchTrackingTaskClubDefinition.createMany({ data: clubSelections.value.map((selection, index) => buildTaskClubDefinitionLink(task.id, selection, index)) })
       tasks.push(task)
     }
     return tasks

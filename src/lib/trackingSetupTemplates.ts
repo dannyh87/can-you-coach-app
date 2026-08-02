@@ -1,6 +1,8 @@
 import type { MatchTrackingScope, Prisma, TrackingTargetContext, TrackingTemplateVisibility } from '@prisma/client'
 
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import type { ClubTrackingSelectionSnapshot, SelectedClubTrackingDefinitionInput } from '@/lib/clubTrackingDefinitions'
+import { getValidatedClubTrackingSelectionSnapshots } from '@/lib/clubTrackingDefinitions'
 import { getMatchDayEventCategoryFallback } from '@/lib/eventDefinitions'
 import { canManageMatchDay, canManageTeamData, isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -18,6 +20,7 @@ export type TemplateBlueprintInput = {
   instructions?: string | null
   eventDefinitionIds: string[]
   patternIds: string[]
+  clubTrackingDefinitions?: SelectedClubTrackingDefinitionInput[]
 }
 
 export type ApplyTemplateMapping = {
@@ -36,9 +39,18 @@ const targetContexts = new Set<TrackingTargetContext>([
 
 const normalizeOptionalText = (value: string | null | undefined) => value?.trim() ? value.trim() : null
 const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean)))
+const clubDefinitionInputIds = (task: TemplateBlueprintInput) => unique((task.clubTrackingDefinitions ?? []).map((selection) => selection.clubTrackingDefinitionId))
 const runTransaction = async <T>(db: Db, fn: (tx: Prisma.TransactionClient) => Promise<T>) => {
   const transaction = (db as typeof prisma).$transaction
   return transaction ? transaction.call(db, fn) as Promise<T> : fn(db as Prisma.TransactionClient)
+}
+
+function buildTemplateClubDefinitionLink(templateTaskId: string, selection: ClubTrackingSelectionSnapshot, displayOrder: number) {
+  return { templateTaskId, clubTrackingDefinitionId: selection.clubTrackingDefinitionId, displayOrder, selectedKind: selection.selectedKind, mappingRevisionAtSelection: selection.mappingRevisionAtSelection, mappingStatusAtSelection: selection.mappingStatusAtSelection, standardEventDefinitionIdAtSelection: selection.standardEventDefinitionIdAtSelection, standardPatternDefinitionIdAtSelection: selection.standardPatternDefinitionIdAtSelection }
+}
+
+function buildTaskClubDefinitionLink(trackingTaskId: string, selection: ClubTrackingSelectionSnapshot, displayOrder: number) {
+  return { trackingTaskId, clubTrackingDefinitionId: selection.clubTrackingDefinitionId, displayOrder, selectedKind: selection.selectedKind, mappingRevisionAtSelection: selection.mappingRevisionAtSelection, mappingStatusAtSelection: selection.mappingStatusAtSelection, standardEventDefinitionIdAtSelection: selection.standardEventDefinitionIdAtSelection, standardPatternDefinitionIdAtSelection: selection.standardPatternDefinitionIdAtSelection }
 }
 
 function accessibleTemplateWhere(userId: string, teamIds: string[], clubIds: string[], includeArchived = false): Prisma.TrackingSetupTemplateWhereInput {
@@ -76,25 +88,48 @@ function getTaskTargetContext(task: { scopeType: MatchTrackingScope; unitKey?: s
   return normalized && targetContexts.has(normalized) ? normalized : 'GENERAL_OUTFIELD_PLAYER'
 }
 
+async function getTemplateClubSelectionSnapshots({ db, clubId, task }: { db: Db; clubId: string; task: TemplateBlueprintInput }): Promise<Result<ClubTrackingSelectionSnapshot[]>> {
+  const selections = task.clubTrackingDefinitions ?? []
+  const ids = unique(selections.map((selection) => selection.clubTrackingDefinitionId))
+  if (ids.length !== selections.length) return { ok: false, reason: 'Duplicate club tracking definitions are not allowed.' }
+  if (ids.length === 0) return { ok: true, value: [] }
+  const definitions = await db.clubTrackingDefinition.findMany({ where: { id: { in: ids }, clubId }, include: { mappedEventDefinition: true } })
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]))
+  const errors: string[] = []
+  const snapshots: ClubTrackingSelectionSnapshot[] = []
+  for (const selection of selections) {
+    const definition = byId.get(selection.clubTrackingDefinitionId)
+    if (!definition) { errors.push(`${selection.clubTrackingDefinitionId}: definition is not available for this club.`); continue }
+    if (definition.status !== 'APPROVED' || !definition.active || definition.retiredAt) { errors.push(`${definition.name}: definition is not active and approved.`); continue }
+    if (definition.kind !== selection.expectedKind || definition.mappingRevision !== selection.expectedMappingRevision || definition.mappingStatus !== selection.expectedMappingStatus) { errors.push(`${definition.name}: selection changed. Refresh and select again.`); continue }
+    snapshots.push({ clubTrackingDefinitionId: definition.id, selectedKind: definition.kind, mappingRevisionAtSelection: definition.mappingRevision, mappingStatusAtSelection: definition.mappingStatus, standardEventDefinitionIdAtSelection: definition.mappedEventDefinitionId, standardPatternDefinitionIdAtSelection: definition.mappedPatternDefinitionId, displayName: definition.name, requiresLocation: definition.requiresLocation, contributesToStandardReporting: definition.kind.endsWith('ALIAS') || ((definition.kind === 'EVENT_MAPPED' || definition.kind === 'PATTERN_MAPPED') && definition.mappingStatus === 'STANDARD_APPROVED'), benchmarkEligible: Boolean(definition.mappedEventDefinition?.benchmarkable) && (definition.kind === 'EVENT_ALIAS' || (definition.kind === 'EVENT_MAPPED' && definition.mappingStatus === 'STANDARD_APPROVED')) })
+  }
+  return errors.length ? { ok: false, reason: 'One or more club tracking selections are invalid.', fieldErrors: { clubTrackingDefinitionIds: errors } } : { ok: true, value: snapshots }
+}
+
 async function validateBlueprints({ db, clubId, tasks }: { db: Db; clubId: string; tasks: TemplateBlueprintInput[] }): Promise<Result> {
   if (tasks.length === 0) return { ok: false, reason: 'Choose at least one task for this template.' }
   const errors: Record<string, string[]> = {}
   const addError = (key: string, message: string) => { errors[key] = [...(errors[key] ?? []), message] }
   const eventIds = unique(tasks.flatMap((task) => task.eventDefinitionIds))
   const patternIds = unique(tasks.flatMap((task) => task.patternIds))
+  const clubDefinitionIds = unique(tasks.flatMap((task) => clubDefinitionInputIds(task)))
   const topicIds = unique(tasks.flatMap((task) => task.topicId ? [task.topicId] : []))
-  const [events, patterns, topics] = await Promise.all([
+  const [events, patterns, clubDefinitions, topics] = await Promise.all([
     eventIds.length ? db.eventDefinition.findMany({ where: { id: { in: eventIds }, isActive: true, archivedAt: null, OR: [{ scope: 'GLOBAL' }, { scope: 'CLUB', clubId }] }, select: { id: true } }) : [],
     patternIds.length ? db.trackingPatternDefinition.findMany({ where: { id: { in: patternIds }, active: true, OR: [{ ownerScope: 'GLOBAL' }, { ownerScope: 'CLUB', clubId }] }, select: { id: true } }) : [],
+    clubDefinitionIds.length ? db.clubTrackingDefinition.findMany({ where: { id: { in: clubDefinitionIds }, clubId, status: 'APPROVED', active: true, retiredAt: null }, select: { id: true } }) : [],
     topicIds.length ? db.eventTopic.findMany({ where: { id: { in: topicIds }, isActive: true, archivedAt: null, OR: [{ ownerScope: 'GLOBAL' }, { ownerScope: 'CLUB', clubId }] }, select: { id: true } }) : [],
   ])
   const validEvents = new Set(events.map((event) => event.id))
   const validPatterns = new Set(patterns.map((pattern) => pattern.id))
+  const validClubDefinitions = new Set(clubDefinitions.map((definition) => definition.id))
   const validTopics = new Set(topics.map((topic) => topic.id))
   tasks.forEach((task, index) => {
     const key = `tasks.${index}`
     if (!task.title.trim()) addError(key, 'Task title is required.')
-    if (task.eventDefinitionIds.length + task.patternIds.length === 0) addError(key, 'Each template task needs at least one event or pattern.')
+    const taskClubDefinitionIds = clubDefinitionInputIds(task)
+    if (task.eventDefinitionIds.length + task.patternIds.length + taskClubDefinitionIds.length === 0) addError(key, 'Each template task needs at least one event, pattern or club tracking definition.')
     if (task.eventDefinitionIds.length !== unique(task.eventDefinitionIds).length) addError(key, 'Duplicate events are not allowed in one template task.')
     if (task.patternIds.length !== unique(task.patternIds).length) addError(key, 'Duplicate patterns are not allowed in one template task.')
     if (task.scopeType === 'PLAYER' && !task.targetContext) addError(key, 'Player template tasks require a target role.')
@@ -103,6 +138,7 @@ async function validateBlueprints({ db, clubId, tasks }: { db: Db; clubId: strin
     if (task.topicId && !validTopics.has(task.topicId)) addError(key, 'Topic is not active or accessible.')
     task.eventDefinitionIds.forEach((id) => { if (!validEvents.has(id)) addError(key, 'One or more events are not active or accessible.') })
     task.patternIds.forEach((id) => { if (!validPatterns.has(id)) addError(key, 'One or more tactical patterns are not active or accessible.') })
+    taskClubDefinitionIds.forEach((id) => { if (!validClubDefinitions.has(id)) addError(key, 'One or more club tracking definitions are not active or accessible.') })
   })
   return Object.keys(errors).length ? { ok: false, reason: 'Template is invalid.', fieldErrors: errors } : { ok: true, value: true }
 }
@@ -120,6 +156,9 @@ export async function createTrackingSetupTemplate({ db = prisma, userId, clubId,
       const createdTask = await tx.trackingSetupTemplateTask.create({ data: { templateId: template.id, scopeType: task.scopeType, targetContext: task.targetContext ?? null, unitKey: normalizeOptionalText(task.unitKey), unitLabel: normalizeOptionalText(task.unitLabel), topicId: task.topicId ?? null, title: task.title.trim(), instructions: normalizeOptionalText(task.instructions), displayOrder: index }, select: { id: true } })
       if (task.eventDefinitionIds.length) await tx.trackingSetupTemplateTaskEvent.createMany({ data: task.eventDefinitionIds.map((eventDefinitionId, displayOrder) => ({ templateTaskId: createdTask.id, eventDefinitionId, displayOrder })) })
       if (task.patternIds.length) await tx.trackingSetupTemplateTaskPattern.createMany({ data: task.patternIds.map((patternId, displayOrder) => ({ templateTaskId: createdTask.id, patternId, displayOrder })) })
+      const clubSelections = await getTemplateClubSelectionSnapshots({ db: tx, clubId, task })
+      if (!clubSelections.ok) throw new Error(clubSelections.reason)
+      if (clubSelections.value.length) await tx.trackingSetupTemplateTaskClubDefinition.createMany({ data: clubSelections.value.map((selection, displayOrder) => buildTemplateClubDefinitionLink(createdTask.id, selection, displayOrder)) })
     }
     return template
   })
@@ -130,8 +169,8 @@ export async function createTemplateFromMatchTasks({ db = prisma, userId, matchD
   if (!(await canManageMatchDay(userId, matchDayId))) return { ok: false, reason: 'You cannot manage templates for this match.' }
   const match = await db.matchDay.findUnique({ where: { id: matchDayId }, select: { teamId: true, team: { select: { clubId: true } } } })
   if (!match) return { ok: false, reason: 'Match was not found.' }
-  const tasks = await db.matchTrackingTask.findMany({ where: { id: { in: unique(taskIds) }, matchDayId, status: { not: 'ARCHIVED' } }, include: { player: { select: { preferredPosition: true } }, events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } } }, orderBy: { createdAt: 'asc' } })
-  const blueprints = tasks.map((task): TemplateBlueprintInput => ({ scopeType: task.scopeType, targetContext: getTaskTargetContext(task), unitKey: task.scopeType === 'UNIT' ? task.unitKey : null, unitLabel: task.scopeType === 'UNIT' ? task.unitLabel : null, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.flatMap((event) => event.matchDayEventType.eventDefinitionId ? [event.matchDayEventType.eventDefinitionId] : []), patternIds: task.patterns.map((pattern) => pattern.patternId) }))
+  const tasks = await db.matchTrackingTask.findMany({ where: { id: { in: unique(taskIds) }, matchDayId, status: { not: 'ARCHIVED' } }, include: { player: { select: { preferredPosition: true } }, events: { include: { matchDayEventType: true }, orderBy: { displayOrder: 'asc' } }, patterns: { orderBy: { displayOrder: 'asc' } }, clubDefinitions: { orderBy: { displayOrder: 'asc' } } }, orderBy: { createdAt: 'asc' } })
+  const blueprints = tasks.map((task): TemplateBlueprintInput => ({ scopeType: task.scopeType, targetContext: getTaskTargetContext(task), unitKey: task.scopeType === 'UNIT' ? task.unitKey : null, unitLabel: task.scopeType === 'UNIT' ? task.unitLabel : null, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.flatMap((event) => event.matchDayEventType.eventDefinitionId ? [event.matchDayEventType.eventDefinitionId] : []), patternIds: task.patterns.map((pattern) => pattern.patternId), clubTrackingDefinitions: (task.clubDefinitions ?? []).map((link) => ({ clubTrackingDefinitionId: link.clubTrackingDefinitionId, expectedKind: link.selectedKind, expectedMappingRevision: link.mappingRevisionAtSelection ?? 0, expectedMappingStatus: link.mappingStatusAtSelection ?? 'NONE' })) }))
   return createTrackingSetupTemplate({ db, userId, clubId: match.team.clubId, teamId: match.teamId, visibility, name, description, tasks: blueprints })
 }
 
@@ -141,8 +180,8 @@ export async function getAccessibleTrackingTemplates({ db = prisma, userId, team
   const access = await getUserAccess(userId, db)
   const teamIds = teamId ? access.teamIds.filter((id) => id === teamId) : access.teamIds
   const search = normalizeOptionalText(query)?.toLowerCase()
-  const templates = await db.trackingSetupTemplate.findMany({ where: { AND: [accessibleTemplateWhere(userId, teamIds, access.clubIds, includeArchived), ...(teamId ? [{ OR: [{ visibility: 'PERSONAL' as const }, { teamId }, { visibility: 'CLUB' as const }] }] : [])] }, include: { team: { select: { name: true } }, tasks: { include: { topic: true, events: { include: { eventDefinition: true } }, patterns: { include: { pattern: { include: { aliases: true } } } } }, orderBy: { displayOrder: 'asc' } }, applications: { orderBy: { createdAt: 'desc' }, take: 1 } }, orderBy: { updatedAt: 'desc' } })
-  return templates.filter((template) => !search || `${template.name} ${template.description ?? ''} ${template.tasks.map((task) => `${task.title} ${task.topic?.name ?? ''} ${task.events.map((event) => event.eventDefinition.name).join(' ')} ${task.patterns.map((pattern) => `${pattern.pattern.name} ${pattern.pattern.aliases.map((alias) => alias.alias).join(' ')}`).join(' ')}`).join(' ')}`.toLowerCase().includes(search)).map(formatTemplateSummary)
+  const templates = await db.trackingSetupTemplate.findMany({ where: { AND: [accessibleTemplateWhere(userId, teamIds, access.clubIds, includeArchived), ...(teamId ? [{ OR: [{ visibility: 'PERSONAL' as const }, { teamId }, { visibility: 'CLUB' as const }] }] : [])] }, include: templateInclude(), orderBy: { updatedAt: 'desc' } })
+  return templates.filter((template) => !search || `${template.name} ${template.description ?? ''} ${template.tasks.map((task) => `${task.title} ${task.topic?.name ?? ''} ${task.events.map((event) => event.eventDefinition.name).join(' ')} ${task.patterns.map((pattern) => `${pattern.pattern.name} ${pattern.pattern.aliases.map((alias) => alias.alias).join(' ')}`).join(' ')} ${task.clubDefinitions.map((link) => `${link.clubTrackingDefinition.name} ${link.clubTrackingDefinition.description ?? ''} ${link.clubTrackingDefinition.guidance ?? ''} ${link.clubTrackingDefinition.mappedEventDefinition?.name ?? ''} ${link.clubTrackingDefinition.mappedPatternDefinition?.name ?? ''}`).join(' ')}`).join(' ')}`.toLowerCase().includes(search)).map(formatTemplateSummary)
 }
 
 export async function getTrackingTemplate({ db = prisma, userId, templateId, includeArchived = false }: { db?: Db; userId: string; templateId: string; includeArchived?: boolean }) {
@@ -180,7 +219,7 @@ export async function restoreTrackingTemplate({ db = prisma, userId, templateId 
 export async function duplicateTrackingTemplate({ db = prisma, userId, templateId, name }: { db?: Db; userId: string; templateId: string; name?: string }): Promise<Result<{ id: string }>> {
   const source = await getTrackingTemplate({ db, userId, templateId, includeArchived: true })
   if (!source) return { ok: false, reason: 'Template was not found.' }
-  return createTrackingSetupTemplate({ db, userId, clubId: source.clubId, teamId: source.teamId, visibility: source.visibility, name: name ?? `${source.name} - Copy`, description: source.description, tasks: source.tasks.map((task) => ({ scopeType: task.scopeType, targetContext: task.targetContext, unitKey: task.unitKey, unitLabel: task.unitLabel, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.map((event) => event.eventDefinitionId), patternIds: task.patterns.map((pattern) => pattern.patternId) })) })
+  return createTrackingSetupTemplate({ db, userId, clubId: source.clubId, teamId: source.teamId, visibility: source.visibility, name: name ?? `${source.name} - Copy`, description: source.description, tasks: source.tasks.map((task) => ({ scopeType: task.scopeType, targetContext: task.targetContext, unitKey: task.unitKey, unitLabel: task.unitLabel, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.map((event) => event.eventDefinitionId), patternIds: task.patterns.map((pattern) => pattern.patternId), clubTrackingDefinitions: task.clubDefinitions.map((link) => ({ clubTrackingDefinitionId: link.clubTrackingDefinitionId, expectedKind: link.selectedKind, expectedMappingRevision: link.mappingRevisionAtSelection ?? 0, expectedMappingStatus: link.mappingStatusAtSelection ?? 'NONE' })) })) })
 }
 
 export const validateTrackingTemplate = validateBlueprints
@@ -217,6 +256,9 @@ export async function applyTrackingTemplateToMatch({ db = prisma, userId, templa
       taskIds.push(createdTask.id)
       if (task.eventDefinitionIds.length) await tx.matchTrackingTaskEvent.createMany({ data: task.eventDefinitionIds.map((eventDefinitionId, displayOrder) => ({ trackingTaskId: createdTask.id, matchDayEventTypeId: eventRows.get(eventDefinitionId)!, displayOrder })) })
       if (task.patternIds.length) await tx.matchTrackingTaskPattern.createMany({ data: task.patternIds.map((patternId, displayOrder) => ({ trackingTaskId: createdTask.id, patternId, displayOrder })) })
+      const clubSelections = await getValidatedClubTrackingSelectionSnapshots({ db: tx, actorUserId: userId, matchDayId, selections: task.clubTrackingDefinitions ?? [], context: { scope: task.scopeType, targetContext: task.targetContext } })
+      if (!clubSelections.ok) throw new Error(clubSelections.reason)
+      if (clubSelections.value.length) await tx.matchTrackingTaskClubDefinition.createMany({ data: clubSelections.value.map((selection, displayOrder) => buildTaskClubDefinitionLink(createdTask.id, selection, displayOrder)) })
     }
     return { applicationId: application.id, taskIds }
   })
@@ -233,15 +275,15 @@ export async function getTemplateUsageSummary({ db = prisma, templateId }: { db?
 }
 
 function templateInclude() {
-  return { team: { select: { name: true } }, tasks: { include: { topic: true, events: { include: { eventDefinition: true }, orderBy: { displayOrder: 'asc' as const } }, patterns: { include: { pattern: { include: { aliases: true } } }, orderBy: { displayOrder: 'asc' as const } } }, orderBy: { displayOrder: 'asc' as const } }, applications: { orderBy: { createdAt: 'desc' as const }, take: 1 } }
+  return { team: { select: { name: true } }, tasks: { include: { topic: true, events: { include: { eventDefinition: true }, orderBy: { displayOrder: 'asc' as const } }, patterns: { include: { pattern: { include: { aliases: true } } }, orderBy: { displayOrder: 'asc' as const } }, clubDefinitions: { include: { clubTrackingDefinition: { include: { mappedEventDefinition: true, mappedPatternDefinition: true } } }, orderBy: { displayOrder: 'asc' as const } } }, orderBy: { displayOrder: 'asc' as const } }, applications: { orderBy: { createdAt: 'desc' as const }, take: 1 } }
 }
 
 function formatTemplateSummary(template: Prisma.TrackingSetupTemplateGetPayload<{ include: ReturnType<typeof templateInclude> }>) {
-  return { id: template.id, name: template.name, description: template.description, visibility: template.visibility, clubId: template.clubId, teamId: template.teamId, teamName: template.team?.name ?? null, active: template.active, archivedAt: template.archivedAt, revision: template.revision, taskCount: template.tasks.length, eventCount: template.tasks.reduce((total, task) => total + task.events.length, 0), patternCount: template.tasks.reduce((total, task) => total + task.patterns.length, 0), scopeSummary: Array.from(new Set(template.tasks.map((task) => task.scopeType))).join(', '), updatedAt: template.updatedAt, lastUsedAt: template.applications[0]?.createdAt ?? null }
+  return { id: template.id, name: template.name, description: template.description, visibility: template.visibility, clubId: template.clubId, teamId: template.teamId, teamName: template.team?.name ?? null, active: template.active, archivedAt: template.archivedAt, revision: template.revision, taskCount: template.tasks.length, eventCount: template.tasks.reduce((total, task) => total + task.events.length, 0), patternCount: template.tasks.reduce((total, task) => total + task.patterns.length, 0), clubDefinitionCount: template.tasks.reduce((total, task) => total + (task.clubDefinitions?.length ?? 0), 0), scopeSummary: Array.from(new Set(template.tasks.map((task) => task.scopeType))).join(', '), updatedAt: template.updatedAt, lastUsedAt: template.applications[0]?.createdAt ?? null }
 }
 
 function formatTemplateDetail(template: Prisma.TrackingSetupTemplateGetPayload<{ include: ReturnType<typeof templateInclude> }>) {
-  return { ...formatTemplateSummary(template), tasks: template.tasks.map((task) => ({ id: task.id, scopeType: task.scopeType, targetContext: task.targetContext, unitKey: task.unitKey, unitLabel: task.unitLabel, topicId: task.topicId, topicName: task.topic?.name ?? null, title: task.title, instructions: task.instructions, displayOrder: task.displayOrder, events: task.events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, displayOrder: event.displayOrder, active: event.eventDefinition.isActive && !event.eventDefinition.archivedAt })), patterns: task.patterns.map((pattern) => ({ patternId: pattern.patternId, name: pattern.pattern.name, displayOrder: pattern.displayOrder, active: pattern.pattern.active, aliases: pattern.pattern.aliases.map((alias) => alias.alias) })) })) }
+  return { ...formatTemplateSummary(template), tasks: template.tasks.map((task) => ({ id: task.id, scopeType: task.scopeType, targetContext: task.targetContext, unitKey: task.unitKey, unitLabel: task.unitLabel, topicId: task.topicId, topicName: task.topic?.name ?? null, title: task.title, instructions: task.instructions, displayOrder: task.displayOrder, events: task.events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, displayOrder: event.displayOrder, active: event.eventDefinition.isActive && !event.eventDefinition.archivedAt })), patterns: task.patterns.map((pattern) => ({ patternId: pattern.patternId, name: pattern.pattern.name, displayOrder: pattern.displayOrder, active: pattern.pattern.active, aliases: pattern.pattern.aliases.map((alias) => alias.alias) })), clubDefinitions: (task.clubDefinitions ?? []).map((link) => ({ clubTrackingDefinitionId: link.clubTrackingDefinitionId, name: link.clubTrackingDefinition.name, selectedKind: link.selectedKind, mappingStatusAtSelection: link.mappingStatusAtSelection, mappingRevisionAtSelection: link.mappingRevisionAtSelection, standardEventDefinitionIdAtSelection: link.standardEventDefinitionIdAtSelection, standardPatternDefinitionIdAtSelection: link.standardPatternDefinitionIdAtSelection, displayOrder: link.displayOrder, active: link.clubTrackingDefinition.active && !link.clubTrackingDefinition.retiredAt && link.clubTrackingDefinition.status === 'APPROVED' })) })) }
 }
 
 async function validateApplication({ db, template, matchDayId, clubId, mappings }: { db: Db; template: NonNullable<Awaited<ReturnType<typeof getTrackingTemplate>>>; matchDayId: string; clubId: string; mappings: ApplyTemplateMapping[] }): Promise<Result<{ tasks: Array<TemplateBlueprintInput & { templateTaskId: string; playerId: string | null }>; warnings: string[] }>> {
@@ -251,13 +293,14 @@ async function validateApplication({ db, template, matchDayId, clubId, mappings 
   const squad = await db.matchDayPlayer.findMany({ where: { matchDayId, squadStatus: { not: 'NOT_INVOLVED' } }, select: { playerId: true } })
   const squadIds = new Set(squad.map((player) => player.playerId))
   const tasks: Array<TemplateBlueprintInput & { templateTaskId: string; playerId: string | null }> = []
+  if (template.clubId !== clubId && template.tasks.some((task) => task.clubDefinitions.length > 0)) return { ok: false, reason: 'This template contains club-specific tracking definitions and cannot be applied to another club without explicit remapping.', fieldErrors: { clubTrackingDefinitionIds: template.tasks.flatMap((task) => task.clubDefinitions.map((link) => link.clubTrackingDefinitionId)) } }
   for (const [index, task] of template.tasks.entries()) {
     const mapping = mappingByTask.get(task.id)
     if (mapping?.skip) continue
-    if (task.events.length + task.patterns.length === 0) addError(`tasks.${index}`, 'Template task has no tracking items.')
+    if (task.events.length + task.patterns.length + task.clubDefinitions.length === 0) addError(`tasks.${index}`, 'Template task has no tracking items.')
     if (task.events.some((event) => !event.active)) addError(`tasks.${index}`, 'Template task contains an inactive event.')
     if (task.patterns.some((pattern) => !pattern.active)) addError(`tasks.${index}`, 'Template task contains an inactive tactical pattern.')
-    const base = { templateTaskId: task.id, scopeType: task.scopeType, targetContext: task.targetContext, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.map((event) => event.eventDefinitionId), patternIds: task.patterns.map((pattern) => pattern.patternId) }
+    const base = { templateTaskId: task.id, scopeType: task.scopeType, targetContext: task.targetContext, topicId: task.topicId, title: task.title, instructions: task.instructions, eventDefinitionIds: task.events.map((event) => event.eventDefinitionId), patternIds: task.patterns.map((pattern) => pattern.patternId), clubTrackingDefinitions: task.clubDefinitions.map((link) => ({ clubTrackingDefinitionId: link.clubTrackingDefinitionId, expectedKind: link.selectedKind, expectedMappingRevision: link.mappingRevisionAtSelection ?? 0, expectedMappingStatus: link.mappingStatusAtSelection ?? 'NONE' })) }
     if (task.scopeType === 'PLAYER') {
       const playerIds = unique(mapping?.playerIds ?? [])
       if (playerIds.length === 0) addError(`tasks.${index}`, 'Choose at least one destination player.')
@@ -278,8 +321,8 @@ async function validateApplication({ db, template, matchDayId, clubId, mappings 
 }
 
 async function getDuplicateWarnings({ db, matchDayId, tasks }: { db: Db; matchDayId: string; tasks: Array<TemplateBlueprintInput & { playerId: string | null }> }) {
-  const existing = await db.matchTrackingTask.findMany({ where: { matchDayId, status: { not: 'ARCHIVED' } }, include: { events: { include: { matchDayEventType: true } }, patterns: true } })
-  return tasks.flatMap((task) => existing.some((candidate) => candidate.scopeType === task.scopeType && candidate.playerId === task.playerId && candidate.unitKey === (task.unitKey ?? null) && candidate.topicId === (task.topicId ?? null) && sameSet(candidate.events.flatMap((event) => event.matchDayEventType.eventDefinitionId ? [event.matchDayEventType.eventDefinitionId] : []), task.eventDefinitionIds) && sameSet(candidate.patterns.map((pattern) => pattern.patternId), task.patternIds)) ? [`A similar task already exists for ${task.title}.`] : [])
+  const existing = await db.matchTrackingTask.findMany({ where: { matchDayId, status: { not: 'ARCHIVED' } }, include: { events: { include: { matchDayEventType: true } }, patterns: true, clubDefinitions: true } })
+  return tasks.flatMap((task) => existing.some((candidate) => candidate.scopeType === task.scopeType && candidate.playerId === task.playerId && candidate.unitKey === (task.unitKey ?? null) && candidate.topicId === (task.topicId ?? null) && sameSet(candidate.events.flatMap((event) => event.matchDayEventType.eventDefinitionId ? [event.matchDayEventType.eventDefinitionId] : []), task.eventDefinitionIds) && sameSet(candidate.patterns.map((pattern) => pattern.patternId), task.patternIds) && sameSet(candidate.clubDefinitions.map((link) => link.clubTrackingDefinitionId), clubDefinitionInputIds(task))) ? [`A similar task already exists for ${task.title}.`] : [])
 }
 
 const sameSet = (first: string[], second: string[]) => first.length === second.length && unique(first).every((id) => unique(second).includes(id))

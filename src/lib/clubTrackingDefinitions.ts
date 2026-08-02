@@ -14,6 +14,7 @@ import type {
 } from '@prisma/client'
 
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
+import { canManageMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 type Db = typeof prisma | Prisma.TransactionClient
@@ -56,10 +57,38 @@ export type ClubTrackingReportingIdentity = {
   benchmarkEligible: boolean
 }
 
+export type SelectedClubTrackingDefinitionInput = {
+  clubTrackingDefinitionId: string
+  expectedKind: ClubTrackingDefinitionKind
+  expectedMappingRevision: number
+  expectedMappingStatus: ClubTrackingMappingStatus
+}
+
+export type ClubTrackingSelectionSnapshot = {
+  clubTrackingDefinitionId: string
+  selectedKind: ClubTrackingDefinitionKind
+  mappingRevisionAtSelection: number
+  mappingStatusAtSelection: ClubTrackingMappingStatus
+  standardEventDefinitionIdAtSelection: string | null
+  standardPatternDefinitionIdAtSelection: string | null
+  displayName: string
+  requiresLocation: boolean
+  contributesToStandardReporting: boolean
+  benchmarkEligible: boolean
+}
+
+export type MatchTrackingSelectableItem =
+  | { source: 'STANDARD_EVENT'; eventDefinitionId: string; displayName: string; requiresLocation: boolean; scopeCompatibility: MatchTrackingScope[] }
+  | { source: 'STANDARD_PATTERN'; patternId: string; displayName: string; requiresLocation: boolean; scopeCompatibility: MatchTrackingScope[] }
+  | (ClubTrackingSelectionSnapshot & { source: 'CLUB_DEFINITION'; kind: ClubTrackingDefinitionKind; identityType: 'Club alias' | 'Club mapped' | 'Club specific'; mappedStandardEventDefinitionId?: string; mappedStandardPatternDefinitionId?: string; mappingStatus: ClubTrackingMappingStatus; mappingRevision: number; scopeCompatibility: MatchTrackingScope[] })
+
 const mappingKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_ALIAS', 'EVENT_MAPPED', 'PATTERN_ALIAS', 'PATTERN_MAPPED'])
 const reviewableMappingKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_MAPPED', 'PATTERN_MAPPED'])
 const eventKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_ALIAS', 'EVENT_MAPPED', 'EVENT_CUSTOM'])
 const patternKinds = new Set<ClubTrackingDefinitionKind>(['PATTERN_ALIAS', 'PATTERN_MAPPED'])
+const selectableKinds = new Set<ClubTrackingDefinitionKind>(['EVENT_ALIAS', 'EVENT_MAPPED', 'EVENT_CUSTOM', 'PATTERN_ALIAS', 'PATTERN_MAPPED'])
+const locallySelectableRejectionCategories = new Set<ClubTrackingStandardMappingRejectionCategory>(['NOT_EQUIVALENT', 'BETTER_STANDARD_EXISTS', 'BENCHMARK_INCOMPATIBLE', 'DUPLICATE_MAPPING', 'OTHER'])
+const locallyBlockedRejectionCategories = new Set<ClubTrackingStandardMappingRejectionCategory>(['EVENT_PATTERN_MISMATCH', 'SCOPE_CONTEXT_MISMATCH', 'OUTCOME_MISMATCH', 'NEEDS_CLARIFICATION'])
 const semanticFields = ['kind', 'scopeType', 'targetContext', 'phase', 'focusArea', 'requiresLocation', 'mappedEventDefinitionId', 'mappedPatternDefinitionId'] as const
 const reviewableStandardMappingStatuses = new Set<ClubTrackingMappingStatus>(['CLUB_APPROVED'])
 
@@ -83,6 +112,53 @@ const unique = <T,>(values: T[]) => Array.from(new Set(values))
 const isPresent = <T,>(value: T | null | false): value is T => Boolean(value)
 const searchTokenFor = ({ clubId, query }: { clubId: string; query: string }) => createHash('sha256').update(`${clubId}:${normalizeClubTrackingDefinitionName(query)}`).digest('hex').slice(0, 24)
 
+export function getClubDefinitionLocalSelectionEligibility(definition: { kind: ClubTrackingDefinitionKind; status: ClubTrackingDefinitionStatus; active: boolean; retiredAt: Date | null; mappingStatus: ClubTrackingMappingStatus; standardMappingRejectionCategory?: ClubTrackingStandardMappingRejectionCategory | null }) {
+  if (!selectableKinds.has(definition.kind)) return { selectable: false, reason: 'This definition kind is not supported in Match Day setup.' }
+  if (definition.status !== 'APPROVED') return { selectable: false, reason: 'Only approved club tracking definitions can be selected.' }
+  if (!definition.active || definition.retiredAt) return { selectable: false, reason: 'Retired or inactive club tracking definitions cannot be selected.' }
+  if (definition.kind === 'EVENT_CUSTOM') return { selectable: true, reason: null }
+  if (definition.kind === 'EVENT_ALIAS' || definition.kind === 'PATTERN_ALIAS') return { selectable: true, reason: null }
+  if (['PROPOSED', 'CLUB_APPROVED', 'STANDARD_APPROVED'].includes(definition.mappingStatus)) return { selectable: true, reason: null }
+  if (definition.mappingStatus === 'REJECTED') {
+    const category = definition.standardMappingRejectionCategory ?? null
+    if (category && locallySelectableRejectionCategories.has(category)) return { selectable: true, reason: null }
+    if (category && locallyBlockedRejectionCategories.has(category)) return { selectable: false, reason: 'This rejected standard mapping must be corrected before new Match Day selection.' }
+    return { selectable: false, reason: 'This rejected standard mapping is not available for new Match Day selection.' }
+  }
+  return { selectable: false, reason: 'This club tracking definition is not locally selectable.' }
+}
+
+function getDefinitionScopeCompatibility(definition: { scopeType: MatchTrackingScope | null }) {
+  return definition.scopeType ? [definition.scopeType] : (['PLAYER', 'UNIT', 'TEAM'] as MatchTrackingScope[])
+}
+
+export function clubDefinitionMatchesTrackingContext(definition: { scopeType: MatchTrackingScope | null; targetContext: TrackingTargetContext | null; phase: TrackingTopicPhase | null; focusArea: TrackingFocusArea | null }, context: { scope?: MatchTrackingScope | null; targetContext?: TrackingTargetContext | null; phase?: TrackingTopicPhase | null; focusArea?: TrackingFocusArea | null }) {
+  if (definition.scopeType && context.scope && definition.scopeType !== context.scope) return false
+  if (definition.targetContext && context.targetContext && definition.targetContext !== context.targetContext) return false
+  if (definition.phase && context.phase && definition.phase !== context.phase) return false
+  if (definition.focusArea && context.focusArea && definition.focusArea !== context.focusArea) return false
+  return true
+}
+
+function formatClubIdentityType(kind: ClubTrackingDefinitionKind): 'Club alias' | 'Club mapped' | 'Club specific' {
+  if (kind === 'EVENT_ALIAS' || kind === 'PATTERN_ALIAS') return 'Club alias'
+  if (kind === 'EVENT_MAPPED' || kind === 'PATTERN_MAPPED') return 'Club mapped'
+  return 'Club specific'
+}
+
+function buildClubSelectionSnapshot(definition: { id: string; kind: ClubTrackingDefinitionKind; name: string; requiresLocation: boolean; mappingStatus: ClubTrackingMappingStatus; mappingRevision: number; mappedEventDefinitionId: string | null; mappedPatternDefinitionId: string | null; mappedEventDefinition?: { benchmarkable: boolean } | null }): ClubTrackingSelectionSnapshot {
+  const isAlias = definition.kind === 'EVENT_ALIAS' || definition.kind === 'PATTERN_ALIAS'
+  const isMapped = definition.kind === 'EVENT_MAPPED' || definition.kind === 'PATTERN_MAPPED'
+  const standardApproved = definition.mappingStatus === 'STANDARD_APPROVED'
+  const contributesToStandardReporting = isAlias || (isMapped && standardApproved)
+  return { clubTrackingDefinitionId: definition.id, selectedKind: definition.kind, mappingRevisionAtSelection: definition.mappingRevision, mappingStatusAtSelection: definition.mappingStatus, standardEventDefinitionIdAtSelection: definition.mappedEventDefinitionId, standardPatternDefinitionIdAtSelection: definition.mappedPatternDefinitionId, displayName: definition.name, requiresLocation: definition.requiresLocation, contributesToStandardReporting, benchmarkEligible: contributesToStandardReporting && Boolean(definition.mappedEventDefinition?.benchmarkable) }
+}
+
+async function getMatchClubForSelection(db: Db, actorUserId: string, matchDayId: string) {
+  if (db === prisma && !(await canManageMatchDay(actorUserId, matchDayId))) return null
+  return db.matchDay.findUnique({ where: { id: matchDayId }, select: { id: true, team: { select: { clubId: true } } } })
+}
+
 async function getMembership(userId: string, clubId: string, db: Db) {
   return db.clubMembership.findUnique({ where: { userId_clubId: { userId, clubId } }, include: { teamAssignments: true } })
 }
@@ -99,6 +175,63 @@ async function canManageClubDefinitions(userId: string, clubId: string, db: Db) 
 
 async function canViewClubDefinitions(userId: string, clubId: string, db: Db) {
   return Boolean(await getMembership(userId, clubId, db))
+}
+
+export async function getSelectableClubTrackingDefinitionsForMatch({ db = prisma, actorUserId, matchDayId, context = {}, topicId, recommendedOnly = false }: { db?: Db; actorUserId: string; matchDayId: string; context?: { scope?: MatchTrackingScope | null; targetContext?: TrackingTargetContext | null; phase?: TrackingTopicPhase | null; focusArea?: TrackingFocusArea | null }; topicId?: string | null; recommendedOnly?: boolean }): Promise<StructuredResult<MatchTrackingSelectableItem[]>> {
+  const match = await getMatchClubForSelection(db, actorUserId, matchDayId)
+  if (!match) return { ok: false, reason: 'You cannot manage this Match Day setup.' }
+  const definitions = await db.clubTrackingDefinition.findMany({ where: { clubId: match.team.clubId, kind: { in: Array.from(selectableKinds) }, status: 'APPROVED', active: true, retiredAt: null, ...(topicId ? { topicLinks: { some: { topicId, ...(recommendedOnly ? { recommended: true } : {}) } } } : {}) }, include: { mappedEventDefinition: true, mappedPatternDefinition: true, topicLinks: topicId ? { where: { topicId } } : true }, orderBy: [{ kind: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }] })
+  const items = definitions.flatMap((definition): MatchTrackingSelectableItem[] => {
+    const eligibility = getClubDefinitionLocalSelectionEligibility(definition)
+    if (!eligibility.selectable || !clubDefinitionMatchesTrackingContext(definition, context)) return []
+    const snapshot = buildClubSelectionSnapshot(definition)
+    return [{ ...snapshot, source: 'CLUB_DEFINITION', kind: definition.kind, identityType: formatClubIdentityType(definition.kind), mappedStandardEventDefinitionId: definition.mappedEventDefinitionId ?? undefined, mappedStandardPatternDefinitionId: definition.mappedPatternDefinitionId ?? undefined, mappingStatus: definition.mappingStatus, mappingRevision: definition.mappingRevision, scopeCompatibility: getDefinitionScopeCompatibility(definition) }]
+  })
+  return { ok: true, value: items }
+}
+
+export async function getValidatedClubTrackingSelectionSnapshots({ db = prisma, actorUserId, matchDayId, selections, context = {} }: { db?: Db; actorUserId: string; matchDayId: string; selections: SelectedClubTrackingDefinitionInput[]; context?: { scope?: MatchTrackingScope | null; targetContext?: TrackingTargetContext | null; phase?: TrackingTopicPhase | null; focusArea?: TrackingFocusArea | null } }): Promise<StructuredResult<ClubTrackingSelectionSnapshot[]>> {
+  const match = await getMatchClubForSelection(db, actorUserId, matchDayId)
+  if (!match) return { ok: false, reason: 'You cannot manage this Match Day setup.' }
+  const requested = selections.filter((selection) => selection.clubTrackingDefinitionId)
+  const ids = unique(requested.map((selection) => selection.clubTrackingDefinitionId))
+  if (ids.length !== requested.length) return { ok: false, reason: 'Duplicate club tracking definitions are not allowed.', fieldErrors: { clubTrackingDefinitionIds: ids } }
+  if (ids.length === 0) return { ok: true, value: [] }
+  const definitions = await db.clubTrackingDefinition.findMany({ where: { id: { in: ids }, clubId: match.team.clubId }, include: { mappedEventDefinition: true, mappedPatternDefinition: true } })
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]))
+  const errors: string[] = []
+  const snapshots: ClubTrackingSelectionSnapshot[] = []
+  for (const selection of requested) {
+    const definition = byId.get(selection.clubTrackingDefinitionId)
+    if (!definition) { errors.push(`${selection.clubTrackingDefinitionId}: definition is not available for this club.`); continue }
+    const eligibility = getClubDefinitionLocalSelectionEligibility(definition)
+    if (!eligibility.selectable) { errors.push(`${definition.name}: ${eligibility.reason}`); continue }
+    if (definition.kind !== selection.expectedKind) { errors.push(`${definition.name}: selection kind is stale.`); continue }
+    if (definition.mappingRevision !== selection.expectedMappingRevision || definition.mappingStatus !== selection.expectedMappingStatus) { errors.push(`${definition.name}: selection mapping status changed. Refresh and select again.`); continue }
+    if (!clubDefinitionMatchesTrackingContext(definition, context)) { errors.push(`${definition.name}: definition is not compatible with this tracking context.`); continue }
+    snapshots.push(buildClubSelectionSnapshot(definition))
+  }
+  return errors.length ? { ok: false, reason: 'One or more club tracking selections are invalid.', fieldErrors: { clubTrackingDefinitionIds: errors } } : { ok: true, value: snapshots }
+}
+
+export async function upsertClubTrackingDefinitionTopic({ db = prisma, userId, definitionId, topicId, recommended = false, displayOrder = 0, observerLoadWeight = 1, guidance }: { db?: Db; userId: string; definitionId: string; topicId: string; recommended?: boolean; displayOrder?: number; observerLoadWeight?: number; guidance?: string | null }): Promise<Result<{ id: string }>> {
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true, status: true, active: true, retiredAt: true, scopeType: true, targetContext: true, phase: true, focusArea: true } })
+  if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
+  if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can manage guided topic links.' }
+  if (definition.status !== 'APPROVED' || !definition.active || definition.retiredAt) return { ok: false, reason: 'Only active approved definitions can be linked to guided topics.' }
+  const topic = await db.eventTopic.findFirst({ where: { id: topicId, isActive: true, archivedAt: null, OR: [{ ownerScope: 'GLOBAL' }, { ownerScope: 'CLUB', clubId: definition.clubId }] }, select: { id: true, phase: true, focusArea: true } })
+  if (!topic) return { ok: false, reason: 'Topic was not found or is not available to this club.' }
+  if (!clubDefinitionMatchesTrackingContext(definition, { phase: topic.phase, focusArea: topic.focusArea })) return { ok: false, reason: 'Definition is not compatible with this topic.' }
+  const link = await db.clubTrackingDefinitionTopic.upsert({ where: { clubTrackingDefinitionId_topicId: { clubTrackingDefinitionId: definition.id, topicId: topic.id } }, update: { recommended, displayOrder, observerLoadWeight, guidance: normalizeOptionalText(guidance) }, create: { clubTrackingDefinitionId: definition.id, topicId: topic.id, recommended, displayOrder, observerLoadWeight, guidance: normalizeOptionalText(guidance) }, select: { id: true } })
+  return { ok: true, value: link }
+}
+
+export async function removeClubTrackingDefinitionTopic({ db = prisma, userId, definitionId, topicId }: { db?: Db; userId: string; definitionId: string; topicId: string }): Promise<Result> {
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true } })
+  if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
+  if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can manage guided topic links.' }
+  await db.clubTrackingDefinitionTopic.deleteMany({ where: { clubTrackingDefinitionId: definition.id, topicId } })
+  return { ok: true, value: true }
 }
 
 async function getTrackingLibraryMembership(userId: string, clubId: string, db: Db) {

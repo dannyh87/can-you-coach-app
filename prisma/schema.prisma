@@ -284,6 +284,7 @@ model MatchTrackingTask {
   copiedTasks                  MatchTrackingTask[]                   @relation("CopiedMatchTrackingTasks")
   events                       MatchTrackingTaskEvent[]
   patterns                     MatchTrackingTaskPattern[]
+  clubDefinitions              MatchTrackingTaskClubDefinition[]
   assignments                  MatchContributorAssignment[]
   submittedPatternObservations SubmittedTrackingPatternObservation[]
   officialPatternObservations  MatchTrackingPatternObservation[]
@@ -315,12 +316,13 @@ model EventTopic {
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
 
-  contexts      EventTopicContext[]
-  events        EventTopicEvent[]
-  patterns      EventTopicPattern[]
-  aliases       EventTopicAlias[]
-  trackingTasks MatchTrackingTask[]
-  templateTasks TrackingSetupTemplateTask[]
+  contexts             EventTopicContext[]
+  events               EventTopicEvent[]
+  patterns             EventTopicPattern[]
+  aliases              EventTopicAlias[]
+  clubDefinitionTopics ClubTrackingDefinitionTopic[]
+  trackingTasks        MatchTrackingTask[]
+  templateTasks        TrackingSetupTemplateTask[]
 
   @@unique([ownerScope, clubId, normalizedName])
   @@index([ownerScope])
@@ -473,11 +475,12 @@ model TrackingSetupTemplateTask {
   createdAt     DateTime               @default(now())
   updatedAt     DateTime               @updatedAt
 
-  template     TrackingSetupTemplate              @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  topic        EventTopic?                        @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  events       TrackingSetupTemplateTaskEvent[]
-  patterns     TrackingSetupTemplateTaskPattern[]
-  createdTasks MatchTrackingTask[]
+  template        TrackingSetupTemplate                     @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  topic           EventTopic?                               @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  events          TrackingSetupTemplateTaskEvent[]
+  patterns        TrackingSetupTemplateTaskPattern[]
+  clubDefinitions TrackingSetupTemplateTaskClubDefinition[]
+  createdTasks    MatchTrackingTask[]
 
   @@index([templateId])
   @@index([topicId])
@@ -512,6 +515,75 @@ model TrackingSetupTemplateTaskPattern {
   @@unique([templateTaskId, patternId])
   @@index([templateTaskId])
   @@index([patternId])
+}
+
+model MatchTrackingTaskClubDefinition {
+  id                                     String                     @id @default(cuid())
+  trackingTaskId                         String
+  clubTrackingDefinitionId               String
+  displayOrder                           Int
+  selectedKind                           ClubTrackingDefinitionKind
+  mappingRevisionAtSelection             Int?
+  mappingStatusAtSelection               ClubTrackingMappingStatus?
+  standardEventDefinitionIdAtSelection   String?
+  standardPatternDefinitionIdAtSelection String?
+  createdAt                              DateTime                   @default(now())
+
+  trackingTask                         MatchTrackingTask          @relation(fields: [trackingTaskId], references: [id], onDelete: Cascade)
+  clubTrackingDefinition               ClubTrackingDefinition     @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardEventDefinitionAtSelection   EventDefinition?           @relation("TaskClubDefinitionStandardEventSelection", fields: [standardEventDefinitionIdAtSelection], references: [id], onDelete: Restrict)
+  standardPatternDefinitionAtSelection TrackingPatternDefinition? @relation("TaskClubDefinitionStandardPatternSelection", fields: [standardPatternDefinitionIdAtSelection], references: [id], onDelete: Restrict)
+
+  @@unique([trackingTaskId, clubTrackingDefinitionId])
+  @@index([trackingTaskId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardEventDefinitionIdAtSelection])
+  @@index([standardPatternDefinitionIdAtSelection])
+  @@index([mappingStatusAtSelection])
+}
+
+model TrackingSetupTemplateTaskClubDefinition {
+  id                                     String                     @id @default(cuid())
+  templateTaskId                         String
+  clubTrackingDefinitionId               String
+  displayOrder                           Int
+  selectedKind                           ClubTrackingDefinitionKind
+  mappingRevisionAtSelection             Int?
+  mappingStatusAtSelection               ClubTrackingMappingStatus?
+  standardEventDefinitionIdAtSelection   String?
+  standardPatternDefinitionIdAtSelection String?
+  createdAt                              DateTime                   @default(now())
+
+  templateTask                         TrackingSetupTemplateTask  @relation(fields: [templateTaskId], references: [id], onDelete: Cascade)
+  clubTrackingDefinition               ClubTrackingDefinition     @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  standardEventDefinitionAtSelection   EventDefinition?           @relation("TemplateTaskClubDefinitionStandardEventSelection", fields: [standardEventDefinitionIdAtSelection], references: [id], onDelete: Restrict)
+  standardPatternDefinitionAtSelection TrackingPatternDefinition? @relation("TemplateTaskClubDefinitionStandardPatternSelection", fields: [standardPatternDefinitionIdAtSelection], references: [id], onDelete: Restrict)
+
+  @@unique([templateTaskId, clubTrackingDefinitionId])
+  @@index([templateTaskId])
+  @@index([clubTrackingDefinitionId])
+  @@index([standardEventDefinitionIdAtSelection])
+  @@index([standardPatternDefinitionIdAtSelection])
+  @@index([mappingStatusAtSelection])
+}
+
+model ClubTrackingDefinitionTopic {
+  id                       String   @id @default(cuid())
+  clubTrackingDefinitionId String
+  topicId                  String
+  recommended              Boolean  @default(false)
+  displayOrder             Int      @default(0)
+  observerLoadWeight       Int      @default(1)
+  guidance                 String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  clubTrackingDefinition ClubTrackingDefinition @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Cascade)
+  topic                  EventTopic             @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([clubTrackingDefinitionId, topicId])
+  @@index([topicId])
+  @@index([recommended])
 }
 
 model TrackingSetupTemplateApplication {
@@ -570,18 +642,21 @@ model ClubTrackingDefinition {
   createdAt                        DateTime                                      @default(now())
   updatedAt                        DateTime                                      @updatedAt
 
-  club                         Club                                  @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  mappedEventDefinition        EventDefinition?                      @relation("ClubTrackingDefinitionsMappedEvent", fields: [mappedEventDefinitionId], references: [id], onDelete: Restrict)
-  mappedPatternDefinition      TrackingPatternDefinition?            @relation("ClubTrackingDefinitionsMappedPattern", fields: [mappedPatternDefinitionId], references: [id], onDelete: Restrict)
-  createdBy                    User                                  @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
-  approvedBy                   User?                                 @relation("ClubTrackingDefinitionsApproved", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  rejectedBy                   User?                                 @relation("ClubTrackingDefinitionsRejected", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
-  standardMappingReviewedBy    User?                                 @relation("ClubTrackingDefinitionStandardMappingReviewer", fields: [standardMappingReviewedByUserId], references: [id], onDelete: SetNull)
-  updatedBy                    User?                                 @relation("ClubTrackingDefinitionsUpdated", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  club                         Club                                      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  mappedEventDefinition        EventDefinition?                          @relation("ClubTrackingDefinitionsMappedEvent", fields: [mappedEventDefinitionId], references: [id], onDelete: Restrict)
+  mappedPatternDefinition      TrackingPatternDefinition?                @relation("ClubTrackingDefinitionsMappedPattern", fields: [mappedPatternDefinitionId], references: [id], onDelete: Restrict)
+  createdBy                    User                                      @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  approvedBy                   User?                                     @relation("ClubTrackingDefinitionsApproved", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  rejectedBy                   User?                                     @relation("ClubTrackingDefinitionsRejected", fields: [rejectedByUserId], references: [id], onDelete: SetNull)
+  standardMappingReviewedBy    User?                                     @relation("ClubTrackingDefinitionStandardMappingReviewer", fields: [standardMappingReviewedByUserId], references: [id], onDelete: SetNull)
+  updatedBy                    User?                                     @relation("ClubTrackingDefinitionsUpdated", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   submittedMatchEvents         SubmittedMatchEvent[]
   officialMatchEvents          MatchEvent[]
   submittedPatternObservations SubmittedTrackingPatternObservation[]
   officialPatternObservations  MatchTrackingPatternObservation[]
+  taskLinks                    MatchTrackingTaskClubDefinition[]
+  templateTaskLinks            TrackingSetupTemplateTaskClubDefinition[]
+  topicLinks                   ClubTrackingDefinitionTopic[]
 
   @@unique([clubId, kind, normalizedName])
   @@unique([clubId, slug])
@@ -806,11 +881,13 @@ model TrackingPatternDefinition {
   topicPatterns                         EventTopicPattern[]
   taskPatterns                          MatchTrackingTaskPattern[]
   templateTaskPatterns                  TrackingSetupTemplateTaskPattern[]
-  clubTrackingDefinitionsMapped         ClubTrackingDefinition[]              @relation("ClubTrackingDefinitionsMappedPattern")
+  taskClubDefinitionSelections          MatchTrackingTaskClubDefinition[]         @relation("TaskClubDefinitionStandardPatternSelection")
+  templateTaskClubDefinitionSelections  TrackingSetupTemplateTaskClubDefinition[] @relation("TemplateTaskClubDefinitionStandardPatternSelection")
+  clubTrackingDefinitionsMapped         ClubTrackingDefinition[]                  @relation("ClubTrackingDefinitionsMappedPattern")
   submittedObservations                 SubmittedTrackingPatternObservation[]
-  submittedObservationsStandardSnapshot SubmittedTrackingPatternObservation[] @relation("SubmittedPatternStandardDefinitionSnapshot")
+  submittedObservationsStandardSnapshot SubmittedTrackingPatternObservation[]     @relation("SubmittedPatternStandardDefinitionSnapshot")
   officialObservations                  MatchTrackingPatternObservation[]
-  officialObservationsStandardSnapshot  MatchTrackingPatternObservation[]     @relation("OfficialPatternStandardDefinitionSnapshot")
+  officialObservationsStandardSnapshot  MatchTrackingPatternObservation[]         @relation("OfficialPatternStandardDefinitionSnapshot")
 
   @@unique([ownerScope, clubId, normalizedName])
   @@index([ownerScope])
@@ -982,11 +1059,11 @@ model MatchTrackingPatternObservation {
 }
 
 model EventDefinition {
-  id                                   String                           @id @default(cuid())
-  scope                                EventDefinitionScope             @default(GLOBAL)
+  id                                   String                                    @id @default(cuid())
+  scope                                EventDefinitionScope                      @default(GLOBAL)
   clubId                               String?
   createdByUserId                      String?
-  legacyEventType                      MatchEventType?                  @unique
+  legacyEventType                      MatchEventType?                           @unique
   name                                 String
   slug                                 String
   normalizedName                       String
@@ -999,22 +1076,24 @@ model EventDefinition {
   agePhases                            EventDefinitionAgePhase[]
   fourCorner                           EventDefinitionFourCorner
   positionRelevance                    EventDefinitionPosition[]
-  enabledByDefault                     Boolean                          @default(false)
-  benchmarkable                        Boolean                          @default(false)
-  requiresLocation                     Boolean                          @default(false)
-  isActive                             Boolean                          @default(true)
+  enabledByDefault                     Boolean                                   @default(false)
+  benchmarkable                        Boolean                                   @default(false)
+  requiresLocation                     Boolean                                   @default(false)
+  isActive                             Boolean                                   @default(true)
   archivedAt                           DateTime?
-  createdAt                            DateTime                         @default(now())
-  updatedAt                            DateTime                         @updatedAt
+  createdAt                            DateTime                                  @default(now())
+  updatedAt                            DateTime                                  @updatedAt
   matchEvents                          MatchEvent[]
   matchDayEventTypes                   MatchDayEventType[]
   submittedMatchEvents                 SubmittedMatchEvent[]
   topicEvents                          EventTopicEvent[]
   patternSteps                         TrackingPatternStep[]
   templateTaskEvents                   TrackingSetupTemplateTaskEvent[]
-  clubTrackingDefinitionsMapped        ClubTrackingDefinition[]         @relation("ClubTrackingDefinitionsMappedEvent")
-  submittedMatchEventsStandardSnapshot SubmittedMatchEvent[]            @relation("SubmittedMatchEventStandardDefinitionSnapshot")
-  matchEventsStandardSnapshot          MatchEvent[]                     @relation("MatchEventStandardDefinitionSnapshot")
+  taskClubDefinitionSelections         MatchTrackingTaskClubDefinition[]         @relation("TaskClubDefinitionStandardEventSelection")
+  templateTaskClubDefinitionSelections TrackingSetupTemplateTaskClubDefinition[] @relation("TemplateTaskClubDefinitionStandardEventSelection")
+  clubTrackingDefinitionsMapped        ClubTrackingDefinition[]                  @relation("ClubTrackingDefinitionsMappedEvent")
+  submittedMatchEventsStandardSnapshot SubmittedMatchEvent[]                     @relation("SubmittedMatchEventStandardDefinitionSnapshot")
+  matchEventsStandardSnapshot          MatchEvent[]                              @relation("MatchEventStandardDefinitionSnapshot")
 
   @@unique([scope, clubId, normalizedName])
   @@unique([scope, clubId, slug])

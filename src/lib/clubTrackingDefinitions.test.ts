@@ -7,6 +7,7 @@ import {
   createClubTrackingDefinitionDraft,
   deleteUnusedClubTrackingDefinitionDraft,
   getClubTrackingReportingIdentity,
+  getClubDefinitionLocalSelectionEligibility,
   normalizeClubTrackingDefinitionName,
   proposeClubTrackingDefinitionMapping,
   rejectClubTrackingDefinition,
@@ -222,6 +223,15 @@ describe('club tracking definitions governance', () => {
     await createClubTrackingDefinitionDraft({ db, userId: 'owner-1', input: { clubId: 'club-1', kind: 'EVENT_ALIAS', name: 'Break the line', mappedEventDefinitionId: 'event-1', searchToken, proposalType: 'EVENT', mappingStatus: 'PROPOSED' } })
     const identity = await getClubTrackingReportingIdentity({ db, clubTrackingDefinitionId: 'definition-1' })
     expect(identity).toMatchObject({ ok: true, value: { identityType: 'CLUB_ALIAS', contributesToStandardReporting: true, contributesToClubReporting: true, benchmarkEligible: true } })
+  })
+
+  it('controls local Match Day selection with standard rejection category', () => {
+    const base = { kind: 'EVENT_MAPPED' as const, status: 'APPROVED' as const, active: true, retiredAt: null, mappingStatus: 'REJECTED' as const }
+    expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'NOT_EQUIVALENT' })).toMatchObject({ selectable: true })
+    expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'BETTER_STANDARD_EXISTS' })).toMatchObject({ selectable: true })
+    expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'EVENT_PATTERN_MISMATCH' })).toMatchObject({ selectable: false })
+    expect(getClubDefinitionLocalSelectionEligibility({ ...base, standardMappingRejectionCategory: 'OUTCOME_MISMATCH' })).toMatchObject({ selectable: false })
+    expect(getClubDefinitionLocalSelectionEligibility({ ...base, active: false, standardMappingRejectionCategory: 'NOT_EQUIVALENT' })).toMatchObject({ selectable: false })
   })
 
   it('retires and restores definitions while excluding retired rows from active lists', async () => {

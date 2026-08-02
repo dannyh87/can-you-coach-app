@@ -9,6 +9,7 @@ import Button from '@/components/ui/Button'
 import FormField from '@/components/ui/FormField'
 import { fieldClassName } from '@/components/ui/formStyles'
 import type {
+  ResolvedClubTrackingDefinition,
   ResolvedTrackingTopic,
   TrackingResolverContext,
   TrackingResolverStep,
@@ -28,7 +29,7 @@ type TeamOption = {
   players: Array<{ id: string; name: string; squadNumber: number | null; preferredPosition: string | null }>
 }
 
-type PreviousTask = { id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; patternNames: string[]; requiresPlayer: boolean }
+type PreviousTask = { id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; clubDefinitionCount: number; patternNames: string[]; clubDefinitionNames: string[]; requiresPlayer: boolean }
 type TemplateSummary = { id: string; name: string; description: string | null; visibility: string; taskCount: number; eventCount: number; patternCount: number; scopeSummary: string; teamName: string | null; lastUsedAt: Date | null }
 type TemplatePreview = TemplateSummary & { tasks: Array<{ id: string; scopeType: 'PLAYER' | 'UNIT' | 'TEAM'; targetContext: string | null; unitKey: string | null; unitLabel: string | null; title: string; instructions: string | null; topicName: string | null; events: Array<{ eventDefinitionId: string; name: string; active: boolean }>; patterns: Array<{ patternId: string; name: string; active: boolean; aliases: string[] }> }> }
 type SetupState = {
@@ -44,13 +45,16 @@ type SetupState = {
     status: string
     eventCount: number
     patternCount: number
+    clubDefinitionCount: number
     patternNames: string[]
+    clubDefinitionNames: string[]
     assignments: Array<{ id: string; assignmentMode: string; status: string; assignedUserId: string | null; recipientCount: number; submittedObservationCount: number; pendingObservationCount: number; createdAt: Date; acceptedAt: Date | null; startedAt: Date | null; submittedAt: Date | null; cancelledAt: Date | null }>
     activeAssignment: { id: string; assignmentMode: string; status: string; assignedUserId: string | null; recipientCount: number } | null
   }>
   coverage: { totalTasks: number; assigned: number; openGroupOffers: number; awaitingResponse: number; accepted: number; unassigned: number; draftTasks: number }
 }
 type ContributorOption = { userId: string; label: string; detail: string; alreadyAssignedOnMatch: boolean }
+type ClubSelection = { clubTrackingDefinitionId: string; expectedKind: string; expectedMappingRevision: number; expectedMappingStatus: string }
 
 type Props = {
   teams: TeamOption[]
@@ -61,14 +65,14 @@ type Props = {
   nextTrackingQuestionAction: (context: TrackingResolverContext) => Promise<ActionResult<TrackingResolverStep | null>>
   searchTopicsAction: (query: string, context: TrackingResolverContext) => Promise<ActionResult<Array<{ topicId: string; name: string; description?: string; matchedAliases: string[]; recommended: boolean }>>>
   getTopicEventsAction: (topicId: string, context: TrackingResolverContext) => Promise<ActionResult<ResolvedTrackingTopic | null>>
-  getAdvancedItemsAction: (context: TrackingResolverContext) => Promise<ActionResult<{ events: Array<{ eventDefinitionId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; searchText: string }>; patterns: Array<{ patternId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; aliases: string[]; steps: Array<{ order: number; label: string }>; outcomes: Array<{ id: string; label: string }>; searchText: string }> }>>
+  getAdvancedItemsAction: (context: TrackingResolverContext) => Promise<ActionResult<{ events: Array<{ eventDefinitionId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; searchText: string }>; patterns: Array<{ patternId: string; name: string; description?: string; requiresLocation: boolean; recommendedByTopic: boolean; outsideChosenTopic: boolean; observerLoadWeight: number; aliases: string[]; steps: Array<{ order: number; label: string }>; outcomes: Array<{ id: string; label: string }>; searchText: string }>; clubDefinitions: ResolvedClubTrackingDefinition[] }>>
   createTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string }>>
   getPreviousTasksAction: (matchDayId: string) => Promise<ActionResult<PreviousTask[]>>
   getTemplatesAction: (teamId: string, query: string) => Promise<ActionResult<TemplateSummary[]>>
   getTemplatePreviewAction: (templateId: string) => Promise<ActionResult<TemplatePreview | null>>
   applyTemplateAction: (formData: FormData) => Promise<ActionResult<{ applicationId: string; taskIds: string[]; warnings: string[] }>>
   saveSetupAsTemplateAction: (formData: FormData) => Promise<ActionResult<{ id: string }>>
-  copyTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>>
+  copyTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[]; missingClubDefinitionIds?: string[] }>>
   getSetupStateAction: (matchDayId: string) => Promise<ActionResult<SetupState>>
   getEligibleContributorsAction: (trackingTaskId: string) => Promise<ActionResult<ContributorOption[]>>
   assignTaskAction: (formData: FormData) => Promise<ActionResult<{ id: string | null; alreadyExisted: boolean }>>
@@ -155,6 +159,7 @@ export default function MatchDayV2SetupWizard({
   const [topicResults, setTopicResults] = useState<Array<{ topicId: string; name: string; description?: string; matchedAliases: string[]; recommended: boolean }>>([])
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const [selectedPatternIds, setSelectedPatternIds] = useState<string[]>([])
+  const [selectedClubDefinitions, setSelectedClubDefinitions] = useState<ClubSelection[]>([])
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [advancedSearch, setAdvancedSearch] = useState('')
   const [advancedType, setAdvancedType] = useState<'ALL' | 'EVENTS' | 'PATTERNS'>('ALL')
@@ -163,11 +168,18 @@ export default function MatchDayV2SetupWizard({
   const involvedPlayers = selectedTeam?.players.filter((player) => squadStatuses[player.id] !== 'NOT_INVOLVED') ?? []
   const selectedEventCount = selectedEventDefinitionIds.length
   const selectedPatternCount = selectedPatternIds.length
-  const selectedLoad = selectedEventDefinitionIds.reduce((total, id) => total + (topic?.events.find((event) => event.eventDefinitionId === id)?.observerLoadWeight ?? advancedItems?.events.find((event) => event.eventDefinitionId === id)?.observerLoadWeight ?? 1), 0) + selectedPatternIds.reduce((total, id) => total + (topic?.patterns.find((pattern) => pattern.patternId === id)?.observerLoadWeight ?? advancedItems?.patterns.find((pattern) => pattern.patternId === id)?.observerLoadWeight ?? 2), 0)
+  const selectedClubDefinitionCount = selectedClubDefinitions.length
+  const selectedLoad = selectedEventDefinitionIds.reduce((total, id) => total + (topic?.events.find((event) => event.eventDefinitionId === id)?.observerLoadWeight ?? advancedItems?.events.find((event) => event.eventDefinitionId === id)?.observerLoadWeight ?? 1), 0) + selectedPatternIds.reduce((total, id) => total + (topic?.patterns.find((pattern) => pattern.patternId === id)?.observerLoadWeight ?? advancedItems?.patterns.find((pattern) => pattern.patternId === id)?.observerLoadWeight ?? 2), 0) + selectedClubDefinitions.reduce((total, selection) => total + (topic?.clubDefinitions.find((definition) => definition.clubTrackingDefinitionId === selection.clubTrackingDefinitionId)?.observerLoadWeight ?? advancedItems?.clubDefinitions.find((definition) => definition.clubTrackingDefinitionId === selection.clubTrackingDefinitionId)?.observerLoadWeight ?? 1), 0)
 
   const resetMessages = () => {
     setMessage(null)
     setError(null)
+  }
+
+  const toggleClubDefinition = (definition: ResolvedClubTrackingDefinition, checked: boolean) => {
+    setSelectedClubDefinitions((current) => checked
+      ? [...current.filter((selection) => selection.clubTrackingDefinitionId !== definition.clubTrackingDefinitionId), { clubTrackingDefinitionId: definition.clubTrackingDefinitionId, expectedKind: definition.kind, expectedMappingRevision: definition.mappingRevision, expectedMappingStatus: definition.mappingStatus }]
+      : current.filter((selection) => selection.clubTrackingDefinitionId !== definition.clubTrackingDefinitionId))
   }
 
   const refreshSetupState = async (id = matchDayId) => {
@@ -273,6 +285,7 @@ export default function MatchDayV2SetupWizard({
       if (resolved.data.topic) {
         setSelectedEventDefinitionIds(resolved.data.topic.events.filter((event) => event.recommended).map((event) => event.eventDefinitionId))
         setSelectedPatternIds(resolved.data.topic.patterns.filter((pattern) => pattern.recommended).map((pattern) => pattern.patternId))
+        setSelectedClubDefinitions([])
         setAdvancedOpen(false)
         setAdvancedItems(null)
         setTaskDetails((current) => ({ ...current, title: current.title || resolved.data.topic!.name }))
@@ -305,6 +318,7 @@ export default function MatchDayV2SetupWizard({
       setTopic(result.data)
       setSelectedEventDefinitionIds(result.data.events.filter((event) => event.recommended).map((event) => event.eventDefinitionId))
       setSelectedPatternIds(result.data.patterns.filter((pattern) => pattern.recommended).map((pattern) => pattern.patternId))
+      setSelectedClubDefinitions([])
       setAdvancedOpen(false)
       setAdvancedItems(null)
       setTaskDetails((current) => ({ ...current, title: result.data!.name }))
@@ -329,6 +343,12 @@ export default function MatchDayV2SetupWizard({
     formData.set('instructions', taskDetails.instructions)
     selectedEventDefinitionIds.forEach((id) => formData.append('eventDefinitionId', id))
     selectedPatternIds.forEach((id) => formData.append('patternId', id))
+    selectedClubDefinitions.forEach((selection, index) => {
+      formData.append('clubTrackingDefinitionId', selection.clubTrackingDefinitionId)
+      formData.set(`clubTrackingDefinitionKind:${index}`, selection.expectedKind)
+      formData.set(`clubTrackingDefinitionRevision:${index}`, String(selection.expectedMappingRevision))
+      formData.set(`clubTrackingDefinitionStatus:${index}`, selection.expectedMappingStatus)
+    })
     startTransition(async () => {
       const result = await createTaskAction(formData)
       if (!result.ok) {
@@ -346,7 +366,7 @@ export default function MatchDayV2SetupWizard({
     resetMessages()
     setAdvancedOpen(true)
     startTransition(async () => {
-      const result = await getAdvancedItemsAction({ ...trackingContext, selectedEventDefinitionIds, selectedPatternIds })
+      const result = await getAdvancedItemsAction({ ...trackingContext, selectedEventDefinitionIds, selectedPatternIds, selectedClubTrackingDefinitionIds: selectedClubDefinitions.map((selection) => selection.clubTrackingDefinitionId) })
       if (!result.ok) {
         setError(result.message)
         return
@@ -579,7 +599,7 @@ export default function MatchDayV2SetupWizard({
         <section className="rounded-2xl border bg-white p-4 shadow-sm sm:p-6">
           <h2 className="text-2xl font-bold">What should be tracked?</h2>
           <p className="mt-1 text-sm text-slate-600">{topic.workloadMessage}</p>
-          <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">{getWorkloadMessage(selectedEventCount, selectedPatternCount, selectedLoad)}</p>
+          <p className="mt-2 rounded-xl bg-slate-50 p-3 text-sm font-semibold text-slate-700">{getWorkloadMessage(selectedEventCount, selectedPatternCount, selectedClubDefinitionCount, selectedLoad)}</p>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
             <section>
@@ -606,13 +626,23 @@ export default function MatchDayV2SetupWizard({
             </section>
           </div>
 
+          {topic.clubDefinitions.length > 0 && (
+            <section className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <h3 className="text-lg font-extrabold text-blue-950">Club additions</h3>
+              <p className="text-sm text-blue-900">Approved club-specific tracking definitions linked to this topic. These are explicit additions.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                {topic.clubDefinitions.map((definition) => <ClubDefinitionSelectionCard key={definition.clubTrackingDefinitionId} definition={definition} selected={selectedClubDefinitions.some((selection) => selection.clubTrackingDefinitionId === definition.clubTrackingDefinitionId)} onToggle={(checked) => toggleClubDefinition(definition, checked)} />)}
+              </div>
+            </section>
+          )}
+
           <div className="mt-5 rounded-2xl border border-dashed border-blue-200 bg-blue-50 p-4">
             <p className="font-bold text-blue-950">Need something more detailed?</p>
             <p className="mt-1 text-sm text-blue-900">Open the advanced builder to combine compatible standard events and tactical patterns without changing the selected topic.</p>
             <Button className="mt-3" variant="secondary" onClick={openAdvancedBuilder} disabled={isPending}>Open advanced builder</Button>
           </div>
 
-          {advancedOpen && <AdvancedBuilder items={advancedItems} search={advancedSearch} onSearch={setAdvancedSearch} itemType={advancedType} onTypeChange={setAdvancedType} selectedEventIds={selectedEventDefinitionIds} selectedPatternIds={selectedPatternIds} onToggleEvent={(id, checked) => setSelectedEventDefinitionIds((current) => toggleId(current, id, checked))} onTogglePattern={(id, checked) => setSelectedPatternIds((current) => toggleId(current, id, checked))} />}
+          {advancedOpen && <AdvancedBuilder items={advancedItems} search={advancedSearch} onSearch={setAdvancedSearch} itemType={advancedType} onTypeChange={setAdvancedType} selectedEventIds={selectedEventDefinitionIds} selectedPatternIds={selectedPatternIds} selectedClubDefinitions={selectedClubDefinitions} onToggleEvent={(id, checked) => setSelectedEventDefinitionIds((current) => toggleId(current, id, checked))} onTogglePattern={(id, checked) => setSelectedPatternIds((current) => toggleId(current, id, checked))} onToggleClubDefinition={toggleClubDefinition} />}
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {trackingContext.scope === 'PLAYER' && <FormField label="Player target"><select className={fieldClassName} value={taskDetails.playerId} onChange={(event) => setTaskDetails({ ...taskDetails, playerId: event.target.value })}><option value="">Choose player</option>{involvedPlayers.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></FormField>}
@@ -620,7 +650,7 @@ export default function MatchDayV2SetupWizard({
             <FormField label="Task title"><input className={fieldClassName} value={taskDetails.title} onChange={(event) => setTaskDetails({ ...taskDetails, title: event.target.value })} /></FormField>
             <FormField label="Instructions"><textarea className={fieldClassName} value={taskDetails.instructions} onChange={(event) => setTaskDetails({ ...taskDetails, instructions: event.target.value })} rows={3} /></FormField>
           </div>
-          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('topic')}>Back</Button><Button onClick={createTask} disabled={isPending || selectedEventDefinitionIds.length + selectedPatternIds.length === 0}>Save tracking task</Button></div>
+          <div className="mt-5 flex justify-between"><Button variant="secondary" onClick={() => setStage('topic')}>Back</Button><Button onClick={createTask} disabled={isPending || selectedEventDefinitionIds.length + selectedPatternIds.length + selectedClubDefinitions.length === 0}>Save tracking task</Button></div>
         </section>
       )}
 
@@ -659,7 +689,7 @@ export default function MatchDayV2SetupWizard({
             <Summary label="Tracking tasks" value={String(setupState?.coverage.totalTasks ?? createdTaskIds.length)} />
           </div>
           {setupState && <div className="mt-4"><CoverageSummary coverage={setupState.coverage} /></div>}
-          {setupState && <div className="mt-5 grid gap-3">{setupState.tasks.map((task) => <article key={task.id} className="rounded-xl border p-4"><p className="font-bold">{task.title}</p><p className="mt-1 text-sm text-slate-600">{task.scopeType} · {task.targetLabel} · {task.eventCount} events · {task.patternCount} patterns · {task.status}</p>{task.patternNames.length > 0 && <p className="mt-1 text-xs font-semibold text-slate-500">Patterns: {task.patternNames.join(', ')}</p>}<p className="mt-1 text-sm font-semibold text-slate-700">{task.activeAssignment ? `${task.activeAssignment.assignmentMode.replace('_', ' ')} · ${task.activeAssignment.status}${task.activeAssignment.recipientCount ? ` · ${task.activeAssignment.recipientCount} recipients` : ''}` : 'No assignment yet'}</p>{!task.activeAssignment && <p className="mt-1 text-sm text-amber-800">Warning: unassigned task.</p>}</article>)}</div>}
+          {setupState && <div className="mt-5 grid gap-3">{setupState.tasks.map((task) => <article key={task.id} className="rounded-xl border p-4"><p className="font-bold">{task.title}</p><p className="mt-1 text-sm text-slate-600">{task.scopeType} · {task.targetLabel} · {task.eventCount} events · {task.patternCount} patterns · {task.clubDefinitionCount} club items · {task.status}</p>{task.patternNames.length > 0 && <p className="mt-1 text-xs font-semibold text-slate-500">Patterns: {task.patternNames.join(', ')}</p>}{task.clubDefinitionNames.length > 0 && <p className="mt-1 text-xs font-semibold text-blue-700">Club: {task.clubDefinitionNames.join(', ')}</p>}<p className="mt-1 text-sm font-semibold text-slate-700">{task.activeAssignment ? `${task.activeAssignment.assignmentMode.replace('_', ' ')} · ${task.activeAssignment.status}${task.activeAssignment.recipientCount ? ` · ${task.activeAssignment.recipientCount} recipients` : ''}` : 'No assignment yet'}</p>{!task.activeAssignment && <p className="mt-1 text-sm text-amber-800">Warning: unassigned task.</p>}</article>)}</div>}
           {setupState && setupState.tasks.length > 0 && <SaveTemplatePanel details={saveTemplateDetails} onChange={setSaveTemplateDetails} onSave={saveSetupAsTemplate} disabled={isPending} />}
           <div className="mt-5 flex flex-wrap gap-3">
             <Button variant="secondary" onClick={() => setStage('tracking')}>Add another task</Button>
@@ -678,13 +708,17 @@ function Summary({ label, value }: { label: string; value: string }) {
   return <div className="rounded-xl border bg-slate-50 p-4"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-bold text-slate-950">{value}</p></div>
 }
 
-function getWorkloadMessage(eventCount: number, patternCount: number, load: number) {
-  const total = eventCount + patternCount
+function getWorkloadMessage(eventCount: number, patternCount: number, clubDefinitionCount: number, load: number) {
+  const total = eventCount + patternCount + clubDefinitionCount
   if (total === 0) return 'No tracking items selected yet.'
-  const base = `${eventCount} event${eventCount === 1 ? '' : 's'} and ${patternCount} tactical pattern${patternCount === 1 ? '' : 's'} selected`
+  const base = `${eventCount} event${eventCount === 1 ? '' : 's'}, ${patternCount} tactical pattern${patternCount === 1 ? '' : 's'} and ${clubDefinitionCount} club item${clubDefinitionCount === 1 ? '' : 's'} selected`
   if (load <= 7) return `${base} - suitable for one focused observer.`
   if (load <= 12) return `${base} - manageable, but the observer should stay focused.`
   return `${base} - this may be difficult to track accurately.`
+}
+
+function ClubDefinitionSelectionCard({ definition, selected, onToggle }: { definition: ResolvedClubTrackingDefinition; selected: boolean; onToggle: (checked: boolean) => void }) {
+  return <label className={`flex gap-3 rounded-xl border p-4 ${selected ? 'border-blue-600 bg-white' : 'border-blue-100 bg-blue-50'}`}><input type="checkbox" checked={selected} onChange={(event) => onToggle(event.target.checked)} /><span><span className="font-bold text-slate-950">{definition.name}</span><span className="ml-2 rounded-full bg-white px-2 py-0.5 text-xs font-bold text-blue-800">{definition.identityType}</span><span className="block text-sm text-slate-700">{definition.mappedStandardName ? `${definition.identityType} for ${definition.mappedStandardName}` : definition.description ?? 'Club-specific tracking item'}</span><span className="mt-1 block text-xs font-bold text-slate-600">{definition.contributesToStandardReporting ? 'Counts in standard reporting' : 'Club reporting only'} · {definition.requiresLocation ? 'Requires location' : 'No required location'}</span></span></label>
 }
 
 function PatternSelectionCard({ pattern, selected, onToggle }: { pattern: ResolvedTrackingTopic['patterns'][number]; selected: boolean; onToggle: (checked: boolean) => void }) {
@@ -709,10 +743,11 @@ function PatternSelectionCard({ pattern, selected, onToggle }: { pattern: Resolv
   )
 }
 
-function AdvancedBuilder({ items, search, onSearch, itemType, onTypeChange, selectedEventIds, selectedPatternIds, onToggleEvent, onTogglePattern }: { items: Awaited<ReturnType<Props['getAdvancedItemsAction']>> extends ActionResult<infer T> ? T | null : never; search: string; onSearch: (value: string) => void; itemType: 'ALL' | 'EVENTS' | 'PATTERNS'; onTypeChange: (value: 'ALL' | 'EVENTS' | 'PATTERNS') => void; selectedEventIds: string[]; selectedPatternIds: string[]; onToggleEvent: (id: string, checked: boolean) => void; onTogglePattern: (id: string, checked: boolean) => void }) {
+function AdvancedBuilder({ items, search, onSearch, itemType, onTypeChange, selectedEventIds, selectedPatternIds, selectedClubDefinitions, onToggleEvent, onTogglePattern, onToggleClubDefinition }: { items: Awaited<ReturnType<Props['getAdvancedItemsAction']>> extends ActionResult<infer T> ? T | null : never; search: string; onSearch: (value: string) => void; itemType: 'ALL' | 'EVENTS' | 'PATTERNS'; onTypeChange: (value: 'ALL' | 'EVENTS' | 'PATTERNS') => void; selectedEventIds: string[]; selectedPatternIds: string[]; selectedClubDefinitions: ClubSelection[]; onToggleEvent: (id: string, checked: boolean) => void; onTogglePattern: (id: string, checked: boolean) => void; onToggleClubDefinition: (definition: ResolvedClubTrackingDefinition, checked: boolean) => void }) {
   const query = search.toLowerCase().trim()
   const eventRows = (items?.events ?? []).filter((event) => (itemType === 'ALL' || itemType === 'EVENTS') && (!query || event.searchText.includes(query) || event.name.toLowerCase().includes(query)))
   const patternRows = (items?.patterns ?? []).filter((pattern) => (itemType === 'ALL' || itemType === 'PATTERNS') && (!query || pattern.searchText.includes(query) || pattern.name.toLowerCase().includes(query) || pattern.aliases.some((alias) => alias.toLowerCase().includes(query))))
+  const clubRows = (items?.clubDefinitions ?? []).filter((definition) => (itemType === 'ALL' || (itemType === 'EVENTS' && definition.kind.startsWith('EVENT')) || (itemType === 'PATTERNS' && definition.kind.startsWith('PATTERN'))) && (!query || definition.searchText.includes(query) || definition.name.toLowerCase().includes(query)))
   const sortRecommended = <T extends { recommendedByTopic: boolean; name: string }>(rows: T[]) => [...rows].sort((a, b) => Number(b.recommendedByTopic) - Number(a.recommendedByTopic) || a.name.localeCompare(b.name))
 
   return (
@@ -722,7 +757,7 @@ function AdvancedBuilder({ items, search, onSearch, itemType, onTypeChange, sele
           <h3 className="text-xl font-extrabold text-slate-950">Advanced builder</h3>
           <p className="mt-1 text-sm text-slate-600">Search compatible standard tracking items. The server revalidates the final selection.</p>
         </div>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">{selectedEventIds.length} events · {selectedPatternIds.length} patterns selected</span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">{selectedEventIds.length} events · {selectedPatternIds.length} patterns · {selectedClubDefinitions.length} club items selected</span>
       </div>
       <label className="mt-4 block text-sm font-bold text-slate-700">Search standard tracking items<input className={`${fieldClassName} mt-1`} value={search} onChange={(event) => onSearch(event.target.value)} placeholder="third man, flick on, behind left back, into feet" /></label>
       <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Tracking item type">
@@ -731,6 +766,7 @@ function AdvancedBuilder({ items, search, onSearch, itemType, onTypeChange, sele
       {!items ? <p className="mt-4 rounded-xl bg-white p-4 text-sm text-slate-600">Loading compatible items...</p> : <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {(itemType === 'ALL' || itemType === 'EVENTS') && <section><h4 className="font-bold">Events</h4><div className="mt-2 grid gap-2">{sortRecommended(eventRows).map((event) => <label key={event.eventDefinitionId} className="flex gap-3 rounded-xl bg-white p-3"><input type="checkbox" checked={selectedEventIds.includes(event.eventDefinitionId)} onChange={(change) => onToggleEvent(event.eventDefinitionId, change.target.checked)} /><span><span className="font-bold">Event · {event.name}</span><span className="block text-sm text-slate-600">{event.recommendedByTopic ? 'Recommended' : 'Compatible addition'} · Load {event.observerLoadWeight}{event.requiresLocation ? ' · Requires location' : ''}</span></span></label>)}</div></section>}
         {(itemType === 'ALL' || itemType === 'PATTERNS') && <section><h4 className="font-bold">Tactical patterns</h4><div className="mt-2 grid gap-2">{sortRecommended(patternRows).map((pattern) => <label key={pattern.patternId} className="flex gap-3 rounded-xl bg-white p-3"><input type="checkbox" checked={selectedPatternIds.includes(pattern.patternId)} onChange={(change) => onTogglePattern(pattern.patternId, change.target.checked)} /><span><span className="font-bold">Pattern · {pattern.name}</span><span className="block text-sm text-slate-600">{pattern.recommendedByTopic ? 'Recommended' : 'Compatible addition'} · {pattern.steps.length} steps · {pattern.outcomes.length} outcomes · Load {pattern.observerLoadWeight}{pattern.requiresLocation ? ' · Requires location' : ''}</span></span></label>)}</div></section>}
+        {clubRows.length > 0 && <section className="lg:col-span-2"><h4 className="font-bold">Club tracking definitions</h4><div className="mt-2 grid gap-2 md:grid-cols-2">{clubRows.map((definition) => <label key={definition.clubTrackingDefinitionId} className="flex gap-3 rounded-xl bg-white p-3"><input type="checkbox" checked={selectedClubDefinitions.some((selection) => selection.clubTrackingDefinitionId === definition.clubTrackingDefinitionId)} onChange={(change) => onToggleClubDefinition(definition, change.target.checked)} /><span><span className="font-bold">{definition.kind.startsWith('PATTERN') ? 'Pattern' : 'Event'} · {definition.name}</span><span className="block text-sm text-slate-600">{definition.identityType}{definition.mappedStandardName ? ` for ${definition.mappedStandardName}` : ''} · {definition.contributesToStandardReporting ? 'Standard reporting' : 'Club reporting only'} · {definition.requiresLocation ? 'Requires location' : 'No location required'}</span></span></label>)}</div></section>}
       </div>}
     </section>
   )
@@ -929,8 +965,9 @@ function PreviousTaskCopy({ tasks, players, onCopy, disabled }: { tasks: Previou
     <div className="mt-3 grid gap-3">
       <select className={fieldClassName} value={sourceTaskId} onChange={(event) => setSourceTaskId(event.target.value)}>{tasks.map((task) => <option key={task.id} value={task.id}>{task.title} ({task.matchLabel})</option>)}</select>
       {selectedTask?.requiresPlayer && <select className={fieldClassName} value={destinationPlayerId} onChange={(event) => setDestinationPlayerId(event.target.value)}><option value="">Choose destination player</option>{players.map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select>}
-      <p className="text-xs text-slate-500">{selectedTask?.scopeType ?? 'Task'} · {selectedTask?.eventCount ?? 0} events · {selectedTask?.patternCount ?? 0} patterns</p>
+      <p className="text-xs text-slate-500">{selectedTask?.scopeType ?? 'Task'} · {selectedTask?.eventCount ?? 0} events · {selectedTask?.patternCount ?? 0} patterns · {selectedTask?.clubDefinitionCount ?? 0} club items</p>
       {selectedTask?.patternNames.length ? <p className="text-xs font-semibold text-slate-600">Patterns: {selectedTask.patternNames.join(', ')}</p> : null}
+      {selectedTask?.clubDefinitionNames.length ? <p className="text-xs font-semibold text-blue-700">Club: {selectedTask.clubDefinitionNames.join(', ')}</p> : null}
       <Button variant="secondary" onClick={() => onCopy(sourceTaskId, destinationPlayerId)} disabled={disabled || !sourceTaskId || Boolean(selectedTask?.requiresPlayer && !destinationPlayerId)}>Copy task</Button>
     </div>
   )

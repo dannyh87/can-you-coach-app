@@ -1,4 +1,6 @@
 import type {
+  ClubTrackingDefinitionKind,
+  ClubTrackingMappingStatus,
   EventDefinitionAgePhase,
   EventDefinitionMatchPhase,
   MatchTrackingScope,
@@ -9,6 +11,7 @@ import type {
 } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import { clubDefinitionMatchesTrackingContext, getClubDefinitionLocalSelectionEligibility } from '@/lib/clubTrackingDefinitions'
 
 type Db = typeof prisma | Prisma.TransactionClient
 
@@ -27,6 +30,7 @@ export type TrackingResolverContext = {
   agePhase?: EventDefinitionAgePhase
   selectedEventDefinitionIds?: string[]
   selectedPatternIds?: string[]
+  selectedClubTrackingDefinitionIds?: string[]
   mode?: TrackingSetupMode
 }
 
@@ -64,6 +68,27 @@ export type ResolvedTrackingTopic = {
     observerLoadWeight: number
   }>
   patterns: ResolvedTrackingPattern[]
+  clubDefinitions: ResolvedClubTrackingDefinition[]
+}
+
+export type ResolvedClubTrackingDefinition = {
+  clubTrackingDefinitionId: string
+  kind: ClubTrackingDefinitionKind
+  name: string
+  description?: string
+  guidance?: string
+  identityType: 'Club alias' | 'Club mapped' | 'Club specific'
+  mappedStandardName?: string
+  mappedStandardEventDefinitionId?: string
+  mappedStandardPatternDefinitionId?: string
+  mappingStatus: ClubTrackingMappingStatus
+  mappingRevision: number
+  contributesToStandardReporting: boolean
+  benchmarkEligible: boolean
+  requiresLocation: boolean
+  recommendedByTopic: boolean
+  observerLoadWeight: number
+  searchText: string
 }
 
 export type ResolvedTrackingPattern = {
@@ -176,6 +201,35 @@ function contextRank(topic: Awaited<ReturnType<typeof findTopics>>[number], cont
   return { recommended: row?.recommended ?? false, displayOrder: row?.displayOrder ?? 9999, exact: Boolean(exact) }
 }
 
+function clubIdentityType(kind: ClubTrackingDefinitionKind): 'Club alias' | 'Club mapped' | 'Club specific' {
+  if (kind === 'EVENT_ALIAS' || kind === 'PATTERN_ALIAS') return 'Club alias'
+  if (kind === 'EVENT_MAPPED' || kind === 'PATTERN_MAPPED') return 'Club mapped'
+  return 'Club specific'
+}
+
+async function getSelectableClubDefinitionsForResolver(context: TrackingResolverContext, db: Db, topicId?: string | null) {
+  if (!context.clubId) return []
+  const delegate = (db as Db & { clubTrackingDefinition?: typeof prisma.clubTrackingDefinition }).clubTrackingDefinition
+  if (!delegate?.findMany) return []
+  const targetContext = getEffectiveTargetContext(context)
+  const definitions = await delegate.findMany({
+    where: { clubId: context.clubId, status: 'APPROVED', active: true, retiredAt: null, kind: { in: ['EVENT_ALIAS', 'EVENT_MAPPED', 'EVENT_CUSTOM', 'PATTERN_ALIAS', 'PATTERN_MAPPED'] }, ...(topicId ? { topicLinks: { some: { topicId } } } : {}) },
+    include: { mappedEventDefinition: true, mappedPatternDefinition: true, topicLinks: topicId ? { where: { topicId } } : true },
+    orderBy: [{ kind: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
+  })
+  return definitions.filter((definition) => getClubDefinitionLocalSelectionEligibility(definition).selectable && clubDefinitionMatchesTrackingContext(definition, { scope: context.scope, targetContext, phase: context.phase, focusArea: context.focusArea }))
+}
+
+function formatResolverClubDefinition(definition: Awaited<ReturnType<typeof getSelectableClubDefinitionsForResolver>>[number]): ResolvedClubTrackingDefinition {
+  const isAlias = definition.kind === 'EVENT_ALIAS' || definition.kind === 'PATTERN_ALIAS'
+  const isMapped = definition.kind === 'EVENT_MAPPED' || definition.kind === 'PATTERN_MAPPED'
+  const standardApproved = definition.mappingStatus === 'STANDARD_APPROVED'
+  const topicLink = definition.topicLinks[0]
+  const mappedStandardName = definition.mappedEventDefinition?.name ?? definition.mappedPatternDefinition?.name ?? undefined
+  const contributesToStandardReporting = isAlias || (isMapped && standardApproved)
+  return { clubTrackingDefinitionId: definition.id, kind: definition.kind, name: definition.name, description: definition.description ?? undefined, guidance: topicLink?.guidance ?? definition.guidance ?? undefined, identityType: clubIdentityType(definition.kind), mappedStandardName, mappedStandardEventDefinitionId: definition.mappedEventDefinitionId ?? undefined, mappedStandardPatternDefinitionId: definition.mappedPatternDefinitionId ?? undefined, mappingStatus: definition.mappingStatus, mappingRevision: definition.mappingRevision, contributesToStandardReporting, benchmarkEligible: contributesToStandardReporting && Boolean(definition.mappedEventDefinition?.benchmarkable), requiresLocation: definition.requiresLocation || Boolean(definition.mappedEventDefinition?.requiresLocation) || Boolean(definition.mappedPatternDefinition?.requiresLocation), recommendedByTopic: topicLink?.recommended ?? false, observerLoadWeight: topicLink?.observerLoadWeight ?? (definition.kind.startsWith('PATTERN') ? 2 : 1), searchText: normalizeTrackingSearch(`${definition.name} ${definition.description ?? ''} ${definition.guidance ?? ''} ${mappedStandardName ?? ''}`) }
+}
+
 export function getAvailableTrackingScopes(): TrackingResolverStep {
   return { key: 'scope', label: 'Who are you tracking?', selectionType: 'single', options: (['PLAYER', 'UNIT', 'TEAM'] as MatchTrackingScope[]).map((value) => ({ value, label: scopeLabels[value], recommended: true })) }
 }
@@ -219,6 +273,9 @@ export async function getRecommendedEventsForTopic(topicId: string, context: Tra
   const targetContext = getEffectiveTargetContext(context)
   const topicPatterns = 'patterns' in topic && Array.isArray(topic.patterns) ? topic.patterns : []
   const patterns = topicPatterns.filter((topicPattern) => topicPattern.pattern.active && topicPattern.pattern.contexts.some((candidate) => !context.scope || (candidate.scopeType === context.scope && (candidate.targetContext === null || candidate.targetContext === targetContext))))
+  const clubDefinitions = await getSelectableClubDefinitionsForResolver(context, db, topic.id)
+  const eventAliasesByStandardId = new Map(clubDefinitions.filter((definition) => definition.kind === 'EVENT_ALIAS' && definition.mappedEventDefinitionId).map((definition) => [definition.mappedEventDefinitionId!, definition]))
+  const patternAliasesByStandardId = new Map(clubDefinitions.filter((definition) => definition.kind === 'PATTERN_ALIAS' && definition.mappedPatternDefinitionId).map((definition) => [definition.mappedPatternDefinitionId!, definition]))
   return {
     topicId: topic.id,
     name: topic.name,
@@ -232,8 +289,9 @@ export async function getRecommendedEventsForTopic(topicId: string, context: Tra
     ],
     suggestedMaxEvents: topic.suggestedMaxEvents,
     workloadMessage: `Recommended: ${events.filter((event) => event.recommended).length} events and ${patterns.filter((pattern) => pattern.recommended).length} tactical patterns. Patterns usually require more observer focus than single events.`,
-    events: events.map((event) => ({ eventDefinitionId: event.eventDefinitionId, name: event.eventDefinition.name, description: event.eventDefinition.description ?? undefined, recommended: event.recommended, displayOrder: event.displayOrder, guidance: event.guidance ?? undefined, requiresLocation: event.eventDefinition.requiresLocation, benchmarkable: event.eventDefinition.benchmarkable, observerLoadWeight: event.observerLoadWeight })),
-    patterns: patterns.map((topicPattern) => ({ patternId: topicPattern.patternId, name: topicPattern.pattern.name, description: topicPattern.pattern.description ?? undefined, recommended: topicPattern.recommended, displayOrder: topicPattern.displayOrder, requiresLocation: topicPattern.pattern.requiresLocation, observerLoadWeight: topicPattern.observerLoadWeight, steps: topicPattern.pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: topicPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })) })),
+    events: events.map((event) => { const alias = eventAliasesByStandardId.get(event.eventDefinitionId); return { eventDefinitionId: event.eventDefinitionId, name: alias?.name ?? event.eventDefinition.name, description: alias?.description ?? event.eventDefinition.description ?? undefined, recommended: event.recommended, displayOrder: event.displayOrder, guidance: alias?.guidance ?? event.guidance ?? undefined, requiresLocation: event.eventDefinition.requiresLocation, benchmarkable: event.eventDefinition.benchmarkable, observerLoadWeight: event.observerLoadWeight, clubTrackingDefinitionId: alias?.id, identityType: alias ? 'Club alias' : undefined } }),
+    patterns: patterns.map((topicPattern) => { const alias = patternAliasesByStandardId.get(topicPattern.patternId); return { patternId: topicPattern.patternId, name: alias?.name ?? topicPattern.pattern.name, description: alias?.description ?? topicPattern.pattern.description ?? undefined, recommended: topicPattern.recommended, displayOrder: topicPattern.displayOrder, requiresLocation: topicPattern.pattern.requiresLocation, observerLoadWeight: topicPattern.observerLoadWeight, steps: topicPattern.pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: topicPattern.pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })), clubTrackingDefinitionId: alias?.id, identityType: alias ? 'Club alias' : undefined } }),
+    clubDefinitions: clubDefinitions.filter((definition) => definition.kind !== 'EVENT_ALIAS' && definition.kind !== 'PATTERN_ALIAS').map(formatResolverClubDefinition),
   }
 }
 
@@ -289,7 +347,10 @@ export async function getAdvancedCompatibleTrackingItems(context: TrackingResolv
     include: { aliases: true, steps: { include: { eventDefinition: true }, orderBy: { stepOrder: 'asc' } }, outcomes: { orderBy: { displayOrder: 'asc' } } },
     orderBy: [{ phase: 'asc' }, { focusArea: 'asc' }, { name: 'asc' }],
   }) : []
-  return { context, events, patterns: patterns.map((pattern) => ({ itemType: 'PATTERN' as const, patternId: pattern.id, name: pattern.name, description: pattern.description ?? undefined, requiresLocation: pattern.requiresLocation, observerLoadWeight: topic?.patterns.find((candidate) => candidate.patternId === pattern.id)?.observerLoadWeight ?? 2, recommendedByTopic: topicPatternIds.has(pattern.id), outsideChosenTopic: Boolean(context.topicId && !topicPatternIds.has(pattern.id)), aliases: pattern.aliases.map((alias) => alias.alias), steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })), ownerScope: 'GLOBAL', searchText: normalizeTrackingSearch(`${pattern.name} ${pattern.description ?? ''} ${pattern.aliases.map((alias) => alias.alias).join(' ')} ${topic?.name ?? ''}`) })) }
+  const clubDefinitions = await getSelectableClubDefinitionsForResolver(context, db, context.topicId)
+  const aliasEventIds = new Set(clubDefinitions.filter((definition) => definition.kind === 'EVENT_ALIAS').flatMap((definition) => definition.mappedEventDefinitionId ? [definition.mappedEventDefinitionId] : []))
+  const aliasPatternIds = new Set(clubDefinitions.filter((definition) => definition.kind === 'PATTERN_ALIAS').flatMap((definition) => definition.mappedPatternDefinitionId ? [definition.mappedPatternDefinitionId] : []))
+  return { context, events: events.filter((event) => !aliasEventIds.has(event.eventDefinitionId)), patterns: patterns.filter((pattern) => !aliasPatternIds.has(pattern.id)).map((pattern) => ({ itemType: 'PATTERN' as const, patternId: pattern.id, name: pattern.name, description: pattern.description ?? undefined, requiresLocation: pattern.requiresLocation, observerLoadWeight: topic?.patterns.find((candidate) => candidate.patternId === pattern.id)?.observerLoadWeight ?? 2, recommendedByTopic: topicPatternIds.has(pattern.id), outsideChosenTopic: Boolean(context.topicId && !topicPatternIds.has(pattern.id)), aliases: pattern.aliases.map((alias) => alias.alias), steps: pattern.steps.map((step) => ({ order: step.stepOrder, eventDefinitionId: step.eventDefinitionId, label: step.label ?? step.eventDefinition.name })), outcomes: pattern.outcomes.map((outcome) => ({ id: outcome.id, code: outcome.code, label: outcome.label })), ownerScope: 'GLOBAL', searchText: normalizeTrackingSearch(`${pattern.name} ${pattern.description ?? ''} ${pattern.aliases.map((alias) => alias.alias).join(' ')} ${topic?.name ?? ''}`) })), clubDefinitions: clubDefinitions.map(formatResolverClubDefinition) }
 }
 
 export async function validateTrackingSetup(context: TrackingResolverContext, db: Db = prisma): Promise<TrackingValidationResult> {
@@ -299,7 +360,7 @@ export async function validateTrackingSetup(context: TrackingResolverContext, db
   if (context.scope === 'UNIT' && !getEffectiveTargetContext(context)) errors.push({ field: 'targetContext', message: 'Choose a unit type.' })
   if (!context.phase) errors.push({ field: 'phase', message: 'Choose a phase of play.' })
   if (!context.focusArea) errors.push({ field: 'focusArea', message: 'Choose a focus area.' })
-  if (!context.selectedEventDefinitionIds?.length && !context.selectedPatternIds?.length) errors.push({ field: 'trackingItems', message: 'Choose at least one event or pattern.' })
+  if (!context.selectedEventDefinitionIds?.length && !context.selectedPatternIds?.length && !context.selectedClubTrackingDefinitionIds?.length) errors.push({ field: 'trackingItems', message: 'Choose at least one event, pattern or club tracking definition.' })
   const rawEventIds = context.selectedEventDefinitionIds?.filter(Boolean) ?? []
   const rawPatternIds = context.selectedPatternIds?.filter(Boolean) ?? []
   if (rawEventIds.length !== new Set(rawEventIds).size) errors.push({ field: 'eventDefinitionIds', message: 'Duplicate event selections are not allowed.' })

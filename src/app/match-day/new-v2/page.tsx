@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound } from 'next/navigation'
-import type { TrackingFocusArea, TrackingTopicPhase } from '@prisma/client'
+import type { ClubTrackingDefinitionKind, ClubTrackingMappingStatus, TrackingFocusArea, TrackingTopicPhase } from '@prisma/client'
 
 import MatchDayV2SetupWizard from '@/app/match-day/new-v2/MatchDayV2SetupWizard'
 import PageHeader from '@/components/ui/PageHeader'
@@ -61,6 +61,13 @@ const getOptionalText = (formData: FormData, key: string) => getText(formData, k
 
 const getSelectedIds = (formData: FormData, key: string) =>
   Array.from(new Set(formData.getAll(key).filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean)))
+
+const getSelectedClubDefinitions = (formData: FormData) => getSelectedIds(formData, 'clubTrackingDefinitionId').map((clubTrackingDefinitionId, index) => ({
+  clubTrackingDefinitionId,
+  expectedKind: getText(formData, `clubTrackingDefinitionKind:${index}`) as ClubTrackingDefinitionKind,
+  expectedMappingRevision: Number(getText(formData, `clubTrackingDefinitionRevision:${index}`)) || -1,
+  expectedMappingStatus: getText(formData, `clubTrackingDefinitionStatus:${index}`) as ClubTrackingMappingStatus,
+}))
 
 async function requireV2User() {
   if (!isMatchDayTrackingV2Enabled()) notFound()
@@ -164,6 +171,7 @@ async function createTaskAction(formData: FormData): Promise<ActionResult<{ id: 
     topicId: getText(formData, 'topicId'),
     selectedEventDefinitionIds: getSelectedIds(formData, 'eventDefinitionId'),
     selectedPatternIds: getSelectedIds(formData, 'patternId'),
+    selectedClubTrackingDefinitions: getSelectedClubDefinitions(formData),
     playerId: getOptionalText(formData, 'playerId'),
     unitKey: getOptionalText(formData, 'unitKey'),
     unitLabel: getOptionalText(formData, 'unitLabel'),
@@ -175,7 +183,7 @@ async function createTaskAction(formData: FormData): Promise<ActionResult<{ id: 
   return ok(result.value)
 }
 
-async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<Array<{ id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; patternNames: string[]; requiresPlayer: boolean }>>> {
+async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<Array<{ id: string; title: string; matchLabel: string; scopeType: string; eventCount: number; patternCount: number; clubDefinitionCount: number; patternNames: string[]; clubDefinitionNames: string[]; requiresPlayer: boolean }>>> {
   'use server'
 
   const user = await requireV2User()
@@ -188,7 +196,9 @@ async function getPreviousTasksAction(matchDayId: string): Promise<ActionResult<
     scopeType: task.scopeType,
     eventCount: task.events.length,
     patternCount: task.patterns.length,
+    clubDefinitionCount: task.clubDefinitions.length,
     patternNames: task.patterns.map((taskPattern) => taskPattern.pattern.name),
+    clubDefinitionNames: task.clubDefinitions.map((link) => link.clubTrackingDefinition.name),
     requiresPlayer: task.scopeType === 'PLAYER',
   })))
 }
@@ -245,7 +255,7 @@ async function getAdvancedItemsAction(context: TrackingResolverContext): Promise
   return ok(await getAdvancedCompatibleTrackingItems(context))
 }
 
-async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[] }>> {
+async function copyTaskAction(formData: FormData): Promise<ActionResult<{ id: string; requiresPlayerSelection: boolean; missingEventIds: string[]; missingPatternIds: string[]; missingClubDefinitionIds?: string[] }>> {
   'use server'
 
   const user = await requireV2User()

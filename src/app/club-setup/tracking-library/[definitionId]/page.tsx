@@ -9,8 +9,9 @@ import PageHeader from '@/components/ui/PageHeader'
 import SectionCard from '@/components/ui/SectionCard'
 import { fieldClassName, formGridClassName } from '@/components/ui/formStyles'
 import { getCurrentUser } from '@/lib/auth'
-import { approveClubTrackingDefinition, getClubTrackingDefinitionUsage, getClubTrackingReportingIdentity, getProductionClubTrackingDefinition, rejectClubTrackingDefinition, restoreClubTrackingDefinition, retireClubTrackingDefinition, submitClubTrackingDefinitionForReview, updateClubTrackingDefinition } from '@/lib/clubTrackingDefinitions'
+import { approveClubTrackingDefinition, getClubTrackingDefinitionUsage, getClubTrackingReportingIdentity, getProductionClubTrackingDefinition, rejectClubTrackingDefinition, removeClubTrackingDefinitionTopic, restoreClubTrackingDefinition, retireClubTrackingDefinition, submitClubTrackingDefinitionForReview, updateClubTrackingDefinition, upsertClubTrackingDefinitionTopic } from '@/lib/clubTrackingDefinitions'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { prisma } from '@/lib/prisma'
 import { ageOptions, BackToLibrary, displayDate, focusOptions, formatKind, formatMappingStatus, formatStatus, isAliasKind, isPatternKind, phaseOptions, scopeOptions, standardName, StatusPill, targetOptions } from '../ui'
 
 export const dynamic = 'force-dynamic'
@@ -69,6 +70,21 @@ async function updateDefinitionAction(formData: FormData) {
   redirect(`/club-setup/tracking-library/${definitionId}?saved=1`)
 }
 
+async function updateTopicLinkAction(formData: FormData) {
+  'use server'
+  if (!isMatchDayTrackingV2Enabled()) notFound()
+  const user = await getCurrentUser()
+  const definitionId = getText(formData, 'definitionId')
+  const topicId = getText(formData, 'topicId')
+  const action = getText(formData, 'action')
+  const result = action === 'remove'
+    ? await removeClubTrackingDefinitionTopic({ userId: user.id, definitionId, topicId })
+    : await upsertClubTrackingDefinitionTopic({ userId: user.id, definitionId, topicId, recommended: formData.get('recommended') === 'on', displayOrder: Number(getText(formData, 'displayOrder')) || 0, observerLoadWeight: Number(getText(formData, 'observerLoadWeight')) || 1, guidance: getText(formData, 'guidance') })
+  if (!result.ok) redirect(`/club-setup/tracking-library/${definitionId}?error=${encodeURIComponent(result.reason)}`)
+  revalidatePath(`/club-setup/tracking-library/${definitionId}`)
+  redirect(`/club-setup/tracking-library/${definitionId}?saved=1`)
+}
+
 export default async function DefinitionDetailPage({ params, searchParams }: { params: Promise<{ definitionId: string }>; searchParams: Promise<{ error?: string; success?: string; saved?: string; created?: string }> }) {
   if (!isMatchDayTrackingV2Enabled()) notFound()
   const user = await getCurrentUser()
@@ -80,6 +96,10 @@ export default async function DefinitionDetailPage({ params, searchParams }: { p
     getClubTrackingReportingIdentity({ clubTrackingDefinitionId: definition.id }),
     getClubTrackingDefinitionUsage({ userId: user.id, definitionId: definition.id }),
   ])
+  const [topicLinks, availableTopics] = role === 'OWNER' ? await Promise.all([
+    prisma.clubTrackingDefinitionTopic.findMany({ where: { clubTrackingDefinitionId: definition.id }, include: { topic: true }, orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }] }),
+    prisma.eventTopic.findMany({ where: { isActive: true, archivedAt: null, OR: [{ ownerScope: 'GLOBAL' }, { ownerScope: 'CLUB', clubId: definition.clubId }] }, orderBy: [{ phase: 'asc' }, { focusArea: 'asc' }, { name: 'asc' }] }),
+  ]) : [[], []]
   const usageCount = usage.ok ? usage.value.totalReferences : 0
   const hasUsage = usageCount > 0
   const canEdit = role === 'OWNER' || definition.createdByUserId === user.id && ['DRAFT', 'REJECTED'].includes(definition.status)
@@ -129,6 +149,22 @@ export default async function DefinitionDetailPage({ params, searchParams }: { p
           <Info label="Location" value={definition.requiresLocation ? 'Requires location' : 'No required location'} />
         </dl>
       </SectionCard>
+
+      {role === 'OWNER' && definition.status === 'APPROVED' && (
+        <SectionCard className="mt-5" title="Guided setup topics" description="Explicit topic links control where this club definition appears as a Match Day V2 guided addition.">
+          {topicLinks.length === 0 ? <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No guided topic links yet.</p> : <div className="grid gap-3">{topicLinks.map((link) => <form key={link.id} action={updateTopicLinkAction} className="rounded-xl border p-3"><input type="hidden" name="definitionId" value={definition.id} /><input type="hidden" name="topicId" value={link.topicId} /><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-bold">{link.topic.name}</p><p className="text-sm text-slate-600">{link.topic.phase} · {link.topic.focusArea} · {link.recommended ? 'Recommended' : 'Club addition'}</p>{link.guidance && <p className="mt-1 text-sm text-slate-700">{link.guidance}</p>}</div><button name="action" value="remove" className="rounded-lg border px-3 py-2 text-sm font-bold text-red-700">Remove</button></div></form>)}</div>}
+          <form action={updateTopicLinkAction} className="mt-4 grid gap-3 rounded-xl border bg-slate-50 p-4 md:grid-cols-2">
+            <input type="hidden" name="definitionId" value={definition.id} />
+            <input type="hidden" name="action" value="upsert" />
+            <FormField label="Topic"><select name="topicId" className={fieldClassName} required><option value="">Choose topic</option>{availableTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name} ({topic.phase} / {topic.focusArea})</option>)}</select></FormField>
+            <FormField label="Display order"><input name="displayOrder" type="number" className={fieldClassName} defaultValue={0} /></FormField>
+            <FormField label="Observer load"><input name="observerLoadWeight" type="number" min={1} max={5} className={fieldClassName} defaultValue={isPatternKind(definition.kind) ? 2 : 1} /></FormField>
+            <label className="mt-7 flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="recommended" /> Recommended club addition</label>
+            <FormField label="Topic guidance"><textarea name="guidance" className={fieldClassName} rows={2} /></FormField>
+            <div className="md:col-span-2"><Button type="submit" variant="secondary">Save topic link</Button></div>
+          </form>
+        </SectionCard>
+      )}
 
       <SectionCard className="mt-5" title="Guidance">
         <p className="text-sm text-slate-700"><span className="font-bold">Description:</span> {definition.description ?? 'No description provided.'}</p>
