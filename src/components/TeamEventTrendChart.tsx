@@ -12,9 +12,16 @@ import {
 type TeamEventTrendPoint = {
   label: string
   count: number
+  positiveRate?: number | null
 }
 
-export default function TeamEventTrendChart({ data }: { data: TeamEventTrendPoint[] }) {
+export default function TeamEventTrendChart({
+  data,
+  itemLabel = 'Observation',
+}: {
+  data: TeamEventTrendPoint[]
+  itemLabel?: string
+}) {
   if (data.length === 0) return null
 
   return (
@@ -30,16 +37,26 @@ export default function TeamEventTrendChart({ data }: { data: TeamEventTrendPoin
             height={64}
           />
           <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-          <Tooltip formatter={(value) => [value, 'Events']} />
+          <Tooltip formatter={(value, name) => [name === 'positiveRate' && typeof value === 'number' ? `${Math.round(value * 100)}%` : value, name === 'positiveRate' ? 'Positive rate' : `${itemLabel} count`]} />
           <Line
             type="monotone"
             dataKey="count"
-            name="Event count"
+            name={`${itemLabel} count`}
             stroke="#047857"
             strokeWidth={3}
             dot={{ r: 4 }}
             activeDot={{ r: 6 }}
           />
+          {data.some((point) => point.positiveRate !== null && point.positiveRate !== undefined) && (
+            <Line
+              type="monotone"
+              dataKey="positiveRate"
+              name="positiveRate"
+              stroke="#7c3aed"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>
