@@ -62,6 +62,10 @@ function createDb(overrides: Record<string, unknown> = {}) {
         playerId: 'player-1',
         patternId: 'pattern-1',
         outcomeId: 'outcome-1',
+        clubTrackingDefinitionId: 'club-pattern-1',
+        standardPatternDefinitionIdAtRecording: 'pattern-1',
+        clubMappingRevisionAtRecording: 3,
+        clubMappingStatusAtRecording: 'CLUB_APPROVED',
         half: 'FIRST_HALF',
         matchSecond: 55,
         ownScoreAtTime: 1,
@@ -76,6 +80,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
       delete: async () => ({ id: 'submitted-1' }),
     },
     matchTrackingPatternObservation: {
+      findUnique: async () => null,
       create: async ({ data }: { data: Record<string, unknown> }) => ({ id: `official:${data.submittedObservationId}` }),
     },
     matchEvent: { create: vi.fn() },
@@ -138,16 +143,23 @@ describe('tracking pattern observations', () => {
   })
 
   it('accepts a pending pattern observation without creating step events', async () => {
-    const db = createDb()
+    let createdData = {} as Record<string, unknown>
+    const db = createDb({ matchTrackingPatternObservation: { findUnique: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: `official:${data.submittedObservationId}` } } } })
     const result = await reviewPatternObservation({ db, actorUserId: 'coach-1', observationId: 'submitted-1', decision: 'ACCEPTED' })
 
     expect(result).toMatchObject({ ok: true, value: { officialObservationId: 'official:submitted-1' } })
+    expect(createdData).toMatchObject({ clubTrackingDefinitionId: 'club-pattern-1', standardPatternDefinitionIdAtRecording: 'pattern-1', clubMappingRevisionAtRecording: 3, clubMappingStatusAtRecording: 'CLUB_APPROVED' })
     expect((db as { matchEvent: { create: ReturnType<typeof vi.fn> } }).matchEvent.create).not.toHaveBeenCalled()
+  })
+
+  it('returns an existing official pattern observation on repeated acceptance', async () => {
+    const db = createDb({ matchTrackingPatternObservation: { findUnique: async () => ({ id: 'official-existing' }), create: async () => { throw new Error('should not create') } } })
+    await expect(reviewPatternObservation({ db, actorUserId: 'coach-1', observationId: 'submitted-1', decision: 'ACCEPTED' })).resolves.toMatchObject({ ok: true, value: { officialObservationId: 'official-existing' } })
   })
 
   it('does not create an official observation when ignored', async () => {
     const officialCreate = vi.fn()
-    const result = await reviewPatternObservation({ db: createDb({ matchTrackingPatternObservation: { create: officialCreate } }), actorUserId: 'coach-1', observationId: 'submitted-1', decision: 'IGNORED' })
+    const result = await reviewPatternObservation({ db: createDb({ matchTrackingPatternObservation: { findUnique: async () => null, create: officialCreate } }), actorUserId: 'coach-1', observationId: 'submitted-1', decision: 'IGNORED' })
 
     expect(result).toMatchObject({ ok: true, value: { officialObservationId: null } })
     expect(officialCreate).not.toHaveBeenCalled()

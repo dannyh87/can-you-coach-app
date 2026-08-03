@@ -15,6 +15,12 @@ type ParentSubmissionRow = {
   squadNumber: number | null
   eventLabel: string
   detailLabel: string | null
+  identityLabel: string
+  mappingStatusLabel: string | null
+  mappingRevisionLabel: string | null
+  standardIdentityLabel: string | null
+  contributesToStandardReporting: boolean
+  currentDefinitionWarnings: string[]
   submitterLabel: string
   halfLabel: string
   matchTime: string
@@ -115,6 +121,7 @@ export default function ParentSubmissionsPanel({
                 <div>
                     <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{submission.type === 'pattern' ? 'Tactical pattern' : 'Event'}</p>
                     <p className="font-bold text-slate-950">{submission.eventLabel}</p>
+                    <p className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-900">{submission.identityLabel}</p>
                     {submission.detailLabel && <p className="mt-1 text-sm font-semibold text-slate-700">{submission.detailLabel}</p>}
                     <p className="mt-1 text-sm text-slate-600">
                       {submission.playerName} / {formatSquadNumber(submission.squadNumber)}
@@ -145,6 +152,19 @@ export default function ParentSubmissionsPanel({
                 <p className="mt-3 rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
                   {submission.note}
                 </p>
+              )}
+
+              {(submission.mappingStatusLabel || submission.mappingRevisionLabel || submission.standardIdentityLabel || submission.currentDefinitionWarnings.length > 0 || !submission.contributesToStandardReporting) && (
+                <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <summary className="cursor-pointer text-sm font-bold text-slate-700">Recorded identity details</summary>
+                  <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                    {submission.standardIdentityLabel && <div><dt className="font-semibold text-slate-500">Recorded standard</dt><dd className="mt-1 text-slate-900">{submission.standardIdentityLabel}</dd></div>}
+                    {submission.mappingStatusLabel && <div><dt className="font-semibold text-slate-500">Mapping status at recording</dt><dd className="mt-1 text-slate-900">{submission.mappingStatusLabel}</dd></div>}
+                    {submission.mappingRevisionLabel && <div><dt className="font-semibold text-slate-500">Mapping revision at recording</dt><dd className="mt-1 text-slate-900">{submission.mappingRevisionLabel}</dd></div>}
+                    <div><dt className="font-semibold text-slate-500">Standard reporting</dt><dd className="mt-1 text-slate-900">{submission.contributesToStandardReporting ? 'Eligible' : 'Club only'}</dd></div>
+                  </dl>
+                  {submission.currentDefinitionWarnings.length > 0 && <ul className="mt-3 space-y-1 text-sm font-semibold text-amber-900">{submission.currentDefinitionWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>}
+                </details>
               )}
 
               {submission.status === 'PENDING' && canReview && (

@@ -25,8 +25,10 @@ import {
   matchEventTypes,
 } from '@/lib/matchEventTaxonomy'
 import {
-  buildAcceptedSubmissionMatchEventData,
+  acceptSubmittedMatchEvent,
+  getClubDefinitionSnapshotWarnings,
   getParentSubmissionEventDisplayName,
+  getReviewIdentityLabel,
 } from '@/lib/parentSubmissionEvents'
 import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -165,8 +167,8 @@ const getMatchEventIdentity = (event: {
   eventType: string | null
 }) => event.eventDefinitionId ?? event.eventType ?? `unknown-event:${event.id}`
 
-const getMatchEventLabel = (event: Parameters<typeof getEventDisplayName>[0]) =>
-  getEventDisplayName(event)
+const getMatchEventLabel = (event: Parameters<typeof getEventDisplayName>[0] & { clubTrackingDefinition?: { name: string } | null }) =>
+  event.clubTrackingDefinition?.name ?? getEventDisplayName(event)
 
 const getSubmissionTargetLabel = (submission: {
   assignment?: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
@@ -1083,95 +1085,11 @@ async function acceptParentSubmission(formData: FormData): Promise<MatchActionRe
     return { ok: false, reason: 'You cannot review parent submissions for this match.' }
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const submission = await tx.submittedMatchEvent.findFirst({
-      where: {
-        id: submittedMatchEventId,
-        matchDayId,
-      },
-      include: {
-        eventDefinition: true,
-        assignment: { select: { trackingTask: { select: { scopeType: true } } } },
-        matchDay: {
-          select: {
-            id: true,
-            status: true,
-          },
-        },
-      },
-    })
-
-    if (!submission) return { ok: false, reason: 'Parent submission was not found.' } satisfies MatchActionResult
-    if (submission.status !== 'PENDING') {
-      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
-    }
-    if (submission.matchDay.status === 'DRAFT') {
-      return { ok: false, reason: 'Draft matches cannot review parent submissions.' } satisfies MatchActionResult
-    }
-    if (!submission.eventDefinitionId && !submission.eventType) {
-      return { ok: false, reason: 'This submission does not have a valid event.' } satisfies MatchActionResult
-    }
-
-    const canBePlayerlessAssignment = submission.assignment?.trackingTask.scopeType === 'UNIT' || submission.assignment?.trackingTask.scopeType === 'TEAM'
-    if (submission.playerId) {
-      const matchPlayer = await tx.matchDayPlayer.findFirst({
-        where: {
-          matchDayId,
-          playerId: submission.playerId,
-          squadStatus: { not: 'NOT_INVOLVED' },
-        },
-        select: { id: true },
-      })
-
-      if (!matchPlayer) {
-        return { ok: false, reason: 'This player is no longer available in the match squad.' } satisfies MatchActionResult
-      }
-    } else if (!canBePlayerlessAssignment) {
-      return { ok: false, reason: 'This submission is missing a player.' } satisfies MatchActionResult
-    }
-
-    const selectedEventType = await tx.matchDayEventType.findFirst({
-      where: submission.eventDefinitionId
-        ? {
-            matchDayId,
-            OR: [
-              { eventDefinitionId: submission.eventDefinitionId },
-              ...(submission.eventType ? [{ eventType: submission.eventType }] : []),
-            ],
-          }
-        : { matchDayId, eventType: submission.eventType },
-      select: { id: true },
-    })
-
-    if (!selectedEventType) {
-      return { ok: false, reason: 'This event is no longer selected for this match.' } satisfies MatchActionResult
-    }
-
-    const reviewedAt = new Date()
-    const reviewedSubmission = await tx.submittedMatchEvent.updateMany({
-      where: {
-        id: submission.id,
-        status: 'PENDING',
-      },
-      data: {
-        status: 'ACCEPTED',
-        acceptedAt: reviewedAt,
-        acceptedByUserId: user.id,
-      },
-    })
-
-    if (reviewedSubmission.count !== 1) {
-      return { ok: false, reason: 'This submission has already been reviewed.' } satisfies MatchActionResult
-    }
-
-    await tx.matchEvent.create({ data: buildAcceptedSubmissionMatchEventData(submission) })
-    if (isMatchDayTrackingV2Enabled()) await notifySubmissionReviewed(tx, submission.id)
-
-    return { ok: true } satisfies MatchActionResult
-  })
+  const result = await acceptSubmittedMatchEvent({ actorUserId: user.id, matchDayId, submittedMatchEventId })
+  if (result.ok && !result.alreadyAccepted && isMatchDayTrackingV2Enabled()) await notifySubmissionReviewed(prisma, submittedMatchEventId)
 
   revalidatePath(`/match-day/${matchDayId}`)
-  return result
+  return result.ok ? { ok: true } : { ok: false, reason: result.message }
 }
 
 async function ignoreParentSubmission(formData: FormData): Promise<MatchActionResult> {
@@ -1326,6 +1244,8 @@ export default async function MatchDayDetailPage({
             },
           },
           eventDefinition: true,
+          clubTrackingDefinition: { include: { mappedEventDefinition: true } },
+          standardEventDefinitionAtRecording: true,
           assignment: {
             select: {
               trackingTask: {
@@ -1342,6 +1262,8 @@ export default async function MatchDayDetailPage({
           submittedBy: { select: { id: true, email: true } },
           reviewedBy: { select: { id: true, email: true } },
           pattern: true,
+          clubTrackingDefinition: { include: { mappedPatternDefinition: true } },
+          standardPatternDefinitionAtRecording: true,
           outcome: true,
           trackingTask: { select: { scopeType: true, unitLabel: true, player: { select: { firstName: true, surname: true } } } },
         },
@@ -1671,13 +1593,24 @@ export default async function MatchDayDetailPage({
       minute: Math.floor(event.matchSecond / 60),
       label: getMatchEventLabel(event),
     }))
-  const parentSubmissionRows = match.submittedMatchEvents.map((submission) => ({
+  const parentSubmissionRows = match.submittedMatchEvents.map((submission) => {
+    const identityLabel = getReviewIdentityLabel({ clubTrackingDefinitionId: submission.clubTrackingDefinitionId, clubDefinitionKind: submission.clubTrackingDefinition?.kind, mappingStatusAtRecording: submission.clubMappingStatusAtRecording })
+    const standardDisplayName = submission.standardEventDefinitionAtRecording?.name ?? submission.eventDefinition?.name ?? null
+    const warnings = getClubDefinitionSnapshotWarnings({ recordedMappingStatus: submission.clubMappingStatusAtRecording, recordedMappingRevision: submission.clubMappingRevisionAtRecording, recordedStandardEventDefinitionId: submission.standardEventDefinitionIdAtRecording, currentDefinition: submission.clubTrackingDefinition })
+    const contributesToStandardReporting = observationContributesToStandardReporting({ clubTrackingDefinitionId: submission.clubTrackingDefinitionId, clubDefinitionKind: submission.clubTrackingDefinition?.kind, mappingStatusAtRecording: submission.clubMappingStatusAtRecording, eventDefinitionId: submission.eventDefinitionId })
+    return {
     id: submission.id,
     type: 'event' as const,
     playerName: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : getSubmissionTargetLabel(submission),
     squadNumber: submission.player?.squadNumber ?? null,
-    eventLabel: getParentSubmissionEventDisplayName(submission),
-    detailLabel: null,
+    eventLabel: submission.clubTrackingDefinition?.name ?? getParentSubmissionEventDisplayName(submission),
+    detailLabel: standardDisplayName ? `Recorded standard: ${standardDisplayName}` : null,
+    identityLabel,
+    mappingStatusLabel: submission.clubMappingStatusAtRecording ? formatStatus(submission.clubMappingStatusAtRecording) : null,
+    mappingRevisionLabel: submission.clubMappingRevisionAtRecording !== null ? String(submission.clubMappingRevisionAtRecording) : null,
+    standardIdentityLabel: standardDisplayName,
+    contributesToStandardReporting,
+    currentDefinitionWarnings: warnings,
     submitterLabel: submission.submittedBy.email,
     halfLabel: formatHalfLabel(submission.half),
     matchTime: formatMatchTime(submission.matchSecond),
@@ -1689,14 +1622,26 @@ export default async function MatchDayDetailPage({
     reviewedByLabel: submission.acceptedBy?.email ?? null,
     note: submission.note,
     hasLocation: submission.x !== null && submission.y !== null,
-  }))
-  const patternSubmissionRows = match.submittedPatterns.map((submission) => ({
+    }
+  })
+  const patternSubmissionRows = match.submittedPatterns.map((submission) => {
+    const identityLabel = getReviewIdentityLabel({ clubTrackingDefinitionId: submission.clubTrackingDefinitionId, clubDefinitionKind: submission.clubTrackingDefinition?.kind, mappingStatusAtRecording: submission.clubMappingStatusAtRecording })
+    const standardDisplayName = submission.standardPatternDefinitionAtRecording?.name ?? submission.pattern.name
+    const warnings = getClubDefinitionSnapshotWarnings({ recordedMappingStatus: submission.clubMappingStatusAtRecording, recordedMappingRevision: submission.clubMappingRevisionAtRecording, recordedStandardPatternDefinitionId: submission.standardPatternDefinitionIdAtRecording, currentDefinition: submission.clubTrackingDefinition })
+    const contributesToStandardReporting = observationContributesToStandardReporting({ clubTrackingDefinitionId: submission.clubTrackingDefinitionId, clubDefinitionKind: submission.clubTrackingDefinition?.kind, mappingStatusAtRecording: submission.clubMappingStatusAtRecording, patternId: submission.patternId })
+    return {
     id: submission.id,
     type: 'pattern' as const,
     playerName: submission.player ? `${submission.player.firstName} ${submission.player.surname}` : getSubmissionTargetLabel({ assignment: { trackingTask: submission.trackingTask } }),
     squadNumber: submission.player?.squadNumber ?? null,
-    eventLabel: submission.pattern.name,
-    detailLabel: `Outcome: ${submission.outcome.label}`,
+    eventLabel: submission.clubTrackingDefinition?.name ?? submission.pattern.name,
+    detailLabel: `Outcome: ${submission.outcome.label}${standardDisplayName ? ` / Recorded standard: ${standardDisplayName}` : ''}`,
+    identityLabel,
+    mappingStatusLabel: submission.clubMappingStatusAtRecording ? formatStatus(submission.clubMappingStatusAtRecording) : null,
+    mappingRevisionLabel: submission.clubMappingRevisionAtRecording !== null ? String(submission.clubMappingRevisionAtRecording) : null,
+    standardIdentityLabel: standardDisplayName,
+    contributesToStandardReporting,
+    currentDefinitionWarnings: warnings,
     submitterLabel: submission.submittedBy.email,
     halfLabel: formatHalfLabel(submission.half),
     matchTime: formatMatchTime(submission.matchSecond),
@@ -1708,7 +1653,8 @@ export default async function MatchDayDetailPage({
     reviewedByLabel: submission.reviewedBy?.email ?? null,
     note: submission.note,
     hasLocation: submission.x !== null && submission.y !== null,
-  }))
+    }
+  })
   const unifiedSubmissionRows = [...parentSubmissionRows, ...patternSubmissionRows].sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING') || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
   const pendingParentSubmissionCount = unifiedSubmissionRows.filter((submission) => submission.status === 'PENDING').length
   const showHeaderScore = match.status !== 'DRAFT'

@@ -252,34 +252,48 @@ export async function reviewPatternObservation({ db = prisma, actorUserId, obser
   if (!observation) return { ok: false, reason: 'Pattern observation was not found.' }
   if (observation.submittedByUserId === actorUserId) return { ok: false, reason: 'Contributors cannot review their own observations.' }
   if (!(await canRunMatchDay(actorUserId, observation.matchDayId))) return { ok: false, reason: 'You cannot review observations for this match.' }
-  if (observation.status !== 'PENDING') return { ok: false, reason: 'This pattern observation has already been reviewed.' }
   if (observation.matchDay.status === 'DRAFT') return { ok: false, reason: 'Draft matches cannot review pattern observations.' }
   const reviewedAt = new Date()
   const applyReview = async (tx: Db) => {
+    const existing = await tx.matchTrackingPatternObservation.findUnique({ where: { submittedObservationId: observation.id }, select: { id: true } })
+    if (existing) return { ok: true as const, value: { officialObservationId: existing.id } }
+    if (observation.status !== 'PENDING') return { ok: false as const, reason: 'This pattern observation has already been reviewed.' }
     const updated = await tx.submittedTrackingPatternObservation.updateMany({ where: { id: observation.id, status: 'PENDING' }, data: { status: decision, reviewedAt, reviewedByUserId: actorUserId } })
     if (updated.count !== 1) return { ok: false as const, reason: 'This pattern observation has already been reviewed.' }
     if (decision === 'IGNORED') return { ok: true as const, value: { officialObservationId: null } }
-    const official = await tx.matchTrackingPatternObservation.create({
-      data: {
-        submittedObservationId: observation.id,
-        matchDayId: observation.matchDayId,
-        trackingTaskId: observation.trackingTaskId,
-        assignmentId: observation.assignmentId,
-        submittedByUserId: observation.submittedByUserId,
-        playerId: observation.playerId,
-        patternId: observation.patternId,
-        outcomeId: observation.outcomeId,
-        half: observation.half,
-        matchSecond: observation.matchSecond,
-        ownScoreAtTime: observation.ownScoreAtTime,
-        oppositionScoreAtTime: observation.oppositionScoreAtTime,
-        x: observation.x,
-        y: observation.y,
-        note: observation.note,
-      },
-      select: { id: true },
-    })
-    return { ok: true as const, value: { officialObservationId: official.id } }
+    try {
+      const official = await tx.matchTrackingPatternObservation.create({
+        data: {
+          submittedObservationId: observation.id,
+          matchDayId: observation.matchDayId,
+          trackingTaskId: observation.trackingTaskId,
+          assignmentId: observation.assignmentId,
+          submittedByUserId: observation.submittedByUserId,
+          playerId: observation.playerId,
+          patternId: observation.patternId,
+          outcomeId: observation.outcomeId,
+          clubTrackingDefinitionId: observation.clubTrackingDefinitionId,
+          standardPatternDefinitionIdAtRecording: observation.standardPatternDefinitionIdAtRecording,
+          clubMappingRevisionAtRecording: observation.clubMappingRevisionAtRecording,
+          clubMappingStatusAtRecording: observation.clubMappingStatusAtRecording,
+          half: observation.half,
+          matchSecond: observation.matchSecond,
+          ownScoreAtTime: observation.ownScoreAtTime,
+          oppositionScoreAtTime: observation.oppositionScoreAtTime,
+          x: observation.x,
+          y: observation.y,
+          note: observation.note,
+        },
+        select: { id: true },
+      })
+      return { ok: true as const, value: { officialObservationId: official.id } }
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && (error as Prisma.PrismaClientKnownRequestError).code === 'P2002') {
+        const official = await tx.matchTrackingPatternObservation.findUnique({ where: { submittedObservationId: observation.id }, select: { id: true } })
+        if (official) return { ok: true as const, value: { officialObservationId: official.id } }
+      }
+      return { ok: false as const, reason: 'Pattern observation could not be accepted.' }
+    }
   }
   return canRunTransaction(db) ? db.$transaction((tx) => applyReview(tx)) : applyReview(db)
 }

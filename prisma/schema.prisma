@@ -790,6 +790,7 @@ model MatchPlayerStint {
 
 model MatchEvent {
   id                                   String                     @id @default(cuid())
+  submittedMatchEventId                String?                    @unique
   matchDayId                           String
   playerId                             String?
   eventType                            MatchEventType?
@@ -806,6 +807,7 @@ model MatchEvent {
   clubMappingStatusAtRecording         ClubTrackingMappingStatus?
   createdAt                            DateTime                   @default(now())
   updatedAt                            DateTime                   @updatedAt
+  submittedMatchEvent                  SubmittedMatchEvent?       @relation(fields: [submittedMatchEventId], references: [id], onDelete: SetNull)
   matchDay                             MatchDay                   @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
   player                               Player?                    @relation(fields: [playerId], references: [id], onDelete: SetNull)
   eventDefinition                      EventDefinition?           @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
@@ -849,6 +851,7 @@ model SubmittedMatchEvent {
   assignment                           MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   submittedBy                          User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
   acceptedBy                           User?                       @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  officialMatchEvent                   MatchEvent?
 
   @@index([matchDayId, playerId])
   @@index([eventDefinitionId])
