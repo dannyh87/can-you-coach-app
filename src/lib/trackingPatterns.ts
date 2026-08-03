@@ -3,6 +3,7 @@ import type { MatchTrackingScope, Prisma, TrackingTargetContext } from '@prisma/
 import { clubDefinitionMatchesTrackingContext, getClubDefinitionLocalSelectionEligibility, observationContributesToStandardReporting } from '@/lib/clubTrackingDefinitions'
 import { canManageMatchDay, canRunMatchDay } from '@/lib/permissions'
 import { getActiveHalf, getSecondsBetween } from '@/lib/parentMatchAccess'
+import { getPositiveRate } from '@/lib/observationReporting'
 import { prisma } from '@/lib/prisma'
 import { normalizeTrackingSearch } from '@/lib/matchTrackingResolver'
 
@@ -343,17 +344,18 @@ export async function copyTrackingTaskPatterns({ db, sourceTaskId, destinationTa
 }
 
 export async function getPatternReportBreakdown({ db = prisma, matchDayId }: { db?: Db; matchDayId?: string } = {}) {
-  const observations = await db.matchTrackingPatternObservation.findMany({ where: matchDayId ? { matchDayId } : {}, include: { pattern: true, outcome: true, player: true, clubTrackingDefinition: true, trackingTask: { include: { topic: true } }, matchDay: true } })
-  const byPattern = new Map<string, { patternId: string; pattern: string; count: number; positiveCount: number; outcomeCounts: Record<string, number> }>()
+  const observations = await db.matchTrackingPatternObservation.findMany({ where: matchDayId ? { matchDayId } : {}, include: { pattern: { include: { outcomes: true } }, outcome: true, player: true, clubTrackingDefinition: true, trackingTask: { include: { topic: true } }, matchDay: true } })
+  const byPattern = new Map<string, { patternId: string; pattern: string; count: number; positiveCount: number; hasDefinedPositiveOutcome: boolean; outcomeCounts: Record<string, number> }>()
   for (const observation of observations) {
     if (!observationContributesToStandardReporting({ clubTrackingDefinitionId: observation.clubTrackingDefinitionId, clubDefinitionKind: observation.clubTrackingDefinition?.kind, mappingStatusAtRecording: observation.clubMappingStatusAtRecording, patternId: observation.patternId })) continue
-    const row = byPattern.get(observation.patternId) ?? { patternId: observation.patternId, pattern: observation.pattern.name, count: 0, positiveCount: 0, outcomeCounts: {} }
+    const row = byPattern.get(observation.patternId) ?? { patternId: observation.patternId, pattern: observation.pattern.name, count: 0, positiveCount: 0, hasDefinedPositiveOutcome: false, outcomeCounts: {} }
     row.count += 1
     if (observation.outcome.positive === true) row.positiveCount += 1
+    row.hasDefinedPositiveOutcome = row.hasDefinedPositiveOutcome || observation.outcome.positive === true || observation.pattern.outcomes.some((outcome) => outcome.positive === true)
     row.outcomeCounts[observation.outcome.label] = (row.outcomeCounts[observation.outcome.label] ?? 0) + 1
     byPattern.set(observation.patternId, row)
   }
-  return Array.from(byPattern.values()).map((row) => ({ ...row, positiveRate: row.count > 0 && row.positiveCount > 0 ? row.positiveCount / row.count : null }))
+  return Array.from(byPattern.values()).map(({ hasDefinedPositiveOutcome, ...row }) => ({ ...row, positiveRate: getPositiveRate(row.count, row.positiveCount, hasDefinedPositiveOutcome) }))
 }
 
 function formatPattern(pattern: { id: string; name: string; slug: string; description: string | null; phase: unknown; focusArea: unknown; requiresLocation: boolean; contexts: Array<{ scopeType: MatchTrackingScope; targetContext: TrackingTargetContext | null; recommended: boolean; displayOrder: number }>; steps: Array<{ eventDefinitionId: string; stepOrder: number; label: string | null; eventDefinition: { name: string } }>; outcomes: Array<{ id: string; code: string; label: string; description: string | null; displayOrder: number; positive: boolean | null }>; aliases: Array<{ alias: string }> }) {

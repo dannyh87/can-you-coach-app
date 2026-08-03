@@ -198,19 +198,20 @@ export function aggregateStandardEvents<T extends { reportingIdentity: Observati
   return Array.from(rows.values())
 }
 
-export function aggregateStandardPatterns<T extends { reportingIdentity: ObservationReportingIdentity; outcome: { label: string; positive: boolean | null } }>(observations: T[]): StandardPatternAggregate[] {
-  const rows = new Map<string, StandardPatternAggregate>()
+export function aggregateStandardPatterns<T extends { reportingIdentity: ObservationReportingIdentity; outcome: { label: string; positive: boolean | null }; pattern?: { outcomes?: Array<{ positive: boolean | null }> } }>(observations: T[]): StandardPatternAggregate[] {
+  const rows = new Map<string, StandardPatternAggregate & { hasDefinedPositiveOutcome: boolean }>()
   for (const observation of observations) {
     const identity = observation.reportingIdentity.standardIdentity
     if (!observation.reportingIdentity.contributesToStandardReporting || !identity || identity.type !== 'PATTERN') continue
     const key = `standard-pattern:${identity.id}`
-    const row = rows.get(key) ?? { key, standardPatternDefinitionId: identity.id, label: identity.label, count: 0, positiveCount: 0, positiveRate: null, outcomeCounts: {} }
+    const row = rows.get(key) ?? { key, standardPatternDefinitionId: identity.id, label: identity.label, count: 0, positiveCount: 0, positiveRate: null, outcomeCounts: {}, hasDefinedPositiveOutcome: false }
     row.count += 1
     if (observation.outcome.positive === true) row.positiveCount += 1
+    row.hasDefinedPositiveOutcome = row.hasDefinedPositiveOutcome || hasDefinedPositiveOutcome(observation)
     row.outcomeCounts[observation.outcome.label] = (row.outcomeCounts[observation.outcome.label] ?? 0) + 1
     rows.set(key, row)
   }
-  return Array.from(rows.values()).map((row) => ({ ...row, positiveRate: row.count > 0 && row.positiveCount > 0 ? row.positiveCount / row.count : null }))
+  return Array.from(rows.values()).map(({ hasDefinedPositiveOutcome, ...row }) => ({ ...row, positiveRate: getPositiveRate(row.count, row.positiveCount, hasDefinedPositiveOutcome) }))
 }
 
 export function aggregateClubEvents<T extends {
@@ -268,11 +269,12 @@ export function aggregateClubPatterns<T extends {
   x?: number | null
   y?: number | null
   outcome: { label: string; positive: boolean | null }
+  pattern?: { outcomes?: Array<{ positive: boolean | null }> }
   reportingIdentity: ObservationReportingIdentity
   targetScope?: MatchTrackingScope | string | null
   targetLabel?: string | null
 }>(observations: T[]): ClubPatternAggregate[] {
-  const rows = new Map<string, ClubPatternAggregate & { identityTypeSet: Set<ObservationIdentityType> }>()
+  const rows = new Map<string, ClubPatternAggregate & { identityTypeSet: Set<ObservationIdentityType>; hasDefinedPositiveOutcome: boolean }>()
   for (const observation of observations) {
     const clubIdentity = observation.reportingIdentity.clubIdentity
     if (!clubIdentity) continue
@@ -297,11 +299,13 @@ export function aggregateClubPatterns<T extends {
       recordedStandardIdentities: [],
       proposedStandardIdentities: [],
       mappingSnapshots: [],
+      hasDefinedPositiveOutcome: false,
     }
     row.count += 1
     if (observation.reportingIdentity.contributesToStandardReporting) row.standardReportableCount += 1
     else row.clubOnlyCount += 1
     if (observation.outcome.positive === true) row.positiveCount += 1
+    row.hasDefinedPositiveOutcome = row.hasDefinedPositiveOutcome || hasDefinedPositiveOutcome(observation)
     row.outcomeCounts[observation.outcome.label] = (row.outcomeCounts[observation.outcome.label] ?? 0) + 1
     if (observation.targetScope) row.scopeCounts[String(observation.targetScope)] = (row.scopeCounts[String(observation.targetScope)] ?? 0) + 1
     if (observation.targetLabel) row.targetCounts[observation.targetLabel] = (row.targetCounts[observation.targetLabel] ?? 0) + 1
@@ -312,12 +316,22 @@ export function aggregateClubPatterns<T extends {
     addSnapshot(row.mappingSnapshots, observation.reportingIdentity)
     rows.set(key, row)
   }
-  return Array.from(rows.values()).map(({ identityTypeSet, ...row }) => ({
+  return Array.from(rows.values()).map(({ identityTypeSet, hasDefinedPositiveOutcome, ...row }) => ({
     ...row,
     identityTypes: Array.from(identityTypeSet),
-    positiveRate: row.count > 0 && row.positiveCount > 0 ? row.positiveCount / row.count : null,
+    positiveRate: getPositiveRate(row.count, row.positiveCount, hasDefinedPositiveOutcome),
     outcomePercentages: Object.fromEntries(Object.entries(row.outcomeCounts).map(([outcome, count]) => [outcome, count / row.count])),
   }))
+}
+
+export function getPositiveRate(total: number, positiveCount: number, hasDefinedPositiveOutcome: boolean) {
+  if (total === 0) return null
+  if (!hasDefinedPositiveOutcome) return null
+  return positiveCount / total
+}
+
+function hasDefinedPositiveOutcome(observation: { outcome: { positive: boolean | null }; pattern?: { outcomes?: Array<{ positive: boolean | null }> } }) {
+  return observation.outcome.positive === true || Boolean(observation.pattern?.outcomes?.some((outcome) => outcome.positive === true))
 }
 
 export function buildMappingCoverage(identities: ObservationReportingIdentity[]): MappingCoverageRow[] {

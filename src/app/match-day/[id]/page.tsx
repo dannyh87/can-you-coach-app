@@ -34,6 +34,13 @@ import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay }
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import {
+  buildMatchEventCsvRows,
+  buildMatchPatternCsvRows,
+  getMatchReportEventLabel,
+  resolveMatchReportEvents,
+  resolveMatchReportPatterns,
+} from '@/lib/matchReportCsvRows'
 import { cancelMatchTrackingAssignmentV2 } from '@/lib/matchDayV2Setup'
 import { formatAssignmentStatus, getAssignmentStatusForMatch, getAssignmentTarget } from '@/lib/myAssignments'
 import { notifySubmissionReviewed } from '@/lib/notifications'
@@ -44,7 +51,6 @@ import {
   buildMappingCoverage,
   getObservationIdentityLabel,
   getStandardReportingKey,
-  resolveObservationReportingIdentity,
 } from '@/lib/observationReporting'
 import { reviewPatternObservation } from '@/lib/trackingPatterns'
 
@@ -176,8 +182,7 @@ const getMatchEventIdentity = (event: {
   eventType: string | null
 }) => event.eventDefinitionId ?? event.eventType ?? `unknown-event:${event.id}`
 
-const getMatchEventLabel = (event: Parameters<typeof getEventDisplayName>[0] & { clubTrackingDefinition?: { name: string } | null }) =>
-  event.clubTrackingDefinition?.name ?? getEventDisplayName(event)
+const getMatchEventLabel = getMatchReportEventLabel
 
 const getSubmissionTargetLabel = (submission: {
   assignment?: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
@@ -1222,7 +1227,7 @@ export default async function MatchDayDetailPage({
         orderBy: { createdAt: 'asc' },
       },
       patternObservations: {
-        include: { pattern: true, outcome: true, player: true, clubTrackingDefinition: true, standardPatternDefinitionAtRecording: true, trackingTask: { include: { topic: true } } },
+        include: { pattern: { include: { outcomes: true } }, outcome: true, player: true, clubTrackingDefinition: true, standardPatternDefinitionAtRecording: true, trackingTask: { include: { topic: true } } },
         orderBy: { createdAt: 'asc' },
       },
       matchDayEventTypes: {
@@ -1434,45 +1439,8 @@ export default async function MatchDayDetailPage({
     new Set(selectedEventOptions.map((eventOption) => eventOption.label))
   ).sort((firstLabel, secondLabel) => firstLabel.localeCompare(secondLabel))
   const eventLabelsByKey = new Map<string, string>()
-  const resolvedMatchEvents = match.matchEvents.map((event) => ({
-    ...event,
-    targetScope: event.playerId ? 'PLAYER' as const : 'TEAM' as const,
-    reportingIdentity: resolveObservationReportingIdentity({
-      observationType: 'EVENT',
-      eventDefinitionId: event.eventDefinitionId ?? event.eventType,
-      eventDefinitionLabel: event.eventDefinition?.name ?? (event.eventType ? formatMatchEventType(event.eventType) : null),
-      eventDefinitionBenchmarkable: event.eventDefinition?.benchmarkable ?? false,
-      clubTrackingDefinitionId: event.clubTrackingDefinitionId,
-      clubDefinitionKind: event.clubTrackingDefinition?.kind ?? null,
-      clubDefinitionLabel: event.clubTrackingDefinition?.name ?? null,
-      standardEventDefinitionIdAtRecording: event.standardEventDefinitionIdAtRecording,
-      standardEventDefinitionLabelAtRecording: event.standardEventDefinitionAtRecording?.name ?? null,
-      standardEventDefinitionBenchmarkableAtRecording: event.standardEventDefinitionAtRecording?.benchmarkable ?? false,
-      clubMappingStatusAtRecording: event.clubMappingStatusAtRecording,
-      clubMappingRevisionAtRecording: event.clubMappingRevisionAtRecording,
-    }),
-  }))
-  const resolvedPatternObservations = match.patternObservations.map((observation) => ({
-    ...observation,
-    targetScope: observation.trackingTask.scopeType,
-    targetLabel: observation.trackingTask.scopeType === 'PLAYER'
-      ? observation.player ? `${observation.player.firstName} ${observation.player.surname}` : 'Selected player'
-      : observation.trackingTask.scopeType === 'UNIT'
-        ? observation.trackingTask.unitLabel ?? 'Selected unit'
-        : 'Whole team',
-    reportingIdentity: resolveObservationReportingIdentity({
-      observationType: 'PATTERN',
-      patternId: observation.patternId,
-      patternLabel: observation.pattern.name,
-      clubTrackingDefinitionId: observation.clubTrackingDefinitionId,
-      clubDefinitionKind: observation.clubTrackingDefinition?.kind ?? null,
-      clubDefinitionLabel: observation.clubTrackingDefinition?.name ?? null,
-      standardPatternDefinitionIdAtRecording: observation.standardPatternDefinitionIdAtRecording,
-      standardPatternDefinitionLabelAtRecording: observation.standardPatternDefinitionAtRecording?.name ?? null,
-      clubMappingStatusAtRecording: observation.clubMappingStatusAtRecording,
-      clubMappingRevisionAtRecording: observation.clubMappingRevisionAtRecording,
-    }),
-  }))
+  const resolvedMatchEvents = resolveMatchReportEvents(match.matchEvents)
+  const resolvedPatternObservations = resolveMatchReportPatterns(match.patternObservations)
   const standardReportEvents = resolvedMatchEvents.filter((event) => event.reportingIdentity.contributesToStandardReporting)
   const standardPatternObservations = resolvedPatternObservations.filter((observation) => observation.reportingIdentity.contributesToStandardReporting)
   const standardEventAggregates = aggregateStandardEvents(resolvedMatchEvents)
@@ -1618,66 +1586,9 @@ export default async function MatchDayDetailPage({
     matchType: matchTypeLabel,
     finalScore,
   }
-  const eventCsvRows = resolvedMatchEvents.map((event) => ({
-    half: formatHalfLabel(event.half),
-    matchTime: formatMatchTime(event.matchSecond),
-    playerName: event.player
-      ? `${event.player.firstName} ${event.player.surname}`
-      : 'Whole team',
-    event: getMatchEventLabel(event),
-    scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
-    reportingDimension: event.reportingIdentity.contributesToStandardReporting && event.reportingIdentity.contributesToClubReporting
-      ? 'Standard; Club'
-      : event.reportingIdentity.contributesToClubReporting ? 'Club' : 'Standard',
-    clubTrackingDefinition: event.reportingIdentity.clubIdentity?.label ?? '',
-    clubTrackingDefinitionId: event.reportingIdentity.clubIdentity?.id ?? '',
-    clubTrackingDefinitionKind: event.reportingIdentity.clubIdentity?.kind ?? '',
-    observationIdentityType: getObservationIdentityLabel(event.reportingIdentity.identityType),
-    recordedStandardEvent: event.reportingIdentity.standardIdentity?.type === 'EVENT' ? event.reportingIdentity.standardIdentity.label : '',
-    recordedStandardEventId: event.reportingIdentity.standardIdentity?.type === 'EVENT' ? event.reportingIdentity.standardIdentity.id : '',
-    proposedStandardEvent: event.reportingIdentity.proposedStandardIdentity?.type === 'EVENT' ? event.reportingIdentity.proposedStandardIdentity.label : '',
-    proposedStandardEventId: event.reportingIdentity.proposedStandardIdentity?.type === 'EVENT' ? event.reportingIdentity.proposedStandardIdentity.id : '',
-    mappingStatusAtRecording: event.reportingIdentity.mappingStatusAtRecording ? formatStatus(event.reportingIdentity.mappingStatusAtRecording) : '',
-    mappingRevisionAtRecording: event.reportingIdentity.mappingRevisionAtRecording !== null ? String(event.reportingIdentity.mappingRevisionAtRecording) : '',
-    standardReportingEligible: event.reportingIdentity.contributesToStandardReporting ? 'Yes' : 'No',
-    benchmarkEligible: event.reportingIdentity.benchmarkEligible ? 'Yes' : 'No',
-  }))
-  const buildPatternCsvRow = (observation: (typeof resolvedPatternObservations)[number]) => ({
-    observationType: 'Tactical pattern',
-    pattern: observation.reportingIdentity.clubIdentity?.label ?? observation.pattern.name,
-    outcome: observation.outcome.label,
-    scope: observation.trackingTask.scopeType,
-    target: observation.trackingTask.scopeType === 'PLAYER'
-      ? observation.player ? `${observation.player.firstName} ${observation.player.surname}` : 'Selected player'
-      : observation.trackingTask.scopeType === 'UNIT'
-        ? observation.trackingTask.unitLabel ?? 'Selected unit'
-        : 'Whole team',
-    playerName: observation.player ? `${observation.player.firstName} ${observation.player.surname}` : '',
-    unit: observation.trackingTask.scopeType === 'UNIT' ? observation.trackingTask.unitLabel ?? '' : '',
-    phase: String(observation.pattern.phase),
-    focusArea: String(observation.pattern.focusArea),
-    matchMinute: formatMatchTime(observation.matchSecond),
-    scoreAtTime: `${observation.ownScoreAtTime}-${observation.oppositionScoreAtTime}`,
-    locationX: observation.x,
-    locationY: observation.y,
-    reviewStatus: 'ACCEPTED',
-    reportingDimension: observation.reportingIdentity.contributesToStandardReporting && observation.reportingIdentity.contributesToClubReporting
-      ? 'Standard; Club'
-      : observation.reportingIdentity.contributesToClubReporting ? 'Club' : 'Standard',
-    clubTrackingDefinition: observation.reportingIdentity.clubIdentity?.label ?? '',
-    clubTrackingDefinitionId: observation.reportingIdentity.clubIdentity?.id ?? '',
-    clubTrackingDefinitionKind: observation.reportingIdentity.clubIdentity?.kind ?? '',
-    observationIdentityType: getObservationIdentityLabel(observation.reportingIdentity.identityType),
-    recordedStandardPattern: observation.reportingIdentity.standardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.standardIdentity.label : '',
-    recordedStandardPatternId: observation.reportingIdentity.standardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.standardIdentity.id : '',
-    proposedStandardPattern: observation.reportingIdentity.proposedStandardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.proposedStandardIdentity.label : '',
-    proposedStandardPatternId: observation.reportingIdentity.proposedStandardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.proposedStandardIdentity.id : '',
-    mappingStatusAtRecording: observation.reportingIdentity.mappingStatusAtRecording ? formatStatus(observation.reportingIdentity.mappingStatusAtRecording) : '',
-    mappingRevisionAtRecording: observation.reportingIdentity.mappingRevisionAtRecording !== null ? String(observation.reportingIdentity.mappingRevisionAtRecording) : '',
-    standardReportingEligible: observation.reportingIdentity.contributesToStandardReporting ? 'Yes' : 'No',
-  })
-  const patternCsvRows = resolvedPatternObservations.map(buildPatternCsvRow)
-  const standardPatternCsvRows = standardPatternObservations.map(buildPatternCsvRow)
+  const eventCsvRows = buildMatchEventCsvRows(resolvedMatchEvents)
+  const patternCsvRows = buildMatchPatternCsvRows(resolvedPatternObservations)
+  const standardPatternCsvRows = buildMatchPatternCsvRows(standardPatternObservations)
   const showClubTrackingReports = isMatchDayTrackingV2Enabled()
   const touchMapEvents = resolvedMatchEvents
     .filter((event) => typeof event.x === 'number' && typeof event.y === 'number' && ((event.eventDefinition?.requiresLocation ?? false) || event.eventType === 'TOUCH' || (showClubTrackingReports && event.clubTrackingDefinitionId)))
@@ -2076,7 +1987,7 @@ function TrackingAssignmentsPanel({ tasks, cancelAssignmentAction }: { tasks: Aw
                         <form action={cancelAssignmentAction} className="mt-2">
                           <input type="hidden" name="matchDayId" value={task.matchDayId} />
                           <input type="hidden" name="assignmentId" value={assignment.id} />
-                          <button className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Cancel assignment</button>
+                          <button type="submit" className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50">Cancel assignment</button>
                         </form>
                       )}
                     </div>

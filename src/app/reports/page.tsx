@@ -57,9 +57,9 @@ export default async function ReportsPage() {
           className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-100/70 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
         >
           <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Match trends</p>
-          <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Team Event Trends</h2>
+          <h2 className="mt-2 text-2xl font-extrabold text-slate-950">Team Tracking Trends</h2>
           <p className="mt-2 text-sm leading-6 text-slate-700">
-            Track how one selected match event changes across completed matches over time.
+            Track how selected standard and club observations change across completed matches over time.
           </p>
           <span className="mt-4 inline-flex rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
             Open report

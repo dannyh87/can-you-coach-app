@@ -170,6 +170,22 @@ describe('tracking pattern observations', () => {
     await expect(undoPendingPatternObservation({ db: createDb(), actorUserId: 'contributor-1', assignmentId: 'assignment-1', observationId: 'submitted-1' })).resolves.toMatchObject({ ok: true })
   })
 
+  it('does not undo accepted pattern observations or touch official rows', async () => {
+    const officialDelete = vi.fn()
+    const submittedDelete = vi.fn()
+    const db = createDb({
+      submittedTrackingPatternObservation: {
+        findFirst: async () => ({ id: 'submitted-1', status: 'ACCEPTED', assignment: { status: 'IN_PROGRESS' } }),
+        delete: submittedDelete,
+      },
+      matchTrackingPatternObservation: { delete: officialDelete },
+    })
+
+    await expect(undoPendingPatternObservation({ db, actorUserId: 'contributor-1', assignmentId: 'assignment-1', observationId: 'submitted-1' })).resolves.toMatchObject({ ok: false })
+    expect(submittedDelete).not.toHaveBeenCalled()
+    expect(officialDelete).not.toHaveBeenCalled()
+  })
+
   it('records club mapped pattern provenance while retaining pattern id for outcomes', async () => {
     let createdData = {} as Record<string, unknown>
     const result = await recordAssignedClubPattern({ db: createClubPatternDb({ submittedTrackingPatternObservation: { findFirst: async () => null, create: async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'submitted-1' } } } }), assignmentId: 'assignment-1', actorUserId: 'contributor-1', taskClubDefinitionId: 'task-club-1', outcomeId: 'outcome-1', playerId: 'player-1', x: 42, y: 21 })

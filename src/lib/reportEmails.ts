@@ -1,16 +1,22 @@
 import { Resend } from 'resend'
 
-import { getEventDisplayName } from '@/lib/eventDefinitions'
+import {
+  buildMatchEventCsvRows,
+  buildMatchPatternCsvRows,
+  resolveMatchReportEvents,
+  type MatchReportEventCsvSource,
+  type MatchReportPatternCsvSource,
+} from '@/lib/matchReportCsvRows'
 import { prisma } from '@/lib/prisma'
 import {
   buildFitnessResultsCsv,
   buildMatchEventsCsv,
+  buildMatchPatternObservationsCsv,
   buildMatchSummaryCsv,
   getFitnessCsvFilename,
   getMatchCsvBaseFilename,
   type FitnessCsvResult,
   type MatchCsvMetadata,
-  type MatchEventCsvRow,
   type MatchSummaryCsvRow,
 } from '@/lib/reportCsv'
 
@@ -34,15 +40,6 @@ const formatMatchType = (matchType: string) =>
 
 const formatVenue = (venue: string) =>
   venue.charAt(0) + venue.slice(1).toLowerCase()
-
-const formatHalfLabel = (half: string) =>
-  half === 'FIRST_HALF' ? 'First half' : 'Second half'
-
-const formatMatchTime = (matchSecond: number) => {
-  const minutes = Math.floor(matchSecond / 60)
-  const seconds = matchSecond % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
 
 const formatResultStatus = (status: string) => {
   if (status === 'DID_NOT_START') return 'Did not start'
@@ -71,6 +68,108 @@ const getReportEmailConfig = () => {
   }
 
   return { apiKey, from }
+}
+
+type CompletedMatchReportEmailMatch = {
+  venue: string
+  opposition: string
+  kickoffAt: Date
+  ownScore: number
+  oppositionScore: number
+  matchType: string
+  team: { name: string; clubId: string; club: { name: string; sendMatchReportEmails: boolean } }
+  matchDayPlayers: Array<{
+    playerId: string
+    squadStatus: string
+    isTracked: boolean
+    player: { firstName: string; surname: string; squadNumber: number | null }
+    stints: Array<{ startedAt: Date; endedAt: Date | null }>
+  }>
+  matchEvents: MatchReportEventCsvSource[]
+  patternObservations: MatchReportPatternCsvSource[]
+}
+
+export function buildCompletedMatchReportEmailAttachments(match: CompletedMatchReportEmailMatch) {
+  const headline = match.venue === 'AWAY'
+    ? `${match.opposition} vs ${match.team.name}`
+    : `${match.team.name} vs ${match.opposition}`
+  const finalScore = `${match.ownScore}-${match.oppositionScore}`
+  const metadata: MatchCsvMetadata = {
+    match: headline,
+    dateLabel: formatDate(match.kickoffAt),
+    dateForFilename: formatDateForFilename(match.kickoffAt),
+    teamName: match.team.name,
+    opposition: match.opposition,
+    venue: formatVenue(match.venue),
+    matchType: formatMatchType(match.matchType),
+    finalScore,
+  }
+  const resolvedEvents = resolveMatchReportEvents(match.matchEvents)
+  const standardReportEvents = resolvedEvents.filter((event) => event.reportingIdentity.contributesToStandardReporting)
+  const playerEventCounts = new Map<string, Map<string, number>>()
+
+  for (const event of standardReportEvents) {
+    const playerId = event.playerId
+    if (!playerId) continue
+
+    const eventKey = event.eventDefinition?.legacyEventType ?? event.eventType
+    if (!eventKey) continue
+
+    const eventCounts = playerEventCounts.get(playerId) ?? new Map<string, number>()
+    eventCounts.set(eventKey, (eventCounts.get(eventKey) ?? 0) + 1)
+    playerEventCounts.set(playerId, eventCounts)
+  }
+
+  const getPlayerEventCount = (playerId: string, eventType: string) =>
+    playerEventCounts.get(playerId)?.get(eventType) ?? 0
+  const summaryRows: MatchSummaryCsvRow[] = match.matchDayPlayers.map((matchPlayer) => {
+    const eventCounts = playerEventCounts.get(matchPlayer.playerId)
+    const totalEvents = eventCounts
+      ? Array.from(eventCounts.values()).reduce((total, count) => total + count, 0)
+      : 0
+    const totalMilliseconds = matchPlayer.stints.reduce((total, stint) => {
+      if (!stint.endedAt) return total
+      return total + Math.max(0, stint.endedAt.getTime() - stint.startedAt.getTime())
+    }, 0)
+
+    return {
+      playerName: `${matchPlayer.player.firstName} ${matchPlayer.player.surname}`,
+      squadNumber: matchPlayer.player.squadNumber,
+      squadStatus: formatSquadStatus(matchPlayer.squadStatus),
+      trackedForEvents: matchPlayer.isTracked,
+      minutesPlayed: Math.round(totalMilliseconds / 60000),
+      totalEvents,
+      goals: getPlayerEventCount(matchPlayer.playerId, 'GOAL'),
+      assists: getPlayerEventCount(matchPlayer.playerId, 'ASSIST'),
+      shotsOnTarget: getPlayerEventCount(matchPlayer.playerId, 'SHOT_ON_TARGET'),
+      shotsOffTarget: getPlayerEventCount(matchPlayer.playerId, 'SHOT_OFF_TARGET'),
+      passComplete: getPlayerEventCount(matchPlayer.playerId, 'PASS_COMPLETE'),
+      passIncomplete: getPlayerEventCount(matchPlayer.playerId, 'PASS_INCOMPLETE'),
+      oneVOneSuccess: getPlayerEventCount(matchPlayer.playerId, 'ONE_V_ONE_SUCCESS'),
+      oneVOneUnsuccessful: getPlayerEventCount(matchPlayer.playerId, 'ONE_V_ONE_UNSUCCESSFUL'),
+    }
+  })
+  const baseFilename = getMatchCsvBaseFilename(metadata)
+  const attachments = [{
+    filename: `match-summary-${baseFilename}.csv`,
+    content: buildMatchSummaryCsv(metadata, summaryRows),
+  }]
+
+  if (match.matchEvents.length > 0) {
+    attachments.push({
+      filename: `match-events-${baseFilename}.csv`,
+      content: buildMatchEventsCsv(metadata, buildMatchEventCsvRows(resolvedEvents)),
+    })
+  }
+
+  if (match.patternObservations.length > 0) {
+    attachments.push({
+      filename: `match-pattern-observations-${baseFilename}.csv`,
+      content: buildMatchPatternObservationsCsv(metadata, buildMatchPatternCsvRows(match.patternObservations)),
+    })
+  }
+
+  return { headline, finalScore, metadata, attachments }
 }
 
 const sendOwnerReportEmail = async ({
@@ -135,6 +234,19 @@ export async function sendCompletedMatchReportEmail(matchDayId: string): Promise
           include: {
             player: true,
             eventDefinition: true,
+            clubTrackingDefinition: true,
+            standardEventDefinitionAtRecording: true,
+          },
+          orderBy: [{ half: 'asc' }, { matchSecond: 'asc' }, { createdAt: 'asc' }],
+        },
+        patternObservations: {
+          include: {
+            player: true,
+            pattern: { include: { outcomes: true } },
+            outcome: true,
+            trackingTask: { select: { scopeType: true, unitLabel: true } },
+            clubTrackingDefinition: true,
+            standardPatternDefinitionAtRecording: true,
           },
           orderBy: [{ half: 'asc' }, { matchSecond: 'asc' }, { createdAt: 'asc' }],
         },
@@ -144,73 +256,7 @@ export async function sendCompletedMatchReportEmail(matchDayId: string): Promise
     if (!match || match.status !== 'COMPLETED') return
     if (!match.team.club.sendMatchReportEmails) return
 
-    const headline = match.venue === 'AWAY'
-      ? `${match.opposition} vs ${match.team.name}`
-      : `${match.team.name} vs ${match.opposition}`
-    const finalScore = `${match.ownScore}-${match.oppositionScore}`
-    const metadata: MatchCsvMetadata = {
-      match: headline,
-      dateLabel: formatDate(match.kickoffAt),
-      dateForFilename: formatDateForFilename(match.kickoffAt),
-      teamName: match.team.name,
-      opposition: match.opposition,
-      venue: formatVenue(match.venue),
-      matchType: formatMatchType(match.matchType),
-      finalScore,
-    }
-    const playerEventCounts = new Map<string, Map<string, number>>()
-
-    for (const event of match.matchEvents) {
-      const playerId = event.playerId
-      if (!playerId) continue
-
-      const eventKey = event.eventDefinition?.legacyEventType ?? event.eventType
-      if (!eventKey) continue
-
-      const eventCounts = playerEventCounts.get(playerId) ?? new Map<string, number>()
-      eventCounts.set(eventKey, (eventCounts.get(eventKey) ?? 0) + 1)
-      playerEventCounts.set(playerId, eventCounts)
-    }
-
-    const getPlayerEventCount = (playerId: string, eventType: string) =>
-      playerEventCounts.get(playerId)?.get(eventType) ?? 0
-    const summaryRows: MatchSummaryCsvRow[] = match.matchDayPlayers.map((matchPlayer) => {
-      const eventCounts = playerEventCounts.get(matchPlayer.playerId)
-      const totalEvents = eventCounts
-        ? Array.from(eventCounts.values()).reduce((total, count) => total + count, 0)
-        : 0
-      const totalMilliseconds = matchPlayer.stints.reduce((total, stint) => {
-        if (!stint.endedAt) return total
-        return total + Math.max(0, stint.endedAt.getTime() - stint.startedAt.getTime())
-      }, 0)
-
-      return {
-        playerName: `${matchPlayer.player.firstName} ${matchPlayer.player.surname}`,
-        squadNumber: matchPlayer.player.squadNumber,
-        squadStatus: formatSquadStatus(matchPlayer.squadStatus),
-        trackedForEvents: matchPlayer.isTracked,
-        minutesPlayed: Math.round(totalMilliseconds / 60000),
-        totalEvents,
-        goals: getPlayerEventCount(matchPlayer.playerId, 'GOAL'),
-        assists: getPlayerEventCount(matchPlayer.playerId, 'ASSIST'),
-        shotsOnTarget: getPlayerEventCount(matchPlayer.playerId, 'SHOT_ON_TARGET'),
-        shotsOffTarget: getPlayerEventCount(matchPlayer.playerId, 'SHOT_OFF_TARGET'),
-        passComplete: getPlayerEventCount(matchPlayer.playerId, 'PASS_COMPLETE'),
-        passIncomplete: getPlayerEventCount(matchPlayer.playerId, 'PASS_INCOMPLETE'),
-        oneVOneSuccess: getPlayerEventCount(matchPlayer.playerId, 'ONE_V_ONE_SUCCESS'),
-        oneVOneUnsuccessful: getPlayerEventCount(matchPlayer.playerId, 'ONE_V_ONE_UNSUCCESSFUL'),
-      }
-    })
-    const eventRows: MatchEventCsvRow[] = match.matchEvents.map((event) => ({
-      half: formatHalfLabel(event.half),
-      matchTime: formatMatchTime(event.matchSecond),
-      playerName: event.player
-        ? `${event.player.firstName} ${event.player.surname}`
-        : 'Whole team',
-      event: getEventDisplayName(event),
-      scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
-    }))
-    const baseFilename = getMatchCsvBaseFilename(metadata)
+    const { headline, finalScore, metadata, attachments } = buildCompletedMatchReportEmailAttachments(match)
     const html = `<p>${escapeHtml(match.team.club.name)} match report completed.</p><ul><li>Match: ${escapeHtml(headline)}</li><li>Date: ${escapeHtml(metadata.dateLabel)}</li><li>Final score: ${escapeHtml(finalScore)}</li><li>Events recorded: ${match.matchEvents.length}</li></ul>`
     const text = `${match.team.club.name} match report completed.\nMatch: ${headline}\nDate: ${metadata.dateLabel}\nFinal score: ${finalScore}\nEvents recorded: ${match.matchEvents.length}`
 
@@ -219,16 +265,7 @@ export async function sendCompletedMatchReportEmail(matchDayId: string): Promise
       subject: `Match report: ${headline}`,
       html,
       text,
-      attachments: [
-        {
-          filename: `match-summary-${baseFilename}.csv`,
-          content: buildMatchSummaryCsv(metadata, summaryRows),
-        },
-        {
-          filename: `match-events-${baseFilename}.csv`,
-          content: buildMatchEventsCsv(metadata, eventRows),
-        },
-      ],
+      attachments,
     })
   } catch (error) {
     console.error('Completed match report email failed.', error)

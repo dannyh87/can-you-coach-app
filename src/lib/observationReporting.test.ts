@@ -6,6 +6,7 @@ import {
   aggregateStandardEvents,
   aggregateStandardPatterns,
   buildMappingCoverage,
+  getPositiveRate,
   resolveObservationReportingIdentity,
 } from '@/lib/observationReporting'
 import { buildMatchEventsCsv, buildMatchPatternObservationsCsv, type MatchCsvMetadata } from '@/lib/reportCsv'
@@ -184,6 +185,22 @@ describe('official observation reporting aggregation', () => {
       { clubTrackingDefinitionId: 'club-pattern-alias', count: 1, positiveCount: 1, positiveRate: 1, outcomeCounts: { Retained: 1 } },
       { clubTrackingDefinitionId: 'mapped-only', count: 1, positiveCount: 0, positiveRate: null, outcomeCounts: { Lost: 1 } },
     ])
+  })
+
+  it('returns zero positive rate when positive outcomes exist but none occurred', () => {
+    const observations = [
+      { id: 'negative-1', pattern: { outcomes: [{ positive: true }, { positive: false }] }, outcome: { label: 'Lost', positive: false }, reportingIdentity: resolveObservationReportingIdentity(standardPattern) },
+      { id: 'negative-2', pattern: { outcomes: [{ positive: true }, { positive: false }] }, outcome: { label: 'Lost', positive: false }, reportingIdentity: resolveObservationReportingIdentity(standardPattern) },
+    ]
+
+    expect(aggregateStandardPatterns(observations)).toMatchObject([{ count: 2, positiveCount: 0, positiveRate: 0 }])
+    expect(aggregateClubPatterns(observations.map((observation) => ({ ...observation, reportingIdentity: resolveObservationReportingIdentity(patternAlias) })))).toMatchObject([{ count: 2, positiveCount: 0, positiveRate: 0 }])
+  })
+
+  it('keeps positive rate unavailable without observations or without a positive outcome definition', () => {
+    expect(getPositiveRate(0, 0, true)).toBeNull()
+    expect(getPositiveRate(5, 0, false)).toBeNull()
+    expect(getPositiveRate(5, 2, true)).toBe(0.4)
   })
 
   it('builds mapping coverage percentages for club observations', () => {
