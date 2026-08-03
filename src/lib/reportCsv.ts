@@ -34,6 +34,19 @@ export type MatchEventCsvRow = {
   playerName: string
   event: string
   scoreAtTime: string
+  reportingDimension?: string
+  clubTrackingDefinition?: string
+  clubTrackingDefinitionId?: string
+  clubTrackingDefinitionKind?: string
+  observationIdentityType?: string
+  recordedStandardEvent?: string
+  recordedStandardEventId?: string
+  proposedStandardEvent?: string
+  proposedStandardEventId?: string
+  mappingStatusAtRecording?: string
+  mappingRevisionAtRecording?: string
+  standardReportingEligible?: string
+  benchmarkEligible?: string
 }
 
 export type MatchPatternObservationCsvRow = {
@@ -51,6 +64,18 @@ export type MatchPatternObservationCsvRow = {
   locationX: number | null
   locationY: number | null
   reviewStatus: string
+  reportingDimension?: string
+  clubTrackingDefinition?: string
+  clubTrackingDefinitionId?: string
+  clubTrackingDefinitionKind?: string
+  observationIdentityType?: string
+  recordedStandardPattern?: string
+  recordedStandardPatternId?: string
+  proposedStandardPattern?: string
+  proposedStandardPatternId?: string
+  mappingStatusAtRecording?: string
+  mappingRevisionAtRecording?: string
+  standardReportingEligible?: string
 }
 
 export type FitnessCsvResult = {
@@ -110,6 +135,19 @@ const matchEventHeaders = [
   'Player',
   'Event',
   'Score At Time',
+  'Reporting Dimension',
+  'Club Tracking Definition',
+  'Club Tracking Definition ID',
+  'Club Tracking Definition Kind',
+  'Observation Identity Type',
+  'Recorded Standard Event',
+  'Recorded Standard Event ID',
+  'Proposed Standard Event',
+  'Proposed Standard Event ID',
+  'Mapping Status At Recording',
+  'Mapping Revision At Recording',
+  'Standard Reporting Eligible',
+  'Benchmark Eligible',
 ]
 
 const matchPatternObservationHeaders = [
@@ -134,6 +172,18 @@ const matchPatternObservationHeaders = [
   'Location X',
   'Location Y',
   'Review Status',
+  'Reporting Dimension',
+  'Club Tracking Definition',
+  'Club Tracking Definition ID',
+  'Club Tracking Definition Kind',
+  'Observation Identity Type',
+  'Recorded Standard Pattern',
+  'Recorded Standard Pattern ID',
+  'Proposed Standard Pattern',
+  'Proposed Standard Pattern ID',
+  'Mapping Status At Recording',
+  'Mapping Revision At Recording',
+  'Standard Reporting Eligible',
 ]
 
 const fitnessHeaders = [
@@ -210,6 +260,19 @@ export const buildMatchEventsCsv = (
     row.playerName,
     row.event,
     row.scoreAtTime,
+    row.reportingDimension ?? 'Standard',
+    row.clubTrackingDefinition ?? '',
+    row.clubTrackingDefinitionId ?? '',
+    row.clubTrackingDefinitionKind ?? '',
+    row.observationIdentityType ?? 'Standard',
+    row.recordedStandardEvent ?? row.event,
+    row.recordedStandardEventId ?? '',
+    row.proposedStandardEvent ?? '',
+    row.proposedStandardEventId ?? '',
+    row.mappingStatusAtRecording ?? '',
+    row.mappingRevisionAtRecording ?? '',
+    row.standardReportingEligible ?? 'Yes',
+    row.benchmarkEligible ?? '',
   ])
 
   return buildCsv(matchEventHeaders, rows)
@@ -241,6 +304,18 @@ export const buildMatchPatternObservationsCsv = (
     row.locationX ?? '',
     row.locationY ?? '',
     row.reviewStatus,
+    row.reportingDimension ?? 'Standard',
+    row.clubTrackingDefinition ?? '',
+    row.clubTrackingDefinitionId ?? '',
+    row.clubTrackingDefinitionKind ?? '',
+    row.observationIdentityType ?? 'Standard',
+    row.recordedStandardPattern ?? row.pattern,
+    row.recordedStandardPatternId ?? '',
+    row.proposedStandardPattern ?? '',
+    row.proposedStandardPatternId ?? '',
+    row.mappingStatusAtRecording ?? '',
+    row.mappingRevisionAtRecording ?? '',
+    row.standardReportingEligible ?? 'Yes',
   ])
 
   return buildCsv(matchPatternObservationHeaders, rows)

@@ -37,6 +37,15 @@ import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { cancelMatchTrackingAssignmentV2 } from '@/lib/matchDayV2Setup'
 import { formatAssignmentStatus, getAssignmentStatusForMatch, getAssignmentTarget } from '@/lib/myAssignments'
 import { notifySubmissionReviewed } from '@/lib/notifications'
+import {
+  aggregateClubEvents,
+  aggregateClubPatterns,
+  aggregateStandardEvents,
+  buildMappingCoverage,
+  getObservationIdentityLabel,
+  getStandardReportingKey,
+  resolveObservationReportingIdentity,
+} from '@/lib/observationReporting'
 import { reviewPatternObservation } from '@/lib/trackingPatterns'
 
 export const dynamic = 'force-dynamic'
@@ -1208,11 +1217,12 @@ export default async function MatchDayDetailPage({
           player: true,
           eventDefinition: true,
           clubTrackingDefinition: true,
+          standardEventDefinitionAtRecording: true,
         },
         orderBy: { createdAt: 'asc' },
       },
       patternObservations: {
-        include: { pattern: true, outcome: true, player: true, clubTrackingDefinition: true, trackingTask: { include: { topic: true } } },
+        include: { pattern: true, outcome: true, player: true, clubTrackingDefinition: true, standardPatternDefinitionAtRecording: true, trackingTask: { include: { topic: true } } },
         orderBy: { createdAt: 'asc' },
       },
       matchDayEventTypes: {
@@ -1424,8 +1434,57 @@ export default async function MatchDayDetailPage({
     new Set(selectedEventOptions.map((eventOption) => eventOption.label))
   ).sort((firstLabel, secondLabel) => firstLabel.localeCompare(secondLabel))
   const eventLabelsByKey = new Map<string, string>()
-  const standardReportEvents = match.matchEvents.filter((event) => observationContributesToStandardReporting({ clubTrackingDefinitionId: event.clubTrackingDefinitionId, clubDefinitionKind: event.clubTrackingDefinition?.kind, mappingStatusAtRecording: event.clubMappingStatusAtRecording, eventDefinitionId: event.eventDefinitionId }))
-  for (const event of match.matchEvents) {
+  const resolvedMatchEvents = match.matchEvents.map((event) => ({
+    ...event,
+    targetScope: event.playerId ? 'PLAYER' as const : 'TEAM' as const,
+    reportingIdentity: resolveObservationReportingIdentity({
+      observationType: 'EVENT',
+      eventDefinitionId: event.eventDefinitionId ?? event.eventType,
+      eventDefinitionLabel: event.eventDefinition?.name ?? (event.eventType ? formatMatchEventType(event.eventType) : null),
+      eventDefinitionBenchmarkable: event.eventDefinition?.benchmarkable ?? false,
+      clubTrackingDefinitionId: event.clubTrackingDefinitionId,
+      clubDefinitionKind: event.clubTrackingDefinition?.kind ?? null,
+      clubDefinitionLabel: event.clubTrackingDefinition?.name ?? null,
+      standardEventDefinitionIdAtRecording: event.standardEventDefinitionIdAtRecording,
+      standardEventDefinitionLabelAtRecording: event.standardEventDefinitionAtRecording?.name ?? null,
+      standardEventDefinitionBenchmarkableAtRecording: event.standardEventDefinitionAtRecording?.benchmarkable ?? false,
+      clubMappingStatusAtRecording: event.clubMappingStatusAtRecording,
+      clubMappingRevisionAtRecording: event.clubMappingRevisionAtRecording,
+    }),
+  }))
+  const resolvedPatternObservations = match.patternObservations.map((observation) => ({
+    ...observation,
+    targetScope: observation.trackingTask.scopeType,
+    targetLabel: observation.trackingTask.scopeType === 'PLAYER'
+      ? observation.player ? `${observation.player.firstName} ${observation.player.surname}` : 'Selected player'
+      : observation.trackingTask.scopeType === 'UNIT'
+        ? observation.trackingTask.unitLabel ?? 'Selected unit'
+        : 'Whole team',
+    reportingIdentity: resolveObservationReportingIdentity({
+      observationType: 'PATTERN',
+      patternId: observation.patternId,
+      patternLabel: observation.pattern.name,
+      clubTrackingDefinitionId: observation.clubTrackingDefinitionId,
+      clubDefinitionKind: observation.clubTrackingDefinition?.kind ?? null,
+      clubDefinitionLabel: observation.clubTrackingDefinition?.name ?? null,
+      standardPatternDefinitionIdAtRecording: observation.standardPatternDefinitionIdAtRecording,
+      standardPatternDefinitionLabelAtRecording: observation.standardPatternDefinitionAtRecording?.name ?? null,
+      clubMappingStatusAtRecording: observation.clubMappingStatusAtRecording,
+      clubMappingRevisionAtRecording: observation.clubMappingRevisionAtRecording,
+    }),
+  }))
+  const standardReportEvents = resolvedMatchEvents.filter((event) => event.reportingIdentity.contributesToStandardReporting)
+  const standardPatternObservations = resolvedPatternObservations.filter((observation) => observation.reportingIdentity.contributesToStandardReporting)
+  const standardEventAggregates = aggregateStandardEvents(resolvedMatchEvents)
+  const clubEventAggregates = aggregateClubEvents(resolvedMatchEvents)
+  const clubPatternAggregates = aggregateClubPatterns(resolvedPatternObservations)
+  const mappingCoverageRows = buildMappingCoverage([
+    ...resolvedMatchEvents.map((event) => event.reportingIdentity),
+    ...resolvedPatternObservations.map((observation) => observation.reportingIdentity),
+  ])
+  for (const event of resolvedMatchEvents) {
+    const standardKey = getStandardReportingKey(event.reportingIdentity)
+    if (standardKey && event.reportingIdentity.standardIdentity) eventLabelsByKey.set(standardKey, event.reportingIdentity.standardIdentity.label)
     eventLabelsByKey.set(getMatchEventIdentity(event), getMatchEventLabel(event))
   }
 
@@ -1435,6 +1494,9 @@ export default async function MatchDayDetailPage({
       ?? eventOption.matchDayEventTypeId
       ?? 'unknown-event'
     if (!eventLabelsByKey.has(eventOptionKey)) eventLabelsByKey.set(eventOptionKey, eventOption.label)
+    if (eventOption.eventDefinitionId && !eventLabelsByKey.has(`standard-event:${eventOption.eventDefinitionId}`)) {
+      eventLabelsByKey.set(`standard-event:${eventOption.eventDefinitionId}`, eventOption.label)
+    }
   }
 
   const selectedEventDefinitionIdsForSetup = Array.from(new Set(match.matchDayEventTypes.flatMap((selectedEventType) => {
@@ -1451,9 +1513,9 @@ export default async function MatchDayDetailPage({
     }))
     .sort((firstPlayer, secondPlayer) => secondPlayer.minutesPlayed - firstPlayer.minutesPlayed)
   const teamEventTotalMap = new Map<string, number>()
-  for (const event of standardReportEvents) {
-    const eventKey = getMatchEventIdentity(event)
-    teamEventTotalMap.set(eventKey, (teamEventTotalMap.get(eventKey) ?? 0) + 1)
+  for (const event of standardEventAggregates) {
+    teamEventTotalMap.set(event.key, event.count)
+    eventLabelsByKey.set(event.key, event.label)
   }
   const teamEventTotals = Array.from(teamEventTotalMap.entries()).map(([eventKey, count]) => ({
     key: eventKey,
@@ -1471,7 +1533,8 @@ export default async function MatchDayDetailPage({
     const playerName = event.player
       ? `${event.player.firstName} ${event.player.surname}`
       : 'Unknown player'
-    const eventCountKey = getMatchEventIdentity(event)
+    const eventCountKey = getStandardReportingKey(event.reportingIdentity)
+    if (!eventCountKey) continue
     const currentRow = playerEventCountMap.get(playerId) ?? {
       playerId,
       playerName,
@@ -1504,7 +1567,8 @@ export default async function MatchDayDetailPage({
   const getPlayerEventCount = (playerId: string, eventType: (typeof matchEventTypes)[number]) => {
     const eventCounts = playerEventCountMap.get(playerId)?.eventCounts
     if (!eventCounts) return 0
-    return eventCounts.get(setupEventDefinitionIdsByLegacyType.get(eventType) ?? eventType) ?? eventCounts.get(eventType) ?? 0
+    const standardEventDefinitionId = setupEventDefinitionIdsByLegacyType.get(eventType)
+    return eventCounts.get(standardEventDefinitionId ? `standard-event:${standardEventDefinitionId}` : `standard-event:${eventType}`) ?? eventCounts.get(eventType) ?? 0
   }
   const summaryCsvRows = pitchPlayers.map((player) => {
     const playerEventCounts = playerEventCountMap.get(player.playerId)?.eventCounts
@@ -1530,9 +1594,12 @@ export default async function MatchDayDetailPage({
     }
   })
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
-  const timelineEvents = match.matchEvents.map((event) => ({
+  const timelineEvents = resolvedMatchEvents.map((event) => ({
     id: event.id,
     label: getMatchEventLabel(event),
+    secondaryLabel: event.reportingIdentity.clubIdentity && event.reportingIdentity.standardIdentity
+      ? `${getObservationIdentityLabel(event.reportingIdentity.identityType)} · Recorded standard: ${event.reportingIdentity.standardIdentity.label}`
+      : event.reportingIdentity.clubIdentity ? getObservationIdentityLabel(event.reportingIdentity.identityType) : null,
     half: event.half,
     matchSecond: event.matchSecond,
     playerName: event.player
@@ -1551,7 +1618,7 @@ export default async function MatchDayDetailPage({
     matchType: matchTypeLabel,
     finalScore,
   }
-  const eventCsvRows = standardReportEvents.map((event) => ({
+  const eventCsvRows = resolvedMatchEvents.map((event) => ({
     half: formatHalfLabel(event.half),
     matchTime: formatMatchTime(event.matchSecond),
     playerName: event.player
@@ -1559,10 +1626,25 @@ export default async function MatchDayDetailPage({
       : 'Whole team',
     event: getMatchEventLabel(event),
     scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
+    reportingDimension: event.reportingIdentity.contributesToStandardReporting && event.reportingIdentity.contributesToClubReporting
+      ? 'Standard; Club'
+      : event.reportingIdentity.contributesToClubReporting ? 'Club' : 'Standard',
+    clubTrackingDefinition: event.reportingIdentity.clubIdentity?.label ?? '',
+    clubTrackingDefinitionId: event.reportingIdentity.clubIdentity?.id ?? '',
+    clubTrackingDefinitionKind: event.reportingIdentity.clubIdentity?.kind ?? '',
+    observationIdentityType: getObservationIdentityLabel(event.reportingIdentity.identityType),
+    recordedStandardEvent: event.reportingIdentity.standardIdentity?.type === 'EVENT' ? event.reportingIdentity.standardIdentity.label : '',
+    recordedStandardEventId: event.reportingIdentity.standardIdentity?.type === 'EVENT' ? event.reportingIdentity.standardIdentity.id : '',
+    proposedStandardEvent: event.reportingIdentity.proposedStandardIdentity?.type === 'EVENT' ? event.reportingIdentity.proposedStandardIdentity.label : '',
+    proposedStandardEventId: event.reportingIdentity.proposedStandardIdentity?.type === 'EVENT' ? event.reportingIdentity.proposedStandardIdentity.id : '',
+    mappingStatusAtRecording: event.reportingIdentity.mappingStatusAtRecording ? formatStatus(event.reportingIdentity.mappingStatusAtRecording) : '',
+    mappingRevisionAtRecording: event.reportingIdentity.mappingRevisionAtRecording !== null ? String(event.reportingIdentity.mappingRevisionAtRecording) : '',
+    standardReportingEligible: event.reportingIdentity.contributesToStandardReporting ? 'Yes' : 'No',
+    benchmarkEligible: event.reportingIdentity.benchmarkEligible ? 'Yes' : 'No',
   }))
-  const patternCsvRows = match.patternObservations.filter((observation) => observationContributesToStandardReporting({ clubTrackingDefinitionId: observation.clubTrackingDefinitionId, clubDefinitionKind: observation.clubTrackingDefinition?.kind, mappingStatusAtRecording: observation.clubMappingStatusAtRecording, patternId: observation.patternId })).map((observation) => ({
+  const buildPatternCsvRow = (observation: (typeof resolvedPatternObservations)[number]) => ({
     observationType: 'Tactical pattern',
-    pattern: observation.pattern.name,
+    pattern: observation.reportingIdentity.clubIdentity?.label ?? observation.pattern.name,
     outcome: observation.outcome.label,
     scope: observation.trackingTask.scopeType,
     target: observation.trackingTask.scopeType === 'PLAYER'
@@ -1579,9 +1661,26 @@ export default async function MatchDayDetailPage({
     locationX: observation.x,
     locationY: observation.y,
     reviewStatus: 'ACCEPTED',
-  }))
-  const touchMapEvents = match.matchEvents
-    .filter((event) => (event.eventDefinition?.requiresLocation ?? false) || event.eventType === 'TOUCH')
+    reportingDimension: observation.reportingIdentity.contributesToStandardReporting && observation.reportingIdentity.contributesToClubReporting
+      ? 'Standard; Club'
+      : observation.reportingIdentity.contributesToClubReporting ? 'Club' : 'Standard',
+    clubTrackingDefinition: observation.reportingIdentity.clubIdentity?.label ?? '',
+    clubTrackingDefinitionId: observation.reportingIdentity.clubIdentity?.id ?? '',
+    clubTrackingDefinitionKind: observation.reportingIdentity.clubIdentity?.kind ?? '',
+    observationIdentityType: getObservationIdentityLabel(observation.reportingIdentity.identityType),
+    recordedStandardPattern: observation.reportingIdentity.standardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.standardIdentity.label : '',
+    recordedStandardPatternId: observation.reportingIdentity.standardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.standardIdentity.id : '',
+    proposedStandardPattern: observation.reportingIdentity.proposedStandardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.proposedStandardIdentity.label : '',
+    proposedStandardPatternId: observation.reportingIdentity.proposedStandardIdentity?.type === 'PATTERN' ? observation.reportingIdentity.proposedStandardIdentity.id : '',
+    mappingStatusAtRecording: observation.reportingIdentity.mappingStatusAtRecording ? formatStatus(observation.reportingIdentity.mappingStatusAtRecording) : '',
+    mappingRevisionAtRecording: observation.reportingIdentity.mappingRevisionAtRecording !== null ? String(observation.reportingIdentity.mappingRevisionAtRecording) : '',
+    standardReportingEligible: observation.reportingIdentity.contributesToStandardReporting ? 'Yes' : 'No',
+  })
+  const patternCsvRows = resolvedPatternObservations.map(buildPatternCsvRow)
+  const standardPatternCsvRows = standardPatternObservations.map(buildPatternCsvRow)
+  const showClubTrackingReports = isMatchDayTrackingV2Enabled()
+  const touchMapEvents = resolvedMatchEvents
+    .filter((event) => typeof event.x === 'number' && typeof event.y === 'number' && ((event.eventDefinition?.requiresLocation ?? false) || event.eventType === 'TOUCH' || (showClubTrackingReports && event.clubTrackingDefinitionId)))
     .map((event) => ({
       id: event.id,
       x: event.x,
@@ -1592,6 +1691,10 @@ export default async function MatchDayDetailPage({
       half: formatHalfLabel(event.half),
       minute: Math.floor(event.matchSecond / 60),
       label: getMatchEventLabel(event),
+      identities: showClubTrackingReports ? [
+        event.reportingIdentity.standardIdentity?.type === 'EVENT' ? { type: 'STANDARD_EVENT' as const, eventDefinitionId: event.reportingIdentity.standardIdentity.id, label: event.reportingIdentity.standardIdentity.label } : null,
+        event.reportingIdentity.clubIdentity ? { type: 'CLUB_DEFINITION' as const, clubTrackingDefinitionId: event.reportingIdentity.clubIdentity.id, label: event.reportingIdentity.clubIdentity.label } : null,
+      ].filter((identity): identity is NonNullable<typeof identity> => Boolean(identity)) : undefined,
     }))
   const parentSubmissionRows = match.submittedMatchEvents.map((submission) => {
     const identityLabel = getReviewIdentityLabel({ clubTrackingDefinitionId: submission.clubTrackingDefinitionId, clubDefinitionKind: submission.clubTrackingDefinition?.kind, mappingStatusAtRecording: submission.clubMappingStatusAtRecording })
@@ -1878,6 +1981,11 @@ export default async function MatchDayDetailPage({
               summaryCsvRows={summaryCsvRows}
               eventCsvRows={eventCsvRows}
               patternCsvRows={patternCsvRows}
+              standardPatternRows={standardPatternCsvRows}
+              showClubTracking={showClubTrackingReports}
+              clubEventAggregates={clubEventAggregates}
+              clubPatternAggregates={clubPatternAggregates}
+              mappingCoverageRows={mappingCoverageRows}
             />
           </section>
           <section className="mt-4">

@@ -12,7 +12,20 @@ export type TouchMapEvent = {
   playerName?: string | null
   half?: string | null
   minute?: number | null
+  identities?: TouchMapIdentityOption[]
 }
+
+export type TouchMapIdentityOption =
+  | {
+      type: 'STANDARD_EVENT'
+      eventDefinitionId: string
+      label: string
+    }
+  | {
+      type: 'CLUB_DEFINITION'
+      clubTrackingDefinitionId: string
+      label: string
+    }
 
 type TouchMapProps = {
   events: TouchMapEvent[]
@@ -42,6 +55,16 @@ const getTouchLabel = (event: TouchMapEvent) => {
   return details ? `${eventLabel}: ${details}` : eventLabel
 }
 
+const getIdentityKey = (identity: TouchMapIdentityOption) =>
+  identity.type === 'STANDARD_EVENT'
+    ? `standard-event:${identity.eventDefinitionId}`
+    : `club-definition:${identity.clubTrackingDefinitionId}`
+
+const getIdentityLabel = (identity: TouchMapIdentityOption) =>
+  identity.type === 'STANDARD_EVENT'
+    ? `Standard: ${identity.label}`
+    : `Club: ${identity.label}`
+
 export default function TouchMap({ events }: TouchMapProps) {
   const locatedTouches = events.filter(isLocatedTouch)
   const playerNames = Array.from(
@@ -50,8 +73,19 @@ export default function TouchMap({ events }: TouchMapProps) {
   const eventLabels = Array.from(
     new Set(locatedTouches.map((event) => event.label).filter((label): label is string => Boolean(label)))
   ).sort((firstEvent, secondEvent) => firstEvent.localeCompare(secondEvent))
+  const identityOptions = Array.from(
+    locatedTouches
+      .flatMap((event) => event.identities ?? [])
+      .reduce((options, identity) => {
+        const key = getIdentityKey(identity)
+        if (!options.has(key)) options.set(key, { key, label: getIdentityLabel(identity) })
+        return options
+      }, new Map<string, { key: string; label: string }>())
+      .values()
+  ).sort((firstOption, secondOption) => firstOption.label.localeCompare(secondOption.label))
   const [selectedPlayerName, setSelectedPlayerName] = useState('')
   const [selectedEventLabel, setSelectedEventLabel] = useState('')
+  const [selectedIdentityKey, setSelectedIdentityKey] = useState('')
   const [selectedPeriod, setSelectedPeriod] = useState('')
   const availablePeriods = periodOptions.filter((period) =>
     locatedTouches.some((event) => event.half === period)
@@ -59,9 +93,12 @@ export default function TouchMap({ events }: TouchMapProps) {
   const playerFilteredTouches = selectedPlayerName
     ? locatedTouches.filter((event) => event.playerName === selectedPlayerName)
     : locatedTouches
-  const eventFilteredTouches = selectedEventLabel
-    ? playerFilteredTouches.filter((event) => event.label === selectedEventLabel)
+  const identityFilteredTouches = selectedIdentityKey
+    ? playerFilteredTouches.filter((event) => (event.identities ?? []).some((identity) => getIdentityKey(identity) === selectedIdentityKey))
     : playerFilteredTouches
+  const eventFilteredTouches = selectedEventLabel && !selectedIdentityKey
+    ? identityFilteredTouches.filter((event) => event.label === selectedEventLabel)
+    : identityFilteredTouches
   const visibleTouches = selectedPeriod
     ? eventFilteredTouches.filter((event) => event.half === selectedPeriod)
     : eventFilteredTouches
@@ -102,11 +139,47 @@ export default function TouchMap({ events }: TouchMapProps) {
       </div>
 
       <div className="mb-3 space-y-2">
+        {identityOptions.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedIdentityKey('')}
+              className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
+                selectedIdentityKey === ''
+                  ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              All identities
+            </button>
+            {identityOptions.map((identityOption) => (
+              <button
+                key={identityOption.key}
+                type="button"
+                onClick={() => {
+                  setSelectedIdentityKey(identityOption.key)
+                  setSelectedEventLabel('')
+                }}
+                className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
+                  selectedIdentityKey === identityOption.key
+                    ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {identityOption.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {eventLabels.length > 1 && (
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
               type="button"
-              onClick={() => setSelectedEventLabel('')}
+              onClick={() => {
+                setSelectedEventLabel('')
+                setSelectedIdentityKey('')
+              }}
               className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
                 selectedEventLabel === ''
                   ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
@@ -119,7 +192,10 @@ export default function TouchMap({ events }: TouchMapProps) {
               <button
                 key={eventLabel}
                 type="button"
-                onClick={() => setSelectedEventLabel(eventLabel)}
+                onClick={() => {
+                  setSelectedEventLabel(eventLabel)
+                  setSelectedIdentityKey('')
+                }}
                 className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold sm:text-sm ${
                   selectedEventLabel === eventLabel
                     ? 'border-purple-700 bg-purple-50 text-purple-950 ring-2 ring-purple-200'
