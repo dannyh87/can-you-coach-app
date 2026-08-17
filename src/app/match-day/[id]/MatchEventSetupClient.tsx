@@ -35,9 +35,7 @@ export default function MatchEventSetupClient({
 }: MatchEventSetupClientProps) {
   const router = useRouter()
   const [selectedValues, setSelectedValues] = useState<string[]>(selectedEventDefinitionIds)
-  const [openGroupLabels, setOpenGroupLabels] = useState<string[]>(() =>
-    getDefaultOpenEventGroupLabels(eventOptions, selectedEventDefinitionIds)
-  )
+  const [openGroupLabels, setOpenGroupLabels] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(
@@ -311,14 +309,6 @@ export default function MatchEventSetupClient({
       </button>
     </section>
   )
-}
-
-function getDefaultOpenEventGroupLabels(events: readonly RecordableEventOption[], selectedEventIds: string[]) {
-  const selectedEventIdSet = new Set(selectedEventIds)
-
-  return getEventDisplayGroups([...events])
-    .filter((group) => group.events.some((event) => selectedEventIdSet.has(event.id) || event.enabledByDefault))
-    .map((group) => group.label)
 }
 
 function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGroup[] {

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 
 import Button from '@/components/ui/Button'
@@ -89,6 +90,9 @@ export default function MatchDayWizard({
   const [teamId, setTeamId] = useState(teams[0]?.id ?? '')
   const [curriculumFocus, setCurriculumFocus] = useState<CurriculumFocus>(getDefaultCurriculumFocus(teams[0]?.ageGroup))
   const [curriculumWeekNumber, setCurriculumWeekNumber] = useState(1)
+  const [trackPlayerMinutes, setTrackPlayerMinutesState] = useState(false)
+  const [trackingFocus, setTrackingFocusState] = useState<'TEAM' | 'PLAYERS'>('TEAM')
+  const [trackedPlayerIds, setTrackedPlayerIds] = useState<string[]>([])
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, SquadStatus>>({})
   const [eventSearchTerm, setEventSearchTerm] = useState('')
   const [eventMatchPhaseFilter, setEventMatchPhaseFilter] = useState('ALL')
@@ -132,7 +136,7 @@ export default function MatchDayWizard({
     [scopedEvents, locationTrackingEnabled]
   )
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
-  const totalSteps = 6
+  const totalSteps = 5
   const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
   const substituteCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'SUBSTITUTE').length ?? 0
@@ -145,7 +149,7 @@ export default function MatchDayWizard({
       setError('Add the opposition before continuing.')
       return
     }
-    if (step === 5 && selectedEventDefinitionIds.length === 0) {
+    if (step === 4 && selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
       return
     }
@@ -156,6 +160,18 @@ export default function MatchDayWizard({
   const goBack = () => setStep((currentStep) => Math.max(1, currentStep - 1))
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
+  }
+  const setTrackPlayerMinutes = (enabled: boolean) => {
+    setTrackPlayerMinutesState(enabled)
+    if (!enabled) setPlayerStatuses({})
+  }
+  const setTrackingFocus = (focus: 'TEAM' | 'PLAYERS') => {
+    setTrackingFocusState(focus)
+    if (focus === 'TEAM') setTrackedPlayerIds([])
+  }
+  const toggleTrackedPlayer = (playerId: string) => {
+    setTrackingFocus('PLAYERS')
+    setTrackedPlayerIds((currentIds) => currentIds.includes(playerId) ? currentIds.filter((id) => id !== playerId) : [...currentIds, playerId])
   }
   const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
   const selectCurriculumRecommendation = () => {
@@ -212,6 +228,9 @@ export default function MatchDayWizard({
     formData.set('opposition', opposition)
     formData.set('matchType', matchType)
     formData.set('venue', venue)
+    formData.set('trackPlayerMinutes', trackPlayerMinutes ? 'true' : 'false')
+    formData.set('trackingFocus', trackingFocus)
+    trackedPlayerIds.forEach((playerId) => formData.append('trackedPlayerId', playerId))
     selectedEventDefinitionIds.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
     selectedTeam?.players.forEach((player) => {
       formData.append('playerStatus', `${player.id}:${playerStatuses[player.id] ?? 'NOT_INVOLVED'}`)
@@ -281,6 +300,7 @@ export default function MatchDayWizard({
               onClick={() => {
                 setTeamId(team.id)
                 setCurriculumFocus(getDefaultCurriculumFocus(team.ageGroup))
+                setTrackedPlayerIds([])
                 const validEventIds = new Set(
                   allEvents
                     .filter((event) => event.scope === 'GLOBAL' || event.clubId === team.clubId)
@@ -297,52 +317,55 @@ export default function MatchDayWizard({
 
       {step === 3 && selectedTeam && (
         <div>
-          <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
-            <span className="rounded-full bg-green-100 px-3 py-1">Starters {starterCount}</span>
-            <span className="rounded-full bg-blue-100 px-3 py-1">Subs {substituteCount}</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1">Not involved {selectedTeam.players.length - involvedCount}</span>
+          <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <label className="flex items-start gap-3 text-sm font-bold text-slate-950">
+              <input type="checkbox" checked={trackPlayerMinutes} onChange={(event) => setTrackPlayerMinutes(event.target.checked)} className="mt-1 h-5 w-5" />
+              <span>
+                Track player minutes and substitutions
+                <span className="mt-1 block font-normal leading-6 text-slate-700">Turn this on if you want to record starters, substitutes and how long each player plays.</span>
+              </span>
+            </label>
           </div>
-          <div className="grid gap-2">
-            {selectedTeam.players.map((player) => {
-              const status = playerStatuses[player.id] ?? 'NOT_INVOLVED'
-              return (
-                <article key={player.id} className="rounded-xl border border-slate-200 p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="font-bold text-slate-950">{player.name}</h2>
-                      <p className="mt-1 text-sm text-slate-500">
-                        {player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {player.preferredPosition ?? 'No position'}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{formatStatus(status)}</span>
-                  </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setPlayerStatus(player.id, option)}
-                        className={`rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}
-                      >
-                        {formatStatus(option)}
-                      </button>
-                    ))}
-                  </div>
-                </article>
-              )
-            })}
-          </div>
+          {trackPlayerMinutes ? (
+            <>
+              <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
+                <span className="rounded-full bg-green-100 px-3 py-1">Starters {starterCount}</span>
+                <span className="rounded-full bg-blue-100 px-3 py-1">Subs {substituteCount}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1">Not involved {selectedTeam.players.length - involvedCount}</span>
+              </div>
+              <div className="grid gap-2">
+                {selectedTeam.players.map((player) => {
+                  const status = playerStatuses[player.id] ?? 'NOT_INVOLVED'
+                  return (
+                    <article key={player.id} className="rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h2 className="font-bold text-slate-950">{player.name}</h2>
+                          <p className="mt-1 text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {player.preferredPosition ?? 'No position'}</p>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{formatStatus(status)}</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => <button key={option} type="button" onClick={() => setPlayerStatus(player.id, option)} className={`rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{formatStatus(option)}</button>)}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button type="button" onClick={() => setTrackingFocus('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${trackingFocus === 'TEAM' ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}>Track team events only<span className="mt-1 block text-sm font-normal">No player selection needed.</span></button>
+                <button type="button" onClick={() => setTrackingFocus('PLAYERS')} className={`rounded-xl border p-4 text-left font-bold ${trackingFocus === 'PLAYERS' ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}>Track selected players<span className="mt-1 block text-sm font-normal">Choose only players needed for player-level events.</span></button>
+              </div>
+              {trackingFocus === 'PLAYERS' && <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>}
+            </div>
+          )}
         </div>
       )}
 
       {step === 4 && (
-        <div className="rounded-xl border border-slate-200 p-4">
-          <h2 className="font-bold text-slate-950">Match settings</h2>
-          <p className="mt-2 text-sm text-slate-600">Venue is already set to {venue.toLowerCase()}. Half durations are not configurable in this version, so no admin-style match settings are needed.</p>
-        </div>
-      )}
-
-      {step === 5 && (
         <EventPicker
           agePhase={selectedTeam?.inferredAgePhase ?? 'ALL'}
           teamAgeGroup={selectedTeam?.ageGroup ?? 'Unknown age group'}
@@ -377,7 +400,7 @@ export default function MatchDayWizard({
         />
       )}
 
-      {step === 6 && selectedTeam && (
+      {step === 5 && selectedTeam && (
         <div className="space-y-3">
           {!canCreateMatch && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
@@ -387,7 +410,8 @@ export default function MatchDayWizard({
           <ReviewRow label="Opposition" value={opposition || 'Not set'} />
           <ReviewRow label="Date" value={`${date} at ${kickoffTime}`} />
           <ReviewRow label="Team" value={`${selectedTeam.clubName} / ${selectedTeam.name}`} />
-          <ReviewRow label="Squad" value={`${starterCount} starters, ${substituteCount} substitutes`} />
+          <ReviewRow label="Playing-time tracking" value={trackPlayerMinutes ? 'On' : 'Off'} />
+          <ReviewRow label="Tracking focus" value={trackPlayerMinutes ? `${starterCount} starters, ${substituteCount} substitutes` : trackingFocus === 'PLAYERS' ? `${trackedPlayerIds.length} selected players` : 'Team events only'} />
           <ReviewRow label="Age suggestion" value={agePhaseLabels[selectedTeam.inferredAgePhase]} />
           <ReviewRow label="Events" value={`${selectedEventDefinitionIds.length} selected`} />
         </div>
@@ -410,9 +434,8 @@ export default function MatchDayWizard({
 function getStepTitle(step: number) {
   if (step === 1) return 'Match details'
   if (step === 2) return 'Choose team'
-  if (step === 3) return 'Pick the squad'
-  if (step === 4) return 'Match settings'
-  if (step === 5) return 'Events to track'
+  if (step === 3) return 'Tracking and squad'
+  if (step === 4) return 'Events to record'
   return 'Review and create'
 }
 
@@ -479,6 +502,7 @@ function EventPicker({
   onSelectVisibleEvents: (visibleEventDefinitionIds: string[]) => void
   onClearAll: () => void
 }) {
+  const [eventBrowserOpen, setEventBrowserOpen] = useState(false)
   const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
   const matchPhaseOptions = getUniqueOptions(events, 'matchPhase', 'matchPhaseLabel')
   const categoryOptions = getUniqueOptions(events, 'category', 'categoryLabel')
@@ -499,38 +523,31 @@ function EventPicker({
   })
   const selectedEvents = events.filter((event) => selectedEventDefinitionIdSet.has(event.id))
   const visibleEventIds = visibleEvents.map((event) => event.id)
+  const eventGroups = getTaxonomyEventGroups(visibleEvents)
 
   return (
     <div className="space-y-4">
-      <OptionalTrackingExtras
-        locationTrackingEnabled={locationTrackingEnabled}
-        setLocationTrackingEnabled={setLocationTrackingEnabled}
-        locationTrackingWarning={locationTrackingWarning}
-      />
+      <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <h2 className="text-2xl font-extrabold text-slate-950">What do you want to record in this match?</h2>
+        <p className="mt-2 text-sm text-slate-700">Start with no events selected. Choose a route, then review the compact summary before continuing.</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <Link href="/match-day" className="rounded-xl border border-blue-200 bg-white p-4 text-sm font-bold text-blue-900 hover:bg-blue-50">Copy previous setup<span className="mt-1 block font-normal text-slate-600">Open an existing match and use Copy setup.</span></Link>
+          <button type="button" onClick={onUseCurriculumRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50" disabled={recommendation.matchedEventDefinitionIds.length === 0}>Use recommended events<span className="mt-1 block font-normal text-slate-600">Apply suggestions explicitly.</span></button>
+          <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50">Choose my own events<span className="mt-1 block font-normal text-slate-600">Open the event browser.</span></button>
+        </div>
+      </section>
 
-      <CurriculumRecommendationPanel
-        teamAgeGroup={teamAgeGroup}
-        recommendation={recommendation}
-        curriculumFocus={curriculumFocus}
-        setCurriculumFocus={setCurriculumFocus}
-        curriculumWeekNumber={curriculumWeekNumber}
-        setCurriculumWeekNumber={setCurriculumWeekNumber}
-        onUseCurriculumRecommendation={onUseCurriculumRecommendation}
-      />
-
-      <EventSetupHeader
-        agePhase={agePhase}
-        selectedEventCount={selectedEventCount}
-        visibleEventCount={visibleEvents.length}
-        onSelectRecommendedDefaults={onSelectRecommendedDefaults}
-        onSelectAllVisible={() => onSelectVisibleEvents(visibleEventIds)}
-        onClearAll={onClearAll}
-      />
-
-      {selectedEvents.length > 0 && (
-        <div className="rounded-xl border border-blue-100 bg-white p-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected events</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+      <section className="rounded-xl border border-emerald-100 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected events</p>
+            <h3 className="mt-1 text-xl font-extrabold text-slate-950">{selectedEventCount} event{selectedEventCount === 1 ? '' : 's'} selected</h3>
+            <p className="mt-1 text-sm text-slate-600">Events can be recorded for the team or, when players are selected, against those players.</p>
+          </div>
+          <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Add or change events</button>
+        </div>
+        {selectedEvents.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
             {selectedEvents.map((event) => (
               <button
                 key={event.id}
@@ -542,10 +559,28 @@ function EventPicker({
               </button>
             ))}
           </div>
-        </div>
-      )}
+        ) : <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">Select at least one event to track for this match.</p>}
+      </section>
 
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
+      <details className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+        <summary className="cursor-pointer text-sm font-bold">Advanced options</summary>
+        <div className="mt-3">
+          <OptionalTrackingExtras locationTrackingEnabled={locationTrackingEnabled} setLocationTrackingEnabled={setLocationTrackingEnabled} locationTrackingWarning={locationTrackingWarning} />
+        </div>
+      </details>
+
+      <details className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+        <summary className="cursor-pointer text-sm font-bold">Recommendation details</summary>
+        <div className="mt-3"><CurriculumRecommendationPanel teamAgeGroup={teamAgeGroup} recommendation={recommendation} curriculumFocus={curriculumFocus} setCurriculumFocus={setCurriculumFocus} curriculumWeekNumber={curriculumWeekNumber} setCurriculumWeekNumber={setCurriculumWeekNumber} onUseCurriculumRecommendation={onUseCurriculumRecommendation} /></div>
+      </details>
+
+      {eventBrowserOpen && <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><h3 className="text-xl font-extrabold text-slate-950">Event browser</h3><p className="mt-1 text-sm text-slate-600">Search and expand categories to choose event buttons.</p></div>
+          <button type="button" onClick={() => setEventBrowserOpen(false)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Save selection</button>
+        </div>
+        <EventSetupHeader agePhase={agePhase} selectedEventCount={selectedEventCount} visibleEventCount={visibleEvents.length} onSelectRecommendedDefaults={onSelectRecommendedDefaults} onSelectAllVisible={() => onSelectVisibleEvents(visibleEventIds)} onClearAll={onClearAll} />
+        <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
         <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
           Search events
           <input
@@ -571,14 +606,14 @@ function EventPicker({
           options={fourCornerOptions.map((value) => ({ value, label: formatEventMeta(value) }))}
         />
         {/* TODO: Add tag filters when event tags exist in the data model. */}
-      </div>
+        </div>
 
-      <div className="grid gap-2">
-        {visibleEvents.length === 0 ? (
+        <div className="mt-4 grid gap-2">
+        {eventGroups.length === 0 ? (
           <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
             No events match the current filters.
           </p>
-        ) : visibleEvents.map((event) => {
+        ) : eventGroups.map((group) => <details key={group.label} className="rounded-2xl border bg-white"><summary className="cursor-pointer px-4 py-4 font-extrabold text-slate-950">{group.label} <span className="text-xs font-bold text-slate-500">{group.events.length} events · {group.events.filter((event) => selectedEventDefinitionIdSet.has(event.id)).length} selected</span></summary><div className="grid gap-2 border-t p-3 sm:grid-cols-2">{group.events.map((event) => {
           const selected = selectedEventDefinitionIdSet.has(event.id)
 
           return (
@@ -588,7 +623,7 @@ function EventPicker({
                 selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
               }`}
             >
-              <div className="flex items-start gap-3">
+              <label className="flex min-h-20 cursor-pointer items-start gap-3">
                   <input
                     type="checkbox"
                     checked={selected}
@@ -623,15 +658,16 @@ function EventPicker({
                   </p>
                   <EventGuidanceDetails event={event} />
                 </div>
-              </div>
+              </label>
             </article>
           )
-        })}
-      </div>
+        })}</div></details>)}
+        </div>
 
-      <p className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+      <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
         Showing {visibleEvents.length} of {events.length} live-recordable observation events.
       </p>
+      </section>}
     </div>
   )
 }
@@ -913,6 +949,17 @@ function getUniqueOptions(
     .sort((firstOption, secondOption) => firstOption.label.localeCompare(secondOption.label))
 }
 
+function getTaxonomyEventGroups(events: TaxonomyEvent[]) {
+  const groups = new Map<string, TaxonomyEvent[]>()
+  for (const event of events) {
+    const label = event.categoryLabel || 'Other events'
+    groups.set(label, [...(groups.get(label) ?? []), event])
+  }
+  return Array.from(groups.entries())
+    .map(([label, groupEvents]) => ({ label, events: groupEvents }))
+    .sort((firstGroup, secondGroup) => firstGroup.label.localeCompare(secondGroup.label))
+}
+
 function formatEventMeta(value: string) {
   return value
     .split('_')
@@ -948,8 +995,8 @@ function getWorkloadGuidance(selectedEventCount: number) {
 
 function getStepDescription(step: number) {
   if (step === 3) return 'Keep it quick. You can mark starters, substitutes and players not involved.'
-  if (step === 5) return 'Choose only what helps your coaching observation.'
-  if (step === 6) return 'Check the setup before opening the match workspace.'
+  if (step === 4) return 'Choose only what helps your coaching observation.'
+  if (step === 5) return 'Check the setup before opening the match workspace.'
   return undefined
 }
 

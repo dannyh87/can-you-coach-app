@@ -64,6 +64,7 @@ type MatchEventsClientProps = {
   matchDayId: string
   status: MatchStatus
   players: EventPlayer[]
+  allowTeamEvents: boolean
   events: RecentEvent[]
   eventOptions: readonly EventOption[]
   categoryOptions: readonly EventCategoryOption[]
@@ -93,6 +94,7 @@ export default function MatchEventsClient({
   matchDayId,
   status,
   players,
+  allowTeamEvents,
   events,
   eventOptions,
   categoryOptions,
@@ -114,7 +116,7 @@ export default function MatchEventsClient({
   const [isPlayerPickerOpen, setIsPlayerPickerOpen] = useState(false)
   const [pendingLocationEvent, setPendingLocationEvent] = useState<{
     eventOption: EventOption
-    player: EventPlayer
+    player: EventPlayer | null
   } | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -146,6 +148,7 @@ export default function MatchEventsClient({
   const selectedPlayer = players.find(
     (player) => player.matchDayPlayerId === effectiveSelectedPlayerId
   )
+  const selectedTargetLabel = selectedPlayer ? formatPlayerName(selectedPlayer) : allowTeamEvents ? 'Whole team' : 'Select player'
   const selectedEvent = eventOptions.find(
     (eventOption) => getEventOptionKey(eventOption) === effectiveSelectedEventKey
   )
@@ -168,28 +171,28 @@ export default function MatchEventsClient({
   }
 
   const recordEvent = async (eventOption: EventOption | undefined, player: EventPlayer | undefined) => {
-    if (!canRecord || pendingAction || pendingLocationEvent || !player || !eventOption) return
+    if (!canRecord || pendingAction || pendingLocationEvent || (!player && !allowTeamEvents) || !eventOption) return
 
     if (eventOption.requiresLocation) {
       setMessage(null)
       setError(null)
-      setPendingLocationEvent({ eventOption, player })
+      setPendingLocationEvent({ eventOption, player: player ?? null })
       return
     }
 
-    setPendingAction(getPendingEventKey(eventOption, player.matchDayPlayerId))
+    setPendingAction(player ? getPendingEventKey(eventOption, player.matchDayPlayerId) : getEventOptionKey(eventOption))
     setMessage(null)
     setError(null)
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    formData.set('matchDayPlayerId', player.matchDayPlayerId)
+    if (player) formData.set('matchDayPlayerId', player.matchDayPlayerId)
     appendEventFields(formData, eventOption)
 
     const result = await recordMatchEventAction(formData)
 
     if (result.ok) {
-      setMessage(`${eventOption.label} recorded for ${formatPlayerName(player)}.`)
+      setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
       router.refresh()
     } else {
       setError(result.reason)
@@ -202,7 +205,7 @@ export default function MatchEventsClient({
     if (!pendingLocationEvent || pendingAction) return
 
     const { eventOption, player } = pendingLocationEvent
-    const pendingKey = getPendingEventKey(eventOption, player.matchDayPlayerId)
+    const pendingKey = player ? getPendingEventKey(eventOption, player.matchDayPlayerId) : getEventOptionKey(eventOption)
 
     setPendingAction(pendingKey)
     setMessage(null)
@@ -210,7 +213,7 @@ export default function MatchEventsClient({
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    formData.set('matchDayPlayerId', player.matchDayPlayerId)
+    if (player) formData.set('matchDayPlayerId', player.matchDayPlayerId)
     appendEventFields(formData, eventOption)
     formData.set('x', String(location.x))
     formData.set('y', String(location.y))
@@ -218,7 +221,7 @@ export default function MatchEventsClient({
     const result = await recordMatchEventAction(formData)
 
     if (result.ok) {
-      setMessage(`${eventOption.label} recorded for ${formatPlayerName(player)}.`)
+      setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
       setPendingLocationEvent(null)
       router.refresh()
     } else {
@@ -259,7 +262,7 @@ export default function MatchEventsClient({
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-wide text-blue-700">Events</p>
               <p className="break-words text-sm font-extrabold leading-tight text-slate-950">
-                {selectedPlayer ? formatPlayerName(selectedPlayer) : 'Select player'}
+                {selectedTargetLabel}
               </p>
             </div>
             <button
@@ -320,7 +323,7 @@ export default function MatchEventsClient({
         </p>
       )}
 
-      {canRecord && players.length === 0 && (
+      {canRecord && players.length === 0 && !allowTeamEvents && (
         <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <p className="font-bold">No players are available for event recording yet.</p>
           <p className="mt-1">
@@ -335,7 +338,7 @@ export default function MatchEventsClient({
         </div>
       )}
 
-      {canRecord && players.length > 0 && (
+      {canRecord && (players.length > 0 || allowTeamEvents) && (
         <div className="mt-2 space-y-2 pb-20 sm:pb-3">
           {eventOptions.length === 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -399,7 +402,7 @@ export default function MatchEventsClient({
                         type="button"
                         onClick={() => recordEvent(eventOption, selectedPlayer)}
                         className="min-h-14 min-w-0 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center text-xs font-black leading-tight text-slate-950 shadow-sm disabled:opacity-50 sm:text-sm"
-                        disabled={!selectedPlayer || Boolean(pendingAction)}
+                        disabled={(!selectedPlayer && !allowTeamEvents) || Boolean(pendingAction)}
                       >
                         <span className="block break-words">{pendingAction === pendingKey ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className="mt-1 block text-[10px] font-bold uppercase text-emerald-700">Location</span>}
@@ -434,7 +437,7 @@ export default function MatchEventsClient({
                             ? 'border-blue-700 bg-blue-700 text-white shadow-sm'
                             : 'border-slate-200 bg-white text-gray-900 shadow-sm'
                         }`}
-                        disabled={!selectedPlayer || Boolean(pendingAction)}
+                        disabled={(!selectedPlayer && !allowTeamEvents) || Boolean(pendingAction)}
                       >
                         <span className="block break-words">{pendingAction === (selectedPlayer ? getPendingEventKey(eventOption, selectedPlayer.matchDayPlayerId) : eventOptionKey) ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className={`mt-1 block text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}>Location</span>}
@@ -444,9 +447,9 @@ export default function MatchEventsClient({
                 </div>
               </div>
 
-              {selectedEvent && selectedPlayer && (
+              {selectedEvent && (selectedPlayer || allowTeamEvents) && (
                 <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900">
-                  {selectedEvent.label} selected for {formatPlayerName(selectedPlayer)}.
+                  {selectedEvent.label} selected for {selectedPlayer ? formatPlayerName(selectedPlayer) : 'Whole team'}.
                 </p>
               )}
             </>

@@ -337,6 +337,14 @@ async function duplicateMatchDaySetup(formData: FormData) {
       matchType: sourceMatch.matchType,
       venue: sourceMatch.venue,
       status: 'DRAFT',
+      ownScore: 0,
+      oppositionScore: 0,
+      trackPlayerMinutes: sourceMatch.trackPlayerMinutes,
+      firstHalfStartedAt: null,
+      firstHalfEndedAt: null,
+      secondHalfStartedAt: null,
+      secondHalfEndedAt: null,
+      completedAt: null,
       matchDayEventTypes: {
         create: copiedEventTypes,
       },
@@ -361,6 +369,9 @@ async function setupMatchSquad(formData: FormData): Promise<SquadActionResult> {
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Squad can only be changed before the match starts.' }
+  }
+  if (!match.trackPlayerMinutes) {
+    await prisma.matchDay.update({ where: { id: match.id }, data: { trackPlayerMinutes: true } })
   }
 
   const activePlayers = await prisma.player.findMany({
@@ -418,6 +429,9 @@ async function updateMatchSquadPlayer(
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Squad can only be changed before the match starts.' }
+  }
+  if (!match.trackPlayerMinutes) {
+    await prisma.matchDay.update({ where: { id: match.id }, data: { trackPlayerMinutes: true } })
   }
 
   const player = await prisma.player.findFirst({
@@ -486,6 +500,7 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
   'use server'
 
   const matchDayId = getTextValue(formData, 'matchDayId')
+  const trackingFocus = getTextValue(formData, 'trackingFocus') === 'PLAYERS' ? 'PLAYERS' : 'TEAM'
   const trackedMatchDayPlayerIds = new Set(
     formData
       .getAll('trackedMatchDayPlayerId')
@@ -500,6 +515,27 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Tracking focus can only be changed before the match starts.' }
+  }
+
+  if (!match.trackPlayerMinutes) {
+    const trackedPlayerIds = new Set(
+      formData
+        .getAll('trackedPlayerId')
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+    const activePlayers = await prisma.player.findMany({ where: { teamId: match.teamId, isActive: true }, select: { id: true, squadNumber: true } })
+    const validPlayerIds = new Set(activePlayers.map((player) => player.id))
+    if ([...trackedPlayerIds].some((playerId) => !validPlayerIds.has(playerId))) return { ok: false, reason: 'One or more selected players are not active for this match team.' }
+    await prisma.$transaction([
+      prisma.matchDayPlayer.deleteMany({ where: { matchDayId: match.id } }),
+      ...(trackingFocus === 'PLAYERS'
+        ? activePlayers.filter((player) => trackedPlayerIds.has(player.id)).map((player) => prisma.matchDayPlayer.create({ data: { matchDayId: match.id, playerId: player.id, squadStatus: 'NOT_INVOLVED', shirtNumberSnapshot: player.squadNumber, isTracked: true } }))
+        : []),
+    ])
+    revalidatePath(`/match-day/${match.id}`)
+    return { ok: true }
   }
 
   const squadPlayers = await prisma.matchDayPlayer.findMany({
@@ -631,7 +667,7 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
         firstHalfStartedAt: now,
       },
     }),
-    ...starters.map((starter) =>
+    ...(match.trackPlayerMinutes ? starters.map((starter) =>
       prisma.matchPlayerStint.create({
         data: {
           matchDayId: match.id,
@@ -642,7 +678,7 @@ async function startMatch(formData: FormData): Promise<MatchActionResult> {
           startMatchSecond: 0,
         },
       })
-    ),
+    ) : []),
   ])
 
   await sendCompletedMatchReportEmail(match.id)
@@ -947,8 +983,8 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const x = getOptionalPitchCoordinate(formData, 'x')
   const y = getOptionalPitchCoordinate(formData, 'y')
 
-  if (!matchDayId || !matchDayPlayerId || (!eventDefinitionId && !eventType)) {
-    return { ok: false, reason: 'Match, player and event are required.' }
+  if (!matchDayId || (!eventDefinitionId && !eventType)) {
+    return { ok: false, reason: 'Match and event are required.' }
   }
 
   if (!x.ok || !y.ok) {
@@ -1000,34 +1036,33 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'No half timer is currently running.' }
   }
 
-  const squadPlayer = await prisma.matchDayPlayer.findFirst({
-    where: {
+  const squadPlayer = matchDayPlayerId ? await prisma.matchDayPlayer.findFirst({
+    where: match.trackPlayerMinutes ? {
       id: matchDayPlayerId,
       matchDayId: match.id,
-      matchDay: {
-        teamId: match.teamId,
-      },
-      squadStatus: {
-        not: 'NOT_INVOLVED',
-      },
+      matchDay: { teamId: match.teamId },
+      squadStatus: { not: 'NOT_INVOLVED' },
+      isTracked: true,
+    } : {
+      id: matchDayPlayerId,
+      matchDayId: match.id,
+      matchDay: { teamId: match.teamId },
       isTracked: true,
     },
-  })
+  }) : null
 
-  if (!squadPlayer) {
+  if (match.trackPlayerMinutes) {
+    if (!squadPlayer) return { ok: false, reason: 'Player is not available for event tracking in this match.' }
+    const openStint = await prisma.matchPlayerStint.findFirst({
+      where: {
+        matchDayId: match.id,
+        matchDayPlayerId: squadPlayer.id,
+        endedAt: null,
+      },
+    })
+    if (!openStint) return { ok: false, reason: 'Events can only be recorded for players on the pitch.' }
+  } else if (matchDayPlayerId && !squadPlayer) {
     return { ok: false, reason: 'Player is not available for event tracking in this match.' }
-  }
-
-  const openStint = await prisma.matchPlayerStint.findFirst({
-    where: {
-      matchDayId: match.id,
-      matchDayPlayerId: squadPlayer.id,
-      endedAt: null,
-    },
-  })
-
-  if (!openStint) {
-    return { ok: false, reason: 'Events can only be recorded for players on the pitch.' }
   }
 
   const now = new Date()
@@ -1036,7 +1071,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   await prisma.matchEvent.create({
     data: {
       matchDayId: match.id,
-      playerId: squadPlayer.playerId,
+      playerId: squadPlayer?.playerId ?? null,
       eventDefinitionId: selectedEvent.eventDefinitionId,
       // Temporary fallback for older UI paths until all clients submit eventDefinitionId.
       eventType: selectedEvent.eventDefinition?.legacyEventType ?? selectedEvent.eventType ?? null,
@@ -1336,13 +1371,14 @@ export default async function MatchDayDetailPage({
     }
   })
   const trackingPlayers = match.matchDayPlayers
-    .filter((squadPlayer) => squadPlayer.squadStatus !== 'NOT_INVOLVED')
+    .filter((squadPlayer) => match.trackPlayerMinutes ? squadPlayer.squadStatus !== 'NOT_INVOLVED' : squadPlayer.isTracked)
     .map((squadPlayer) => ({
       matchDayPlayerId: squadPlayer.id,
+      playerId: squadPlayer.playerId,
       firstName: squadPlayer.player.firstName,
       surname: squadPlayer.player.surname,
       squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
-      squadStatus: squadPlayer.squadStatus as 'STARTER' | 'SUBSTITUTE',
+      squadStatus: (squadPlayer.squadStatus === 'SUBSTITUTE' ? 'SUBSTITUTE' : 'STARTER') as 'STARTER' | 'SUBSTITUTE',
       isTracked: squadPlayer.isTracked,
     }))
   const matchElapsedMilliseconds = getMatchElapsedMilliseconds(match)
@@ -1368,15 +1404,25 @@ export default async function MatchDayDetailPage({
         totalMilliseconds,
       }
     })
-  const eventPlayers = pitchPlayers
-    .filter((player) => player.isOnPitch && player.isTracked)
-    .map((player) => ({
-      matchDayPlayerId: player.matchDayPlayerId,
-      playerId: player.playerId,
-      firstName: player.firstName,
-      surname: player.surname,
-      squadNumber: player.squadNumber,
-    }))
+  const eventPlayers = match.trackPlayerMinutes
+    ? pitchPlayers
+        .filter((player) => player.isOnPitch && player.isTracked)
+        .map((player) => ({
+          matchDayPlayerId: player.matchDayPlayerId,
+          playerId: player.playerId,
+          firstName: player.firstName,
+          surname: player.surname,
+          squadNumber: player.squadNumber,
+        }))
+    : match.matchDayPlayers
+        .filter((player) => player.isTracked)
+        .map((squadPlayer) => ({
+          matchDayPlayerId: squadPlayer.id,
+          playerId: squadPlayer.playerId,
+          firstName: squadPlayer.player.firstName,
+          surname: squadPlayer.player.surname,
+          squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
+        }))
   const recentEvents = match.matchEvents.map((event) => ({
       id: event.id,
       label: getMatchEventLabel(event),
@@ -1413,22 +1459,7 @@ export default async function MatchDayDetailPage({
           isActive: eventDefinition?.isActive ?? true,
         }]
       })
-    : setupEventOptions.map((eventDefinition) => ({
-        matchDayEventTypeId: eventDefinition.id,
-        eventDefinitionId: eventDefinition.id,
-        legacyEventType: eventDefinition.legacyEventType,
-        label: eventDefinition.label,
-        category: getMatchDayEventCategoryFallback({
-          legacyEventType: eventDefinition.legacyEventType,
-          matchPhase: eventDefinition.matchPhase,
-        }),
-        categoryLabel: eventDefinition.categoryLabel,
-        subcategory: eventDefinition.subcategory,
-        description: eventDefinition.description,
-        videoUrl: eventDefinition.videoUrl,
-        requiresLocation: eventDefinition.requiresLocation,
-        isActive: eventDefinition.isActive,
-      }))
+    : []
   const selectedEventCategoryOptions = Array.from(
     selectedEventOptions.reduce((categoryMap, eventOption) => {
       categoryMap.set(eventOption.category, eventOption.categoryLabel)
@@ -1675,6 +1706,15 @@ export default async function MatchDayDetailPage({
   const copiedSetupNotice = setupCopied === '1'
   const showTrackingAssignmentStatus = isMatchDayTrackingV2Enabled() && canManageThisMatch
   const trackingAssignmentStatus = showTrackingAssignmentStatus ? await getAssignmentStatusForMatch(match.id) : []
+  const selectedTrackedPlayerNames = match.matchDayPlayers
+    .filter((player) => player.isTracked)
+    .map((player) => `${player.player.firstName} ${player.player.surname}`)
+    .sort((firstName, secondName) => firstName.localeCompare(secondName))
+  const trackingFocusLabel = match.trackPlayerMinutes
+    ? 'Full squad'
+    : selectedTrackedPlayerNames.length > 0
+      ? 'Selected players'
+      : 'Team'
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -1731,41 +1771,16 @@ export default async function MatchDayDetailPage({
 
       {match.status === 'DRAFT' && (
         <>
-          {canManageThisMatch && (
-            <DraftMatchDetailsForm
-              matchDayId={match.id}
-              kickoffAt={match.kickoffAt}
-              opposition={match.opposition}
-              matchType={match.matchType}
-              venue={match.venue}
-              updateDraftMatchDetailsAction={updateDraftMatchDetails}
-            />
-          )}
-          <section className="mt-6 grid gap-4 lg:grid-cols-2">
-            <MatchSquadClient
-              matchDayId={match.id}
-              isReadOnly={false}
-              hasSquadRecords={match.matchDayPlayers.length > 0}
-              players={squadPlayers}
-              setupMatchSquadAction={setupMatchSquad}
-              updateMatchSquadPlayerAction={updateMatchSquadPlayer}
-            />
-            <MatchTrackingFocusClient
-              key={trackingPlayers
-                .map((player) => `${player.matchDayPlayerId}:${player.isTracked}`)
-                .join('|')}
-              matchDayId={match.id}
-              players={trackingPlayers}
-              updateMatchTrackingFocusAction={updateMatchTrackingFocus}
-            />
-            <MatchEventSetupClient
-              matchDayId={match.id}
-              eventOptions={setupEventOptions}
-              categoryOptions={setupEventCategoryOptions}
-              selectedEventDefinitionIds={selectedEventDefinitionIdsForSetup}
-              updateMatchEventSetupAction={updateMatchEventSetup}
-            />
-          </section>
+          <DraftSetupSummary
+            dateLabel={formatDate(match.kickoffAt)}
+            kickoffLabel={formatTimeInput(match.kickoffAt)}
+            venueLabel={venueLabel}
+            statusLabel={statusLabel}
+            trackPlayerMinutes={match.trackPlayerMinutes}
+            trackingFocusLabel={trackingFocusLabel}
+            selectedPlayerNames={selectedTrackedPlayerNames}
+            selectedEventLabels={selectedEventLabels}
+          />
           <MatchControlClient
             matchDayId={match.id}
             teamName={match.team.name}
@@ -1785,6 +1800,26 @@ export default async function MatchDayDetailPage({
             completeMatchAction={completeMatch}
             updateMatchScoreAction={updateMatchScore}
           />
+          {canManageThisMatch && (
+            <section className="mt-6 grid gap-4">
+              <details className="rounded-2xl border bg-white p-4">
+                <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit match details</summary>
+                <DraftMatchDetailsForm matchDayId={match.id} kickoffAt={match.kickoffAt} opposition={match.opposition} matchType={match.matchType} venue={match.venue} updateDraftMatchDetailsAction={updateDraftMatchDetails} />
+              </details>
+              <details className="rounded-2xl border bg-white p-4">
+                <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit squad and players</summary>
+                <div className="mt-4"><MatchSquadClient matchDayId={match.id} isReadOnly={false} hasSquadRecords={match.matchDayPlayers.length > 0} players={squadPlayers} setupMatchSquadAction={setupMatchSquad} updateMatchSquadPlayerAction={updateMatchSquadPlayer} /></div>
+              </details>
+              <details className="rounded-2xl border bg-white p-4">
+                <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit tracking focus</summary>
+                <div className="mt-4"><MatchTrackingFocusClient key={trackingPlayers.map((player) => `${player.matchDayPlayerId}:${player.isTracked}`).join('|')} matchDayId={match.id} players={trackingPlayers} teamPlayers={squadPlayers} trackPlayerMinutes={match.trackPlayerMinutes} updateMatchTrackingFocusAction={updateMatchTrackingFocus} /></div>
+              </details>
+              <details className="rounded-2xl border bg-white p-4">
+                <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit events</summary>
+                <div className="mt-4"><MatchEventSetupClient matchDayId={match.id} eventOptions={setupEventOptions} categoryOptions={setupEventCategoryOptions} selectedEventDefinitionIds={selectedEventDefinitionIdsForSetup} updateMatchEventSetupAction={updateMatchEventSetup} /></div>
+              </details>
+            </section>
+          )}
           {showTrackingAssignmentStatus && (
             <section className="mt-6">
               <TrackingAssignmentsPanel tasks={trackingAssignmentStatus} cancelAssignmentAction={cancelCoachTrackingAssignment} />
@@ -1832,21 +1867,24 @@ export default async function MatchDayDetailPage({
 
       {match.status !== 'COMPLETED' && match.status !== 'DRAFT' && (
         <section className="mt-2 rounded-xl bg-gray-50 p-1 sm:mt-4 sm:p-3">
-          <div className="grid gap-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-            <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
-              <MatchPitchClient
-                matchDayId={match.id}
-                status={match.status}
-                matchElapsedMilliseconds={matchElapsedMilliseconds}
-                players={pitchPlayers}
-                togglePlayerOnPitchAction={togglePlayerOnPitch}
-              />
-            </div>
+          <div className={match.trackPlayerMinutes ? 'grid gap-2 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]' : 'grid gap-2'}>
+            {match.trackPlayerMinutes && (
+              <div id="players-and-substitutions" className="order-2 scroll-mt-24 xl:order-1">
+                <MatchPitchClient
+                  matchDayId={match.id}
+                  status={match.status}
+                  matchElapsedMilliseconds={matchElapsedMilliseconds}
+                  players={pitchPlayers}
+                  togglePlayerOnPitchAction={togglePlayerOnPitch}
+                />
+              </div>
+            )}
             <div id="event-recording" className="order-1 scroll-mt-24 xl:order-2">
               <MatchEventsClient
                 matchDayId={match.id}
                 status={match.status}
                 players={eventPlayers}
+                allowTeamEvents={!match.trackPlayerMinutes}
                 events={recentEventsForRecording}
                 eventOptions={selectedEventOptions}
                 categoryOptions={selectedEventCategoryOptions}
@@ -1940,6 +1978,56 @@ export default async function MatchDayDetailPage({
       )}
     </main>
   )
+}
+
+function DraftSetupSummary({
+  dateLabel,
+  kickoffLabel,
+  venueLabel,
+  statusLabel,
+  trackPlayerMinutes,
+  trackingFocusLabel,
+  selectedPlayerNames,
+  selectedEventLabels,
+}: {
+  dateLabel: string
+  kickoffLabel: string
+  venueLabel: string
+  statusLabel: string
+  trackPlayerMinutes: boolean
+  trackingFocusLabel: string
+  selectedPlayerNames: string[]
+  selectedEventLabels: string[]
+}) {
+  return (
+    <section className="mt-6 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-slate-950">Draft setup overview</h2>
+          <p className="mt-1 text-sm text-slate-600">Review the match setup, then start when ready. Edit sections are closed until needed.</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{statusLabel}</span>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Fixture" value={`${dateLabel} · ${kickoffLabel}`} />
+        <SummaryCard label="Venue" value={venueLabel} />
+        <SummaryCard label="Playing-time tracking" value={trackPlayerMinutes ? 'On' : 'Off'} />
+        <SummaryCard label="Tracking focus" value={trackingFocusLabel} />
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <ChipPanel title="Selected players" emptyText={trackPlayerMinutes ? 'Full squad setup controls starters and substitutes.' : 'Team events only. No player selection required.'} values={selectedPlayerNames} />
+        <ChipPanel title={`${selectedEventLabels.length} selected event${selectedEventLabels.length === 1 ? '' : 's'}`} emptyText="No events selected yet." values={selectedEventLabels} />
+      </div>
+    </section>
+  )
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border bg-slate-50 p-3"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 font-extrabold text-slate-950">{value}</p></div>
+}
+
+function ChipPanel({ title, emptyText, values }: { title: string; emptyText: string; values: string[] }) {
+  return <div className="rounded-xl border p-3"><p className="text-sm font-bold text-slate-950">{title}</p>{values.length === 0 ? <p className="mt-2 text-sm text-slate-500">{emptyText}</p> : <div className="mt-2 flex flex-wrap gap-2">{values.map((value) => <span key={value} className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-900">{value}</span>)}</div>}</div>
 }
 
 function TrackingAssignmentsPanel({ tasks, cancelAssignmentAction }: { tasks: Awaited<ReturnType<typeof getAssignmentStatusForMatch>>; cancelAssignmentAction: (formData: FormData) => Promise<void> }) {

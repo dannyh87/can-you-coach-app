@@ -5,6 +5,7 @@ import MatchDayWizard from '@/app/match-day/new/MatchDayWizard'
 import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
+import { buildClassicMatchDayPlayerCreates } from '@/lib/matchDayClassicSetup'
 import {
   getActiveRecordableEventDefinitions,
   getMatchDayEventCategoryFallback,
@@ -37,6 +38,13 @@ async function createMatchFromWizard(formData: FormData) {
   const opposition = getTextValue(formData, 'opposition')
   const matchType = getTextValue(formData, 'matchType')
   const venue = getTextValue(formData, 'venue')
+  const trackPlayerMinutes = getTextValue(formData, 'trackPlayerMinutes') === 'true'
+  const trackingFocus = getTextValue(formData, 'trackingFocus') === 'PLAYERS' ? 'PLAYERS' : 'TEAM'
+  const trackedPlayerIds = new Set(formData
+    .getAll('trackedPlayerId')
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean))
   const selectedEventDefinitionIds = Array.from(new Set(formData
     .getAll('eventDefinitionId')
     .filter((value): value is string => typeof value === 'string')
@@ -84,6 +92,14 @@ async function createMatchFromWizard(formData: FormData) {
     return { ok: false as const, reason: 'One or more selected events are no longer available.' }
   }
 
+  const matchDayPlayerCreates = buildClassicMatchDayPlayerCreates({
+    activePlayers,
+    trackPlayerMinutes,
+    trackingFocus,
+    trackedPlayerIds,
+    playerStatusById,
+  })
+
   const match = await prisma.matchDay.create({
     data: {
       teamId,
@@ -91,16 +107,9 @@ async function createMatchFromWizard(formData: FormData) {
       opposition,
       matchType: matchType as (typeof matchTypes)[number],
       venue: venue as (typeof matchVenues)[number],
+      trackPlayerMinutes,
       matchDayPlayers: {
-        create: activePlayers.map((player) => {
-          const squadStatus = playerStatusById.get(player.id) ?? 'NOT_INVOLVED'
-          return {
-            playerId: player.id,
-            squadStatus,
-            shirtNumberSnapshot: player.squadNumber,
-            isTracked: squadStatus !== 'NOT_INVOLVED',
-          }
-        }),
+        create: matchDayPlayerCreates,
       },
       matchDayEventTypes: {
         create: selectedEvents.map((eventDefinition) => ({
