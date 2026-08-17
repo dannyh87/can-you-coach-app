@@ -339,6 +339,7 @@ async function duplicateMatchDaySetup(formData: FormData) {
       status: 'DRAFT',
       ownScore: 0,
       oppositionScore: 0,
+      eventTrackingScope: sourceMatch.eventTrackingScope,
       trackPlayerMinutes: sourceMatch.trackPlayerMinutes,
       firstHalfStartedAt: null,
       firstHalfEndedAt: null,
@@ -500,7 +501,7 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
   'use server'
 
   const matchDayId = getTextValue(formData, 'matchDayId')
-  const trackingFocus = getTextValue(formData, 'trackingFocus') === 'PLAYERS' ? 'PLAYERS' : 'TEAM'
+  const eventTrackingScope = getTextValue(formData, 'eventTrackingScope') === 'PLAYER' ? 'PLAYER' : 'TEAM'
   const trackedMatchDayPlayerIds = new Set(
     formData
       .getAll('trackedMatchDayPlayerId')
@@ -528,9 +529,11 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
     const activePlayers = await prisma.player.findMany({ where: { teamId: match.teamId, isActive: true }, select: { id: true, squadNumber: true } })
     const validPlayerIds = new Set(activePlayers.map((player) => player.id))
     if ([...trackedPlayerIds].some((playerId) => !validPlayerIds.has(playerId))) return { ok: false, reason: 'One or more selected players are not active for this match team.' }
+    if (eventTrackingScope === 'PLAYER' && trackedPlayerIds.size === 0) return { ok: false, reason: 'Select at least one player to track.' }
     await prisma.$transaction([
+      prisma.matchDay.update({ where: { id: match.id }, data: { eventTrackingScope } }),
       prisma.matchDayPlayer.deleteMany({ where: { matchDayId: match.id } }),
-      ...(trackingFocus === 'PLAYERS'
+      ...(eventTrackingScope === 'PLAYER'
         ? activePlayers.filter((player) => trackedPlayerIds.has(player.id)).map((player) => prisma.matchDayPlayer.create({ data: { matchDayId: match.id, playerId: player.id, squadStatus: 'NOT_INVOLVED', shirtNumberSnapshot: player.squadNumber, isTracked: true } }))
         : []),
     ])
@@ -543,18 +546,20 @@ async function updateMatchTrackingFocus(formData: FormData): Promise<MatchAction
     select: { id: true, squadStatus: true },
   })
 
-  await prisma.$transaction(
-    squadPlayers.map((squadPlayer) =>
+  await prisma.$transaction([
+    prisma.matchDay.update({ where: { id: match.id }, data: { eventTrackingScope } }),
+    ...squadPlayers.map((squadPlayer) =>
       prisma.matchDayPlayer.update({
         where: { id: squadPlayer.id },
         data: {
           isTracked:
+            eventTrackingScope === 'PLAYER' &&
             squadPlayer.squadStatus !== 'NOT_INVOLVED' &&
             trackedMatchDayPlayerIds.has(squadPlayer.id),
         },
       })
-    )
-  )
+    ),
+  ])
 
   revalidatePath(`/match-day/${match.id}`)
   return { ok: true }
@@ -1051,7 +1056,9 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     },
   }) : null
 
-  if (match.trackPlayerMinutes) {
+  if (match.eventTrackingScope === 'TEAM') {
+    if (matchDayPlayerId) return { ok: false, reason: 'Team event tracking does not accept a player target.' }
+  } else if (match.trackPlayerMinutes) {
     if (!squadPlayer) return { ok: false, reason: 'Player is not available for event tracking in this match.' }
     const openStint = await prisma.matchPlayerStint.findFirst({
       where: {
@@ -1061,8 +1068,9 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
       },
     })
     if (!openStint) return { ok: false, reason: 'Events can only be recorded for players on the pitch.' }
-  } else if (matchDayPlayerId && !squadPlayer) {
-    return { ok: false, reason: 'Player is not available for event tracking in this match.' }
+  } else {
+    if (!matchDayPlayerId) return { ok: false, reason: 'Select a player for player event tracking.' }
+    if (!squadPlayer) return { ok: false, reason: 'Player is not available for event tracking in this match.' }
   }
 
   const now = new Date()
@@ -1404,25 +1412,27 @@ export default async function MatchDayDetailPage({
         totalMilliseconds,
       }
     })
-  const eventPlayers = match.trackPlayerMinutes
-    ? pitchPlayers
-        .filter((player) => player.isOnPitch && player.isTracked)
-        .map((player) => ({
-          matchDayPlayerId: player.matchDayPlayerId,
-          playerId: player.playerId,
-          firstName: player.firstName,
-          surname: player.surname,
-          squadNumber: player.squadNumber,
-        }))
-    : match.matchDayPlayers
-        .filter((player) => player.isTracked)
-        .map((squadPlayer) => ({
-          matchDayPlayerId: squadPlayer.id,
-          playerId: squadPlayer.playerId,
-          firstName: squadPlayer.player.firstName,
-          surname: squadPlayer.player.surname,
-          squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
-        }))
+  const eventPlayers = match.eventTrackingScope === 'TEAM'
+    ? []
+    : match.trackPlayerMinutes
+      ? pitchPlayers
+          .filter((player) => player.isOnPitch && player.isTracked)
+          .map((player) => ({
+            matchDayPlayerId: player.matchDayPlayerId,
+            playerId: player.playerId,
+            firstName: player.firstName,
+            surname: player.surname,
+            squadNumber: player.squadNumber,
+          }))
+      : match.matchDayPlayers
+          .filter((player) => player.isTracked)
+          .map((squadPlayer) => ({
+            matchDayPlayerId: squadPlayer.id,
+            playerId: squadPlayer.playerId,
+            firstName: squadPlayer.player.firstName,
+            surname: squadPlayer.player.surname,
+            squadNumber: squadPlayer.shirtNumberSnapshot ?? squadPlayer.player.squadNumber,
+          }))
   const recentEvents = match.matchEvents.map((event) => ({
       id: event.id,
       label: getMatchEventLabel(event),
@@ -1707,14 +1717,10 @@ export default async function MatchDayDetailPage({
   const showTrackingAssignmentStatus = isMatchDayTrackingV2Enabled() && canManageThisMatch
   const trackingAssignmentStatus = showTrackingAssignmentStatus ? await getAssignmentStatusForMatch(match.id) : []
   const selectedTrackedPlayerNames = match.matchDayPlayers
-    .filter((player) => player.isTracked)
+    .filter((player) => match.eventTrackingScope === 'PLAYER' && player.isTracked)
     .map((player) => `${player.player.firstName} ${player.player.surname}`)
     .sort((firstName, secondName) => firstName.localeCompare(secondName))
-  const trackingFocusLabel = match.trackPlayerMinutes
-    ? 'Full squad'
-    : selectedTrackedPlayerNames.length > 0
-      ? 'Selected players'
-      : 'Team'
+  const trackingFocusLabel = match.eventTrackingScope === 'PLAYER' ? 'Selected players' : 'Team events'
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -1812,7 +1818,7 @@ export default async function MatchDayDetailPage({
               </details>
               <details className="rounded-2xl border bg-white p-4">
                 <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit tracking focus</summary>
-                <div className="mt-4"><MatchTrackingFocusClient key={trackingPlayers.map((player) => `${player.matchDayPlayerId}:${player.isTracked}`).join('|')} matchDayId={match.id} players={trackingPlayers} teamPlayers={squadPlayers} trackPlayerMinutes={match.trackPlayerMinutes} updateMatchTrackingFocusAction={updateMatchTrackingFocus} /></div>
+                <div className="mt-4"><MatchTrackingFocusClient key={`${match.eventTrackingScope}:${trackingPlayers.map((player) => `${player.matchDayPlayerId}:${player.isTracked}`).join('|')}`} matchDayId={match.id} players={trackingPlayers} teamPlayers={squadPlayers} eventTrackingScope={match.eventTrackingScope} trackPlayerMinutes={match.trackPlayerMinutes} updateMatchTrackingFocusAction={updateMatchTrackingFocus} /></div>
               </details>
               <details className="rounded-2xl border bg-white p-4">
                 <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit events</summary>
@@ -1884,7 +1890,7 @@ export default async function MatchDayDetailPage({
                 matchDayId={match.id}
                 status={match.status}
                 players={eventPlayers}
-                allowTeamEvents={!match.trackPlayerMinutes}
+                allowTeamEvents={match.eventTrackingScope === 'TEAM'}
                 events={recentEventsForRecording}
                 eventOptions={selectedEventOptions}
                 categoryOptions={selectedEventCategoryOptions}

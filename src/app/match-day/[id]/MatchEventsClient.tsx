@@ -265,14 +265,16 @@ export default function MatchEventsClient({
                 {selectedTargetLabel}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsPlayerPickerOpen(true)}
-              className="min-h-10 shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 disabled:opacity-50"
-              disabled={players.length === 0 || Boolean(pendingAction)}
-            >
-              Change player
-            </button>
+            {!allowTeamEvents && (
+              <button
+                type="button"
+                onClick={() => setIsPlayerPickerOpen(true)}
+                className="min-h-10 shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800 disabled:opacity-50"
+                disabled={players.length === 0 || Boolean(pendingAction)}
+              >
+                Change player
+              </button>
+            )}
           </div>
           <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
             <button

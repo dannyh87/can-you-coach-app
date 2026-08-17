@@ -39,7 +39,7 @@ async function createMatchFromWizard(formData: FormData) {
   const matchType = getTextValue(formData, 'matchType')
   const venue = getTextValue(formData, 'venue')
   const trackPlayerMinutes = getTextValue(formData, 'trackPlayerMinutes') === 'true'
-  const trackingFocus = getTextValue(formData, 'trackingFocus') === 'PLAYERS' ? 'PLAYERS' : 'TEAM'
+  const eventTrackingScope = getTextValue(formData, 'eventTrackingScope') === 'PLAYER' ? 'PLAYER' : 'TEAM'
   const trackedPlayerIds = new Set(formData
     .getAll('trackedPlayerId')
     .filter((value): value is string => typeof value === 'string')
@@ -95,10 +95,13 @@ async function createMatchFromWizard(formData: FormData) {
   const matchDayPlayerCreates = buildClassicMatchDayPlayerCreates({
     activePlayers,
     trackPlayerMinutes,
-    trackingFocus,
+    eventTrackingScope,
     trackedPlayerIds,
     playerStatusById,
   })
+  if (!trackPlayerMinutes && eventTrackingScope === 'PLAYER' && matchDayPlayerCreates.length === 0) {
+    return { ok: false as const, reason: 'Select at least one player to track.' }
+  }
 
   const match = await prisma.matchDay.create({
     data: {
@@ -107,6 +110,7 @@ async function createMatchFromWizard(formData: FormData) {
       opposition,
       matchType: matchType as (typeof matchTypes)[number],
       venue: venue as (typeof matchVenues)[number],
+      eventTrackingScope,
       trackPlayerMinutes,
       matchDayPlayers: {
         create: matchDayPlayerCreates,

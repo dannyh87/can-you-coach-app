@@ -1,5 +1,5 @@
 export type ClassicSquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
-export type ClassicTrackingFocus = 'TEAM' | 'PLAYERS'
+export type ClassicEventTrackingScope = 'TEAM' | 'PLAYER'
 
 export type ClassicActivePlayer = {
   id: string
@@ -9,13 +9,13 @@ export type ClassicActivePlayer = {
 export function buildClassicMatchDayPlayerCreates({
   activePlayers,
   trackPlayerMinutes,
-  trackingFocus,
+  eventTrackingScope,
   trackedPlayerIds,
   playerStatusById,
 }: {
   activePlayers: ClassicActivePlayer[]
   trackPlayerMinutes: boolean
-  trackingFocus: ClassicTrackingFocus
+  eventTrackingScope: ClassicEventTrackingScope
   trackedPlayerIds: Set<string>
   playerStatusById: Map<string, ClassicSquadStatus>
 }) {
@@ -31,7 +31,7 @@ export function buildClassicMatchDayPlayerCreates({
     })
   }
 
-  if (trackingFocus === 'TEAM') return []
+  if (eventTrackingScope === 'TEAM') return []
 
   return activePlayers
     .filter((player) => trackedPlayerIds.has(player.id))
@@ -45,35 +45,40 @@ export function buildClassicMatchDayPlayerCreates({
 
 export function applyClassicTrackingModeSwitch({
   trackPlayerMinutes,
-  trackingFocus,
+  eventTrackingScope,
   trackedPlayerIds,
   playerStatuses,
 }: {
   trackPlayerMinutes: boolean
-  trackingFocus: ClassicTrackingFocus
+  eventTrackingScope: ClassicEventTrackingScope
   trackedPlayerIds: string[]
   playerStatuses: Record<string, ClassicSquadStatus>
 }) {
   return {
     trackPlayerMinutes,
-    trackingFocus,
-    trackedPlayerIds: trackingFocus === 'TEAM' ? [] : trackedPlayerIds,
+    eventTrackingScope,
+    trackedPlayerIds: eventTrackingScope === 'TEAM' ? [] : trackedPlayerIds,
     playerStatuses: trackPlayerMinutes ? playerStatuses : {},
   }
 }
 
 export function getClassicRecordingRequirement({
+  eventTrackingScope,
   trackPlayerMinutes,
   hasPlayerTarget,
   playerIsValidTarget,
   playerHasOpenStint,
 }: {
+  eventTrackingScope: ClassicEventTrackingScope
   trackPlayerMinutes: boolean
   hasPlayerTarget: boolean
   playerIsValidTarget: boolean
   playerHasOpenStint: boolean
 }) {
-  if (!hasPlayerTarget) return { ok: true as const, playerIdRequired: false }
+  if (eventTrackingScope === 'TEAM') return hasPlayerTarget
+    ? { ok: false as const, reason: 'Team event tracking does not accept a player target.' }
+    : { ok: true as const, playerIdRequired: false }
+  if (!hasPlayerTarget) return { ok: false as const, reason: 'Select a player for player event tracking.' }
   if (!playerIsValidTarget) return { ok: false as const, reason: 'Player is not available for event tracking in this match.' }
   if (trackPlayerMinutes && !playerHasOpenStint) return { ok: false as const, reason: 'Events can only be recorded for players on the pitch.' }
   return { ok: true as const, playerIdRequired: true }

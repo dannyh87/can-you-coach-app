@@ -91,7 +91,7 @@ export default function MatchDayWizard({
   const [curriculumFocus, setCurriculumFocus] = useState<CurriculumFocus>(getDefaultCurriculumFocus(teams[0]?.ageGroup))
   const [curriculumWeekNumber, setCurriculumWeekNumber] = useState(1)
   const [trackPlayerMinutes, setTrackPlayerMinutesState] = useState(false)
-  const [trackingFocus, setTrackingFocusState] = useState<'TEAM' | 'PLAYERS'>('TEAM')
+  const [eventTrackingScope, setEventTrackingScopeState] = useState<'TEAM' | 'PLAYER'>('TEAM')
   const [trackedPlayerIds, setTrackedPlayerIds] = useState<string[]>([])
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, SquadStatus>>({})
   const [eventSearchTerm, setEventSearchTerm] = useState('')
@@ -149,6 +149,10 @@ export default function MatchDayWizard({
       setError('Add the opposition before continuing.')
       return
     }
+    if (step === 3 && !trackPlayerMinutes && eventTrackingScope === 'PLAYER' && trackedPlayerIds.length === 0) {
+      setError('Select at least one player to track.')
+      return
+    }
     if (step === 4 && selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
       return
@@ -165,12 +169,12 @@ export default function MatchDayWizard({
     setTrackPlayerMinutesState(enabled)
     if (!enabled) setPlayerStatuses({})
   }
-  const setTrackingFocus = (focus: 'TEAM' | 'PLAYERS') => {
-    setTrackingFocusState(focus)
-    if (focus === 'TEAM') setTrackedPlayerIds([])
+  const setEventTrackingScope = (scope: 'TEAM' | 'PLAYER') => {
+    setEventTrackingScopeState(scope)
+    if (scope === 'TEAM') setTrackedPlayerIds([])
   }
   const toggleTrackedPlayer = (playerId: string) => {
-    setTrackingFocus('PLAYERS')
+    setEventTrackingScope('PLAYER')
     setTrackedPlayerIds((currentIds) => currentIds.includes(playerId) ? currentIds.filter((id) => id !== playerId) : [...currentIds, playerId])
   }
   const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
@@ -228,8 +232,8 @@ export default function MatchDayWizard({
     formData.set('opposition', opposition)
     formData.set('matchType', matchType)
     formData.set('venue', venue)
+    formData.set('eventTrackingScope', eventTrackingScope)
     formData.set('trackPlayerMinutes', trackPlayerMinutes ? 'true' : 'false')
-    formData.set('trackingFocus', trackingFocus)
     trackedPlayerIds.forEach((playerId) => formData.append('trackedPlayerId', playerId))
     selectedEventDefinitionIds.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
     selectedTeam?.players.forEach((player) => {
@@ -317,6 +321,13 @@ export default function MatchDayWizard({
 
       {step === 3 && selectedTeam && (
         <div>
+          <section className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <h2 className="text-lg font-extrabold text-slate-950">What are you tracking?</h2>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <button type="button" onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Team events<span className="mt-1 block text-sm font-normal">Record totals and observations for the team without selecting a player.</span></button>
+              <button type="button" onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Selected players<span className="mt-1 block text-sm font-normal">Attribute recorded events to one or more selected players.</span></button>
+            </div>
+          </section>
           <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
             <label className="flex items-start gap-3 text-sm font-bold text-slate-950">
               <input type="checkbox" checked={trackPlayerMinutes} onChange={(event) => setTrackPlayerMinutes(event.target.checked)} className="mt-1 h-5 w-5" />
@@ -328,6 +339,7 @@ export default function MatchDayWizard({
           </div>
           {trackPlayerMinutes ? (
             <>
+              {eventTrackingScope === 'PLAYER' && <p className="mb-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-900">Player event tracking uses the squad players marked as tracked for events. You can refine those on the draft setup page before kick-off.</p>}
               <div className="mb-3 flex flex-wrap gap-2 text-xs font-bold text-slate-700">
                 <span className="rounded-full bg-green-100 px-3 py-1">Starters {starterCount}</span>
                 <span className="rounded-full bg-blue-100 px-3 py-1">Subs {substituteCount}</span>
@@ -353,14 +365,12 @@ export default function MatchDayWizard({
                 })}
               </div>
             </>
-          ) : (
+          ) : eventTrackingScope === 'PLAYER' ? (
             <div className="space-y-4">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button type="button" onClick={() => setTrackingFocus('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${trackingFocus === 'TEAM' ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}>Track team events only<span className="mt-1 block text-sm font-normal">No player selection needed.</span></button>
-                <button type="button" onClick={() => setTrackingFocus('PLAYERS')} className={`rounded-xl border p-4 text-left font-bold ${trackingFocus === 'PLAYERS' ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}>Track selected players<span className="mt-1 block text-sm font-normal">Choose only players needed for player-level events.</span></button>
-              </div>
-              {trackingFocus === 'PLAYERS' && <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>}
+              <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>
             </div>
+          ) : (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No player selection is needed for team event tracking.</p>
           )}
         </div>
       )}
@@ -410,8 +420,9 @@ export default function MatchDayWizard({
           <ReviewRow label="Opposition" value={opposition || 'Not set'} />
           <ReviewRow label="Date" value={`${date} at ${kickoffTime}`} />
           <ReviewRow label="Team" value={`${selectedTeam.clubName} / ${selectedTeam.name}`} />
+          <ReviewRow label="What you are tracking" value={eventTrackingScope === 'PLAYER' ? 'Selected players' : 'Team events'} />
           <ReviewRow label="Playing-time tracking" value={trackPlayerMinutes ? 'On' : 'Off'} />
-          <ReviewRow label="Tracking focus" value={trackPlayerMinutes ? `${starterCount} starters, ${substituteCount} substitutes` : trackingFocus === 'PLAYERS' ? `${trackedPlayerIds.length} selected players` : 'Team events only'} />
+          <ReviewRow label="Players" value={trackPlayerMinutes ? `${starterCount} starters, ${substituteCount} substitutes` : eventTrackingScope === 'PLAYER' ? `${trackedPlayerIds.length} selected players` : 'Not required'} />
           <ReviewRow label="Age suggestion" value={agePhaseLabels[selectedTeam.inferredAgePhase]} />
           <ReviewRow label="Events" value={`${selectedEventDefinitionIds.length} selected`} />
         </div>

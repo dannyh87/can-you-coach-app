@@ -219,6 +219,7 @@ model MatchDay {
   ownScore             Int                                   @default(0)
   oppositionScore      Int                                   @default(0)
   status               MatchStatus                           @default(DRAFT)
+  eventTrackingScope   MatchDayEventTrackingScope            @default(TEAM)
   trackPlayerMinutes   Boolean                               @default(false)
   firstHalfStartedAt   DateTime?
   firstHalfEndedAt     DateTime?
@@ -1133,6 +1134,11 @@ enum MatchStatus {
   IN_PROGRESS
   HALF_TIME
   COMPLETED
+}
+
+enum MatchDayEventTrackingScope {
+  TEAM
+  PLAYER
 }
 
 enum MatchSquadStatus {
