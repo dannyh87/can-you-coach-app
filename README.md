@@ -70,6 +70,8 @@ NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
 NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
 ```
 
+`APP_URL` is optional locally. Invitation links fall back to `http://localhost:3000` in development and tests.
+
 Apply migrations, seed default data, and generate Prisma Client:
 
 ```bash
@@ -105,6 +107,7 @@ Use a managed Postgres provider and set these environment variables:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
+APP_URL="https://canyoucoach.app"
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_..."
 CLERK_SECRET_KEY="sk_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
@@ -113,6 +116,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
 SUPER_ADMIN_EMAILS="admin@example.com"
 ENABLE_ROLE_TESTER="false"
 ```
+
+`APP_URL` must be the canonical production origin. It is used for generated invitation links and must not include paths, query strings, fragments, or credentials.
 
 `DIRECT_URL` is not currently required because `prisma/schema.prisma` only uses `env("DATABASE_URL")`.
 

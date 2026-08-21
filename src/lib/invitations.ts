@@ -2,6 +2,7 @@ import crypto from 'crypto'
 
 import { Prisma, type InvitationType } from '@prisma/client'
 
+import { getAppUrl } from '@/lib/appUrl'
 import { isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
@@ -24,8 +25,8 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
 export const getInvitationAcceptPath = (token: string) => `/invite/accept?token=${encodeURIComponent(token)}`
 
-export function getInvitationAcceptUrl(token: string, origin: string) {
-  return new URL(getInvitationAcceptPath(token), origin).toString()
+export function getInvitationAcceptUrl(token: string) {
+  return getAppUrl(getInvitationAcceptPath(token))
 }
 
 function generateInvitationToken() {
@@ -124,14 +125,12 @@ export async function createTeamInvitation({
   email,
   invitedByUserId,
   type,
-  origin,
 }: {
   clubId: string
   teamId: string
   email: string
   invitedByUserId: string
   type: 'TEAM_COACH' | 'TEAM_ASSISTANT'
-  origin: string
 }): Promise<InvitationActionResult> {
   const displayEmail = email.trim()
   const normalizedEmail = normalizeEmail(email)
@@ -155,7 +154,7 @@ export async function createTeamInvitation({
     invitedByUserId,
   })
 
-  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token, origin) }
+  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token) }
 }
 
 export async function createPlayerInvitation({
@@ -164,14 +163,12 @@ export async function createPlayerInvitation({
   email,
   invitedByUserId,
   type,
-  origin,
 }: {
   clubId: string
   playerId: string
   email: string
   invitedByUserId: string
   type: 'PLAYER_PARENT' | 'PLAYER_SPECTATOR'
-  origin: string
 }): Promise<InvitationActionResult> {
   const displayEmail = email.trim()
   const normalizedEmail = normalizeEmail(email)
@@ -195,7 +192,7 @@ export async function createPlayerInvitation({
     invitedByUserId,
   })
 
-  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token, origin) }
+  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token) }
 }
 
 export async function revokeInvitation({

@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
-import { headers } from 'next/headers'
 
 import ClubAccessClient from '@/app/club-setup/access/ClubAccessClient'
 import PageHeader from '@/components/ui/PageHeader'
@@ -34,11 +33,6 @@ const getSelectedIds = (formData: FormData, key: string) =>
       .filter(Boolean)
   ))
 
-const getRequestOrigin = async () => {
-  const requestHeaders = await headers()
-  return requestHeaders.get('origin') ?? 'http://localhost:3000'
-}
-
 async function requireClubOwner(userId: string, clubId: string): Promise<AccessActionResult> {
   if (!clubId) return { ok: false, reason: 'Missing club.' }
   if (!(await isOwnerForClub(userId, clubId))) {
@@ -71,7 +65,6 @@ async function addStaffAccess(formData: FormData): Promise<AccessActionResult> {
     email,
     invitedByUserId: currentUser.id,
     type: role === 'COACH' ? 'TEAM_COACH' : 'TEAM_ASSISTANT',
-    origin: await getRequestOrigin(),
   })
   if (!result.ok) return result
 
@@ -162,7 +155,6 @@ async function addParentAccess(formData: FormData): Promise<AccessActionResult> 
     email,
     invitedByUserId: currentUser.id,
     type: type as (typeof playerInviteTypes)[number],
-    origin: await getRequestOrigin(),
   })
   if (!result.ok) return result
 
@@ -206,7 +198,6 @@ async function removeParentAccess(formData: FormData): Promise<AccessActionResul
 export default async function ClubAccessPage() {
   const user = await getCurrentUser()
   if (!isClerkEnabled()) await ensureDefaultClub(user.id)
-  const origin = await getRequestOrigin()
 
   const clubs = await prisma.club.findMany({
     where: {
@@ -310,7 +301,7 @@ export default async function ClubAccessPage() {
             email: invitation.email,
             type: invitation.type,
             expiresAt: invitation.expiresAt.toISOString(),
-            inviteLink: getInvitationAcceptUrl(invitation.token, origin),
+            inviteLink: getInvitationAcceptUrl(invitation.token),
             targetName: invitation.team
               ? invitation.team.name
               : invitation.player
