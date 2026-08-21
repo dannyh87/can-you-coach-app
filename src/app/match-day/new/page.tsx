@@ -57,6 +57,20 @@ async function createMatchFromWizard(formData: FormData) {
       const [playerId, squadStatus] = value.split(':')
       return { playerId, squadStatus }
     })
+  const startingPositions = new Map(formData
+    .getAll('startingPosition')
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => {
+      const [playerId, ...positionParts] = value.split(':')
+      return [playerId, positionParts.join(':').trim()]
+    }))
+  const trackedStateById = new Map(formData
+    .getAll('playerTracked')
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => {
+      const [playerId, isTracked] = value.split(':')
+      return [playerId, isTracked === 'true']
+    }))
 
   if (!teamId || !date || !kickoffTime || !opposition || !matchType || !venue) {
     return { ok: false as const, reason: 'Match details, team and venue are required.' }
@@ -98,6 +112,8 @@ async function createMatchFromWizard(formData: FormData) {
     eventTrackingScope,
     trackedPlayerIds,
     playerStatusById,
+    startingPositionById: startingPositions,
+    isTrackedById: trackedStateById,
   })
   if (!trackPlayerMinutes && eventTrackingScope === 'PLAYER' && matchDayPlayerCreates.length === 0) {
     return { ok: false as const, reason: 'Select at least one player to track.' }
@@ -128,6 +144,32 @@ async function createMatchFromWizard(formData: FormData) {
   redirect(`/match-day/${match.id}`)
 }
 
+async function validateTemplateForTeam(formData: FormData) {
+  'use server'
+
+  const user = await getCurrentUser()
+  const templateId = getTextValue(formData, 'templateId')
+  const teamId = getTextValue(formData, 'teamId')
+  if (!templateId || !teamId) return { ok: false as const, reason: 'Template and team are required.' }
+  if (!(await canManageTeamData(user.id, teamId))) return { ok: false as const, reason: 'You cannot create a match for this team.' }
+
+  const template = await prisma.matchDay.findFirst({
+    where: { id: templateId, teamId },
+    select: { id: true },
+  })
+  if (!template) return { ok: false as const, reason: 'That previous setup is not available for the selected team.' }
+  if (!(await canManageMatchDayForTemplate(user.id, templateId))) {
+    return { ok: false as const, reason: 'That previous setup is not available to you.' }
+  }
+
+  return { ok: true as const }
+}
+
+async function canManageMatchDayForTemplate(userId: string, matchDayId: string) {
+  const match = await prisma.matchDay.findUnique({ where: { id: matchDayId }, select: { teamId: true } })
+  return Boolean(match && await canManageTeamData(userId, match.teamId))
+}
+
 export default async function NewMatchDayPage() {
   const user = await getCurrentUser()
   const manageableTeamIds = await getManageableTeamIds(user.id)
@@ -147,6 +189,16 @@ export default async function NewMatchDayPage() {
     clubIds: Array.from(new Set(teams.map((team) => team.clubId))),
   })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
+  const previousMatches = await prisma.matchDay.findMany({
+    where: { teamId: { in: teams.map((team) => team.id) } },
+    include: {
+      team: { include: { club: true } },
+      matchDayEventTypes: { include: { eventDefinition: true }, orderBy: { createdAt: 'asc' } },
+      matchDayPlayers: { include: { player: true }, orderBy: { createdAt: 'asc' } },
+    },
+    orderBy: { kickoffAt: 'desc' },
+    take: 24,
+  })
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -193,6 +245,30 @@ export default async function NewMatchDayPage() {
             enabledByDefault: event.enabledByDefault,
           })),
         }))}
+        previousSetups={previousMatches.map((match) => ({
+          id: match.id,
+          teamId: match.teamId,
+          teamName: match.team.name,
+          clubName: match.team.club.name,
+          opposition: match.opposition,
+          kickoffAt: match.kickoffAt.toISOString(),
+          eventTrackingScope: match.eventTrackingScope,
+          trackPlayerMinutes: match.trackPlayerMinutes,
+          locationTrackingEnabled: match.matchDayEventTypes.some((eventType) => eventType.eventDefinition?.requiresLocation),
+          selectedEventDefinitionIds: match.matchDayEventTypes
+            .map((eventType) => eventType.eventDefinitionId)
+            .filter((eventDefinitionId): eventDefinitionId is string => Boolean(eventDefinitionId)),
+          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.eventType ?? 'Legacy event'),
+          players: match.matchDayPlayers.map((matchPlayer) => ({
+            playerId: matchPlayer.playerId,
+            playerName: `${matchPlayer.player.firstName} ${matchPlayer.player.surname}`,
+            squadStatus: matchPlayer.squadStatus,
+            startingPosition: matchPlayer.startingPosition,
+            shirtNumberSnapshot: matchPlayer.shirtNumberSnapshot,
+            isTracked: matchPlayer.isTracked,
+          })),
+        }))}
+        validateTemplateAction={validateTemplateForTeam}
         createAction={createMatchFromWizard}
       />
     </main>

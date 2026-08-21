@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 
+import Button from '@/components/ui/Button'
+
 type MatchStatus = 'DRAFT' | 'IN_PROGRESS' | 'HALF_TIME' | 'COMPLETED'
 type MatchVenue = 'HOME' | 'AWAY' | 'NEUTRAL'
 
@@ -134,16 +136,20 @@ export default function MatchControlClient({
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
 
-    const result = await action(formData)
+    try {
+      const result = await action(formData)
 
-    if (result.ok) {
-      setMessage(label === 'Full time' ? 'Match completed.' : `${label} saved.`)
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage(label === 'Full time' ? 'Match completed.' : `${label} saved.`)
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   const updateScore = async ({
@@ -165,16 +171,20 @@ export default function MatchControlClient({
     formData.set('ownScore', String(nextOwnScore))
     formData.set('oppositionScore', String(nextOppositionScore))
 
-    const result = await updateMatchScoreAction(formData)
+    try {
+      const result = await updateMatchScoreAction(formData)
 
-    if (result.ok) {
-      setMessage('Score updated.')
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage('Score updated.')
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   const lifecycleButton = (() => {
@@ -204,14 +214,18 @@ export default function MatchControlClient({
             </p>
           </div>
           {lifecycleButton && (
-            <button
+            <Button
               type="button"
               onClick={() => runLifecycleAction(lifecycleButton)}
-              className="w-full rounded-lg bg-green-700 px-5 py-4 text-lg font-bold text-white disabled:opacity-50 sm:w-auto"
+              variant="success"
+              size="lg"
+              className="w-full sm:w-auto"
               disabled={Boolean(pendingAction)}
+              isPending={pendingAction === lifecycleButton.label}
+              pendingText="Starting match..."
             >
-              {pendingAction === lifecycleButton.label ? 'Starting...' : lifecycleButton.label}
-            </button>
+              {lifecycleButton.label}
+            </Button>
           )}
         </div>
 
@@ -238,14 +252,18 @@ export default function MatchControlClient({
         <CompactStat label="Period" value={currentHalfLabel} />
         <div className="grid gap-2">
           {lifecycleButton && !isCompleted && (
-            <button
+            <Button
               type="button"
               onClick={() => runLifecycleAction(lifecycleButton)}
-              className="min-h-11 rounded-lg bg-green-700 px-2 py-2 text-sm font-black leading-tight text-white disabled:opacity-50"
+              variant="success"
+              size="sm"
+              className="min-h-11 leading-tight"
               disabled={Boolean(pendingAction)}
+              isPending={pendingAction === lifecycleButton.label}
+              pendingText="Saving..."
             >
-              {pendingAction === lifecycleButton.label ? 'Saving...' : lifecycleButton.label}
-            </button>
+              {lifecycleButton.label}
+            </Button>
           )}
           {liveDetailsControl}
         </div>
@@ -273,6 +291,7 @@ export default function MatchControlClient({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <GoalButton
             label="Our goal"
+            isPending={pendingAction === 'score'}
             disabled={Boolean(pendingAction) || !canUpdateScore}
             onClick={() =>
               updateScore({
@@ -283,6 +302,7 @@ export default function MatchControlClient({
           />
           <GoalButton
             label="Opp goal"
+            isPending={pendingAction === 'score'}
             disabled={Boolean(pendingAction) || !canUpdateScore}
             onClick={() =>
               updateScore({
@@ -293,6 +313,7 @@ export default function MatchControlClient({
           />
           <UndoGoalButton
             label="Undo ours"
+            isPending={pendingAction === 'score'}
             disabled={Boolean(pendingAction) || !canUpdateScore || ownScore <= 0}
             onClick={() =>
               updateScore({
@@ -303,6 +324,7 @@ export default function MatchControlClient({
           />
           <UndoGoalButton
             label="Undo opp"
+            isPending={pendingAction === 'score'}
             disabled={Boolean(pendingAction) || !canUpdateScore || oppositionScore <= 0}
             onClick={() =>
               updateScore({
@@ -344,42 +366,52 @@ function CompactStat({
 
 function GoalButton({
   label,
+  isPending,
   disabled,
   onClick,
 }: {
   label: string
+  isPending: boolean
   disabled: boolean
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className="rounded-lg bg-green-700 px-3 py-3 text-sm font-extrabold text-white disabled:opacity-50 sm:px-4 sm:py-4 sm:text-base"
+      variant="success"
+      className="px-3 py-3 text-sm font-extrabold sm:px-4 sm:py-4 sm:text-base"
       disabled={disabled}
+      isPending={isPending}
+      pendingText="Updating score..."
     >
       {label}
-    </button>
+    </Button>
   )
 }
 
 function UndoGoalButton({
   label,
+  isPending,
   disabled,
   onClick,
 }: {
   label: string
+  isPending: boolean
   disabled: boolean
   onClick: () => void
 }) {
   return (
-    <button
+    <Button
       type="button"
       onClick={onClick}
-      className="rounded-lg border bg-white px-3 py-2.5 text-xs font-semibold text-red-700 disabled:opacity-50 sm:px-4 sm:py-3 sm:text-sm"
+      variant="secondary"
+      className="px-3 py-2.5 text-xs font-semibold text-red-700 sm:px-4 sm:py-3 sm:text-sm"
       disabled={disabled}
+      isPending={isPending}
+      pendingText="Updating score..."
     >
       {label}
-    </button>
+    </Button>
   )
 }

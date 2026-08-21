@@ -1,10 +1,11 @@
 'use client'
 
-import Link from 'next/link'
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { RefObject } from 'react'
 
 import Button from '@/components/ui/Button'
 import { fieldClassName } from '@/components/ui/formStyles'
+import ModalShell from '@/components/ui/ModalShell'
 import { WizardActions, WizardOptionCard, WizardShell } from '@/components/ui/Wizard'
 import {
   curriculumFocusOptions,
@@ -13,6 +14,7 @@ import {
   inferMatchFormat,
   type CurriculumFocus,
 } from '@/lib/curriculumRecommendations'
+import { sanitizeClassicTemplateSetup } from '@/lib/matchDayClassicSetup'
 import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
@@ -60,7 +62,30 @@ type MatchPhaseGroup = {
 }
 
 type WizardResult = { ok: false; reason: string } | void
+type TemplateValidationResult = { ok: true } | { ok: false; reason: string }
 type CurriculumRecommendation = ReturnType<typeof getCurriculumRecommendation>
+
+type PreviousSetup = {
+  id: string
+  teamId: string
+  teamName: string
+  clubName: string
+  opposition: string
+  kickoffAt: string
+  eventTrackingScope: 'TEAM' | 'PLAYER'
+  trackPlayerMinutes: boolean
+  locationTrackingEnabled: boolean
+  selectedEventDefinitionIds: string[]
+  eventLabels: string[]
+  players: Array<{
+    playerId: string
+    playerName: string
+    squadStatus: SquadStatus
+    startingPosition: string | null
+    shirtNumberSnapshot: number | null
+    isTracked: boolean
+  }>
+}
 
 const today = () => new Date().toISOString().split('T')[0]
 
@@ -75,10 +100,14 @@ const zeroEventValidationMessage = 'Select at least one event to track for this 
 export default function MatchDayWizard({
   teams,
   matchPhaseGroups,
+  previousSetups,
+  validateTemplateAction,
   createAction,
 }: {
   teams: TeamOption[]
   matchPhaseGroups: MatchPhaseGroup[]
+  previousSetups: PreviousSetup[]
+  validateTemplateAction: (formData: FormData) => Promise<TemplateValidationResult>
   createAction: (formData: FormData) => Promise<WizardResult>
 }) {
   const [step, setStep] = useState(1)
@@ -94,6 +123,8 @@ export default function MatchDayWizard({
   const [eventTrackingScope, setEventTrackingScopeState] = useState<'TEAM' | 'PLAYER'>('TEAM')
   const [trackedPlayerIds, setTrackedPlayerIds] = useState<string[]>([])
   const [playerStatuses, setPlayerStatuses] = useState<Record<string, SquadStatus>>({})
+  const [startingPositions, setStartingPositions] = useState<Record<string, string>>({})
+  const [trackedStateById, setTrackedStateById] = useState<Record<string, boolean>>({})
   const [eventSearchTerm, setEventSearchTerm] = useState('')
   const [eventMatchPhaseFilter, setEventMatchPhaseFilter] = useState('ALL')
   const [eventCategoryFilter, setEventCategoryFilter] = useState('ALL')
@@ -102,8 +133,14 @@ export default function MatchDayWizard({
   const [eventFourCornerFilter, setEventFourCornerFilter] = useState('ALL')
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(false)
   const [locationTrackingWarning, setLocationTrackingWarning] = useState<string | null>(null)
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [templateWarning, setTemplateWarning] = useState<string | null>(null)
+  const [recommendationApplied, setRecommendationApplied] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, setIsPending] = useState(false)
+  const [isTemplatePending, setIsTemplatePending] = useState(false)
+  const eventSelectionRef = useRef<HTMLDivElement>(null)
   const selectedTeam = teams.find((team) => team.id === teamId) ?? teams[0]
   const allEvents = useMemo(
     () => matchPhaseGroups.flatMap((group) => group.events),
@@ -138,6 +175,8 @@ export default function MatchDayWizard({
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const totalSteps = 5
   const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
+  const selectedTeamPreviousSetups = previousSetups.filter((setup) => setup.teamId === selectedTeam?.id)
+  const selectedTemplate = selectedTeamPreviousSetups.find((setup) => setup.id === selectedTemplateId) ?? selectedTeamPreviousSetups[0]
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
   const substituteCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'SUBSTITUTE').length ?? 0
   const involvedCount = starterCount + substituteCount
@@ -155,6 +194,7 @@ export default function MatchDayWizard({
     }
     if (step === 4 && selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
+      eventSelectionRef.current?.focus()
       return
     }
 
@@ -164,6 +204,7 @@ export default function MatchDayWizard({
   const goBack = () => setStep((currentStep) => Math.max(1, currentStep - 1))
   const setPlayerStatus = (playerId: string, squadStatus: SquadStatus) => {
     setPlayerStatuses((currentStatuses) => ({ ...currentStatuses, [playerId]: squadStatus }))
+    setTrackedStateById((currentTracked) => ({ ...currentTracked, [playerId]: squadStatus !== 'NOT_INVOLVED' }))
   }
   const setTrackPlayerMinutes = (enabled: boolean) => {
     setTrackPlayerMinutesState(enabled)
@@ -176,6 +217,7 @@ export default function MatchDayWizard({
   const toggleTrackedPlayer = (playerId: string) => {
     setEventTrackingScope('PLAYER')
     setTrackedPlayerIds((currentIds) => currentIds.includes(playerId) ? currentIds.filter((id) => id !== playerId) : [...currentIds, playerId])
+    setTrackedStateById((currentTracked) => ({ ...currentTracked, [playerId]: !(currentTracked[playerId] ?? trackedPlayerIds.includes(playerId)) }))
   }
   const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
   const selectCurriculumRecommendation = () => {
@@ -184,6 +226,7 @@ export default function MatchDayWizard({
       return event && (locationTrackingEnabled || !event.requiresLocation)
     })
     setSelectedEventDefinitionIds(nextEventDefinitionIds)
+    setRecommendationApplied(true)
   }
   const setLocationTracking = (enabled: boolean) => {
     setLocationTrackingEnabled(enabled)
@@ -218,10 +261,51 @@ export default function MatchDayWizard({
     )
   }
 
+  const applyTemplate = (template: PreviousSetup) => {
+    if (!selectedTeam) return
+
+    const validEventDefinitionIds = new Set(scopedEvents.map((event) => event.id))
+    setIsTemplatePending(true)
+    void (async () => {
+      const formData = new FormData()
+      formData.set('templateId', template.id)
+      formData.set('teamId', selectedTeam.id)
+      try {
+        const result = await validateTemplateAction(formData)
+        if (!result.ok) {
+          setError(result.reason)
+          return
+        }
+
+        const sanitizedTemplate = sanitizeClassicTemplateSetup({
+          template,
+          activePlayers: selectedTeam.players,
+          validEventDefinitionIds,
+        })
+        setEventTrackingScopeState(sanitizedTemplate.eventTrackingScope)
+        setTrackPlayerMinutesState(sanitizedTemplate.trackPlayerMinutes)
+        setLocationTrackingEnabled(sanitizedTemplate.locationTrackingEnabled)
+        setSelectedEventDefinitionIds(sanitizedTemplate.selectedEventDefinitionIds)
+        setTrackedPlayerIds(sanitizedTemplate.trackedPlayerIds)
+        setPlayerStatuses(sanitizedTemplate.playerStatuses)
+        setStartingPositions(sanitizedTemplate.startingPositions)
+        setTrackedStateById(Object.fromEntries(sanitizedTemplate.trackedPlayerIds.map((playerId) => [playerId, true])))
+        setTemplateWarning(getTemplateWarning(sanitizedTemplate.omittedPlayers, sanitizedTemplate.omittedEventDefinitionCount))
+        setError(null)
+        setTemplateModalOpen(false)
+      } catch {
+        setError('Could not apply that setup. Try again.')
+      } finally {
+        setIsTemplatePending(false)
+      }
+    })()
+  }
+
   const createMatch = () => {
     setError(null)
     if (selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
+      eventSelectionRef.current?.focus()
       return
     }
 
@@ -238,12 +322,21 @@ export default function MatchDayWizard({
     selectedEventDefinitionIds.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
     selectedTeam?.players.forEach((player) => {
       formData.append('playerStatus', `${player.id}:${playerStatuses[player.id] ?? 'NOT_INVOLVED'}`)
+      formData.append('startingPosition', `${player.id}:${startingPositions[player.id] ?? ''}`)
+      formData.append('playerTracked', `${player.id}:${trackedStateById[player.id] ?? trackedPlayerIds.includes(player.id) ?? false}`)
     })
 
-    startTransition(async () => {
-      const result = await createAction(formData)
-      if (result && !result.ok) setError(result.reason)
-    })
+    setIsPending(true)
+    void (async () => {
+      try {
+        const result = await createAction(formData)
+        if (result && !result.ok) setError(result.reason)
+      } catch {
+        setError('Could not create the match. Try again.')
+      } finally {
+        setIsPending(false)
+      }
+    })()
   }
 
   if (teams.length === 0) {
@@ -253,6 +346,7 @@ export default function MatchDayWizard({
   return (
     <WizardShell currentStep={step} totalSteps={totalSteps} title={getStepTitle(step)} description={getStepDescription(step)}>
       {error && <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
+      {templateWarning && <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{templateWarning}</p>}
 
       {step === 1 && (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -324,8 +418,8 @@ export default function MatchDayWizard({
           <section className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
             <h2 className="text-lg font-extrabold text-slate-950">What are you tracking?</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <button type="button" onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Team events<span className="mt-1 block text-sm font-normal">Record totals and observations for the team without selecting a player.</span></button>
-              <button type="button" onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Selected players<span className="mt-1 block text-sm font-normal">Attribute recorded events to one or more selected players.</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'TEAM'} onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Team events<span className="mt-1 block text-sm font-normal">Record totals and observations for the team without selecting a player.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'TEAM' ? 'Selected' : 'Not selected'}</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'PLAYER'} onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Selected players<span className="mt-1 block text-sm font-normal">Attribute recorded events to one or more selected players.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'PLAYER' ? 'Selected' : 'Not selected'}</span></button>
             </div>
           </section>
           <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
@@ -358,8 +452,9 @@ export default function MatchDayWizard({
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{formatStatus(status)}</span>
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2">
-                        {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => <button key={option} type="button" onClick={() => setPlayerStatus(player.id, option)} className={`rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{formatStatus(option)}</button>)}
+                        {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => <button key={option} type="button" role="radio" aria-checked={status === option} onClick={() => setPlayerStatus(player.id, option)} className={`rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{formatStatus(option)}{status === option ? ' selected' : ''}</button>)}
                       </div>
+                      {(status === 'STARTER' || status === 'SUBSTITUTE') && <input className={`${fieldClassName} mt-3`} placeholder="Starting position or role" value={startingPositions[player.id] ?? ''} onChange={(event) => setStartingPositions({ ...startingPositions, [player.id]: event.target.value })} />}
                     </article>
                   )
                 })}
@@ -367,7 +462,7 @@ export default function MatchDayWizard({
             </>
           ) : eventTrackingScope === 'PLAYER' ? (
             <div className="space-y-4">
-              <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>
+              <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" aria-pressed={selected} onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>
             </div>
           ) : (
             <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No player selection is needed for team event tracking.</p>
@@ -407,6 +502,10 @@ export default function MatchDayWizard({
           onSelectRecommendedDefaults={selectRecommendedDefaults}
           onSelectVisibleEvents={selectVisibleEvents}
           onClearAll={clearSelectedEvents}
+          onOpenTemplatePicker={() => setTemplateModalOpen(true)}
+          recommendationApplied={recommendationApplied}
+          eventTrackingScope={eventTrackingScope}
+          eventSelectionRef={eventSelectionRef}
         />
       )}
 
@@ -425,6 +524,7 @@ export default function MatchDayWizard({
           <ReviewRow label="Players" value={trackPlayerMinutes ? `${starterCount} starters, ${substituteCount} substitutes` : eventTrackingScope === 'PLAYER' ? `${trackedPlayerIds.length} selected players` : 'Not required'} />
           <ReviewRow label="Age suggestion" value={agePhaseLabels[selectedTeam.inferredAgePhase]} />
           <ReviewRow label="Events" value={`${selectedEventDefinitionIds.length} selected`} />
+          <ReviewRow label="Location tracking" value={locationTrackingEnabled ? 'On' : 'Off'} />
         </div>
       )}
 
@@ -434,10 +534,20 @@ export default function MatchDayWizard({
           {step < totalSteps ? (
             <Button type="button" onClick={goNext}>Next</Button>
           ) : (
-            <Button type="button" onClick={createMatch} disabled={isPending || !canCreateMatch}>{isPending ? 'Creating...' : 'Create Match'}</Button>
+            <Button type="button" onClick={createMatch} disabled={!canCreateMatch} isPending={isPending} pendingText="Creating match...">Create Match</Button>
           )}
         </div>
       </WizardActions>
+      {templateModalOpen && selectedTeam && (
+        <TemplatePickerModal
+          templates={selectedTeamPreviousSetups}
+          selectedTemplate={selectedTemplate}
+          onSelectTemplate={setSelectedTemplateId}
+          onApplyTemplate={applyTemplate}
+          onClose={() => setTemplateModalOpen(false)}
+          isPending={isTemplatePending}
+        />
+      )}
     </WizardShell>
   )
 }
@@ -481,6 +591,10 @@ function EventPicker({
   onSelectRecommendedDefaults,
   onSelectVisibleEvents,
   onClearAll,
+  onOpenTemplatePicker,
+  recommendationApplied,
+  eventTrackingScope,
+  eventSelectionRef,
 }: {
   agePhase: AgePhase
   teamAgeGroup: string
@@ -512,6 +626,10 @@ function EventPicker({
   onSelectRecommendedDefaults: () => void
   onSelectVisibleEvents: (visibleEventDefinitionIds: string[]) => void
   onClearAll: () => void
+  onOpenTemplatePicker: () => void
+  recommendationApplied: boolean
+  eventTrackingScope: 'TEAM' | 'PLAYER'
+  eventSelectionRef: RefObject<HTMLDivElement | null>
 }) {
   const [eventBrowserOpen, setEventBrowserOpen] = useState(false)
   const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
@@ -540,20 +658,20 @@ function EventPicker({
     <div className="space-y-4">
       <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
         <h2 className="text-2xl font-extrabold text-slate-950">What do you want to record in this match?</h2>
-        <p className="mt-2 text-sm text-slate-700">Start with no events selected. Choose a route, then review the compact summary before continuing.</p>
+        <p className="mt-2 text-sm text-slate-700">Choose what you want to track. Add squad details only if you need them.</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <Link href="/match-day" className="rounded-xl border border-blue-200 bg-white p-4 text-sm font-bold text-blue-900 hover:bg-blue-50">Copy previous setup<span className="mt-1 block font-normal text-slate-600">Open an existing match and use Copy setup.</span></Link>
-          <button type="button" onClick={onUseCurriculumRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50" disabled={recommendation.matchedEventDefinitionIds.length === 0}>Use recommended events<span className="mt-1 block font-normal text-slate-600">Apply suggestions explicitly.</span></button>
+          <button type="button" onClick={onOpenTemplatePicker} className="rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 hover:bg-blue-50">Copy previous setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
+          <button type="button" onClick={onUseCurriculumRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50" disabled={recommendation.matchedEventDefinitionIds.length === 0}>Use recommended events<span className="mt-1 block font-normal text-slate-600">{recommendationApplied ? 'Recommended events applied.' : 'Apply suggestions explicitly.'}</span></button>
           <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50">Choose my own events<span className="mt-1 block font-normal text-slate-600">Open the event browser.</span></button>
         </div>
       </section>
 
-      <section className="rounded-xl border border-emerald-100 bg-white p-4">
+      <section ref={eventSelectionRef} tabIndex={-1} className="rounded-xl border border-emerald-100 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected events</p>
             <h3 className="mt-1 text-xl font-extrabold text-slate-950">{selectedEventCount} event{selectedEventCount === 1 ? '' : 's'} selected</h3>
-            <p className="mt-1 text-sm text-slate-600">Events can be recorded for the team or, when players are selected, against those players.</p>
+            <p className="mt-1 text-sm text-slate-600">{eventTrackingScope === 'PLAYER' ? 'These events will be attributed to your selected players.' : 'These events will be recorded for the whole team.'}</p>
           </div>
           <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Add or change events</button>
         </div>
@@ -570,7 +688,7 @@ function EventPicker({
               </button>
             ))}
           </div>
-        ) : <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">Select at least one event to track for this match.</p>}
+        ) : <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">No events selected yet.</p>}
       </section>
 
       <details className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
@@ -1005,10 +1123,89 @@ function getWorkloadGuidance(selectedEventCount: number) {
 }
 
 function getStepDescription(step: number) {
-  if (step === 3) return 'Keep it quick. You can mark starters, substitutes and players not involved.'
+  if (step === 3) return 'Choose what you want to track. Add squad details only if you need them.'
   if (step === 4) return 'Choose only what helps your coaching observation.'
   if (step === 5) return 'Check the setup before opening the match workspace.'
   return undefined
+}
+
+function TemplatePickerModal({
+  templates,
+  selectedTemplate,
+  onSelectTemplate,
+  onApplyTemplate,
+  onClose,
+  isPending,
+}: {
+  templates: PreviousSetup[]
+  selectedTemplate: PreviousSetup | undefined
+  onSelectTemplate: (templateId: string) => void
+  onApplyTemplate: (template: PreviousSetup) => void
+  onClose: () => void
+  isPending: boolean
+}) {
+  return (
+    <ModalShell title="Copy Previous Setup" description="Preview reusable setup, then apply it inside this wizard. Fixture details stay unchanged." onClose={onClose} isSubmitting={isPending} maxWidthClassName="max-w-4xl">
+      {templates.length === 0 ? (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No previous setups are available for the selected team.</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="space-y-2">
+            {templates.map((template) => (
+              <button
+                key={template.id}
+                type="button"
+                aria-pressed={selectedTemplate?.id === template.id}
+                onClick={() => onSelectTemplate(template.id)}
+                className={`w-full rounded-xl border p-3 text-left text-sm ${selectedTemplate?.id === template.id ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}
+              >
+                <span className="block font-bold">{template.teamName} vs {template.opposition}</span>
+                <span className="mt-1 block text-xs text-slate-500">{template.clubName} · {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(template.kickoffAt))}</span>
+                <span className="mt-1 block text-xs font-bold">{selectedTemplate?.id === template.id ? 'Selected' : 'Not selected'}</span>
+              </button>
+            ))}
+          </div>
+          {selectedTemplate && (
+            <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+              <h3 className="text-lg font-extrabold text-slate-950">Setup preview</h3>
+              <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+                <PreviewItem label="Event tracking" value={selectedTemplate.eventTrackingScope === 'PLAYER' ? 'Selected players' : 'Whole team'} />
+                <PreviewItem label="Player minutes" value={selectedTemplate.trackPlayerMinutes ? 'On' : 'Off'} />
+                <PreviewItem label="Location tracking" value={selectedTemplate.locationTrackingEnabled ? 'On' : 'Off'} />
+                <PreviewItem label="Events" value={`${selectedTemplate.selectedEventDefinitionIds.length} selected`} />
+                <PreviewItem label="Tracked targets" value={`${selectedTemplate.players.filter((player) => player.isTracked).length} players`} />
+                <PreviewItem label="Squad setup" value={`${selectedTemplate.players.filter((player) => player.squadStatus === 'STARTER').length} starters, ${selectedTemplate.players.filter((player) => player.squadStatus === 'SUBSTITUTE').length} subs`} />
+              </dl>
+              <div className="mt-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Events copied</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedTemplate.eventLabels.slice(0, 12).map((label, index) => <span key={`${label}:${index}`} className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">{label}</span>)}
+                  {selectedTemplate.eventLabels.length > 12 && <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700">+{selectedTemplate.eventLabels.length - 12} more</span>}
+                </div>
+              </div>
+              <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-950">This applies reusable setup only. It will not copy score, match clock, stints, recorded events, reports, fixture date, kick-off, opposition, match type or venue.</p>
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
+                <Button type="button" onClick={() => onApplyTemplate(selectedTemplate)} isPending={isPending} pendingText="Applying setup...">Use this setup</Button>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+    </ModalShell>
+  )
+}
+
+function PreviewItem({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-white p-3"><dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 font-bold text-slate-950">{value}</dd></div>
+}
+
+function getTemplateWarning(omittedPlayers: string[], omittedEventDefinitionCount: number) {
+  const warnings = []
+  if (omittedPlayers.length === 1) warnings.push(`${omittedPlayers[0]} was omitted because they are inactive or no longer belong to this team.`)
+  if (omittedPlayers.length > 1) warnings.push(`${omittedPlayers.length} players were omitted because they are inactive or no longer belong to this team: ${omittedPlayers.slice(0, 5).join(', ')}${omittedPlayers.length > 5 ? ', and others' : ''}.`)
+  if (omittedEventDefinitionCount > 0) warnings.push(`${omittedEventDefinitionCount} unavailable event${omittedEventDefinitionCount === 1 ? '' : 's'} were omitted.`)
+  return warnings.length ? warnings.join(' ') : null
 }
 
 function formatStatus(status: SquadStatus) {

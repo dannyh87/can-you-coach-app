@@ -189,16 +189,20 @@ export default function MatchEventsClient({
     if (player) formData.set('matchDayPlayerId', player.matchDayPlayerId)
     appendEventFields(formData, eventOption)
 
-    const result = await recordMatchEventAction(formData)
+    try {
+      const result = await recordMatchEventAction(formData)
 
-    if (result.ok) {
-      setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   const recordEventLocation = async (location: PitchLocation) => {
@@ -218,17 +222,21 @@ export default function MatchEventsClient({
     formData.set('x', String(location.x))
     formData.set('y', String(location.y))
 
-    const result = await recordMatchEventAction(formData)
+    try {
+      const result = await recordMatchEventAction(formData)
 
-    if (result.ok) {
-      setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
-      setPendingLocationEvent(null)
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
+        setPendingLocationEvent(null)
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   const undoEvent = async (eventId: string) => {
@@ -242,16 +250,20 @@ export default function MatchEventsClient({
     formData.set('matchDayId', matchDayId)
     formData.set('matchEventId', eventId)
 
-    const result = await deleteMatchEventAction(formData)
+    try {
+      const result = await deleteMatchEventAction(formData)
 
-    if (result.ok) {
-      setMessage('Event removed.')
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage('Event removed.')
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   return (
@@ -279,6 +291,8 @@ export default function MatchEventsClient({
           <div className="grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-[11px] font-bold">
             <button
               type="button"
+              role="radio"
+              aria-checked={recordingMode === 'PLAYER_FIRST'}
               onClick={() => setRecordingMode('PLAYER_FIRST')}
               className={`rounded-md px-2 py-1.5 ${recordingMode === 'PLAYER_FIRST' ? 'bg-blue-700 text-white' : 'text-slate-700'}`}
             >
@@ -286,6 +300,8 @@ export default function MatchEventsClient({
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={recordingMode === 'EVENT_FIRST'}
               onClick={() => setRecordingMode('EVENT_FIRST')}
               className={`rounded-md px-2 py-1.5 ${recordingMode === 'EVENT_FIRST' ? 'bg-blue-700 text-white' : 'text-slate-700'}`}
             >
@@ -361,6 +377,7 @@ export default function MatchEventsClient({
                         <button
                           key={category.value}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => {
                             setSelectedCategory(category.value)
                             const firstCategoryEvent = eventOptions.find(
@@ -402,6 +419,7 @@ export default function MatchEventsClient({
                       <button
                         key={eventOptionKey}
                         type="button"
+                        aria-busy={pendingAction === pendingKey || undefined}
                         onClick={() => recordEvent(eventOption, selectedPlayer)}
                         className="min-h-14 min-w-0 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center text-xs font-black leading-tight text-slate-950 shadow-sm disabled:opacity-50 sm:text-sm"
                         disabled={(!selectedPlayer && !allowTeamEvents) || Boolean(pendingAction)}
@@ -430,6 +448,8 @@ export default function MatchEventsClient({
                       <button
                         key={eventOptionKey}
                         type="button"
+                        aria-pressed={isSelected}
+                        aria-busy={pendingAction === (selectedPlayer ? getPendingEventKey(eventOption, selectedPlayer.matchDayPlayerId) : eventOptionKey) || undefined}
                         onClick={() => {
                           setSelectedEventKey(eventOptionKey)
                           void recordEvent(eventOption, selectedPlayer)
@@ -548,6 +568,7 @@ export default function MatchEventsClient({
                   <button
                     key={player.matchDayPlayerId}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => selectPlayer(player.matchDayPlayerId)}
                     className={`min-h-11 min-w-0 rounded-lg border px-2 py-2 text-left text-sm font-black leading-tight ${
                       isSelected

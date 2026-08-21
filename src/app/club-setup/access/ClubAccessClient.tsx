@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+
 type ActionResult = { ok: true; inviteLink?: string } | { ok: false; reason: string }
 type StaffRole = 'OWNER' | 'COACH' | 'ASSISTANT_COACH'
 type InviteType = 'TEAM_COACH' | 'TEAM_ASSISTANT' | 'PLAYER_PARENT' | 'PLAYER_SPECTATOR'
@@ -100,18 +102,22 @@ export default function ClubAccessClient({
     setError(null)
     setGeneratedInviteLink(null)
 
-    const result = await action(new FormData(form))
+    try {
+      const result = await action(new FormData(form))
 
-    if (result.ok) {
-      setMessage(successMessage)
-      if (result.inviteLink) setGeneratedInviteLink(result.inviteLink)
-      if (resetOnSuccess) form.reset()
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage(successMessage)
+        if (result.inviteLink) setGeneratedInviteLink(result.inviteLink)
+        if (resetOnSuccess) form.reset()
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingAction(null)
     }
-
-    setPendingAction(null)
   }
 
   if (clubs.length === 0) {
@@ -171,9 +177,7 @@ export default function ClubAccessClient({
               </label>
               <StaffInviteRoleSelect />
               <TeamSelect teams={selectedClub.teams} />
-              <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 md:col-span-3" disabled={Boolean(pendingAction)}>
-                {pendingAction === 'add-staff' ? 'Generating...' : 'Generate staff invite'}
-              </button>
+              <Button type="submit" className="md:col-span-3" disabled={Boolean(pendingAction)} isPending={pendingAction === 'add-staff'} pendingText="Generating staff invite...">Generate staff invite</Button>
             </form>
           </section>
 
@@ -222,9 +226,7 @@ export default function ClubAccessClient({
                       <input type="hidden" name="membershipId" value={staff.id} />
                       <RoleSelect defaultValue={staff.role} />
                       <TeamCheckboxes teams={selectedClub.teams} selectedTeamIds={staff.teamIds} />
-                      <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 md:col-span-2" disabled={Boolean(pendingAction)}>
-                        {pendingAction === `update-staff:${staff.id}` ? 'Saving...' : 'Save staff access'}
-                      </button>
+                      <Button type="submit" className="md:col-span-2" disabled={Boolean(pendingAction)} isPending={pendingAction === `update-staff:${staff.id}`} pendingText="Saving staff access...">Save staff access</Button>
                     </form>
                     <form
                       className="mt-3"
@@ -240,9 +242,7 @@ export default function ClubAccessClient({
                       }}
                     >
                       <input type="hidden" name="membershipId" value={staff.id} />
-                      <button className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 disabled:opacity-50" disabled={Boolean(pendingAction) || staff.isCurrentUser}>
-                        {pendingAction === `remove-staff:${staff.id}` ? 'Removing...' : 'Remove staff access'}
-                      </button>
+                      <Button type="submit" variant="danger" disabled={Boolean(pendingAction) || staff.isCurrentUser} isPending={pendingAction === `remove-staff:${staff.id}`} pendingText="Removing staff access...">Remove staff access</Button>
                     </form>
                   </details>
                 </article>
@@ -279,9 +279,7 @@ export default function ClubAccessClient({
               </label>
               <PlayerInviteTypeSelect />
               <PlayerSelect teams={selectedClub.teams} />
-              <button className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50 md:col-span-2" disabled={Boolean(pendingAction)}>
-                {pendingAction === 'add-parent' ? 'Generating...' : 'Generate player invite'}
-              </button>
+              <Button type="submit" className="md:col-span-2" disabled={Boolean(pendingAction)} isPending={pendingAction === 'add-parent'} pendingText="Generating player invite...">Generate player invite</Button>
             </form>
           </section>
 
@@ -312,9 +310,7 @@ export default function ClubAccessClient({
                       }}
                     >
                       <input type="hidden" name="spectatorAccessId" value={link.id} />
-                      <button className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50" disabled={Boolean(pendingAction)}>
-                        {pendingAction === `remove-parent:${link.id}` ? 'Removing...' : 'Remove link'}
-                      </button>
+                      <Button type="submit" size="sm" variant="danger" disabled={Boolean(pendingAction)} isPending={pendingAction === `remove-parent:${link.id}`} pendingText="Removing link...">Remove link</Button>
                     </form>
                   </div>
                 ))}
@@ -548,9 +544,7 @@ function PendingInvitesSection({
                   }}
                 >
                   <input type="hidden" name="invitationId" value={invite.id} />
-                  <button className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50" disabled={Boolean(pendingAction)}>
-                    {pendingAction === `revoke-invite:${invite.id}` ? 'Revoking...' : 'Revoke'}
-                  </button>
+                  <Button type="submit" size="sm" variant="danger" disabled={Boolean(pendingAction)} isPending={pendingAction === `revoke-invite:${invite.id}`} pendingText="Revoking...">Revoke</Button>
                 </form>
               </div>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">

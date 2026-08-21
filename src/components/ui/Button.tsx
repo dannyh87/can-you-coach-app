@@ -8,6 +8,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant
   size?: ButtonSize
   fullWidth?: boolean
+  isPending?: boolean
+  pendingText?: string
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -31,15 +33,25 @@ export default function Button({
   fullWidth = false,
   className = '',
   type = 'button',
+  disabled,
+  isPending = false,
+  pendingText,
   ...props
 }: ButtonProps) {
+  const isDisabled = disabled || isPending
+
   return (
     <button
       type={type}
+      disabled={isDisabled}
+      aria-busy={isPending || undefined}
       className={`inline-flex items-center justify-center rounded-xl font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${variantClasses[variant]} ${sizeClasses[size]} ${fullWidth ? 'w-full' : ''} ${className}`}
       {...props}
     >
-      {children}
+      {isPending && (
+        <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+      )}
+      {isPending && pendingText ? pendingText : children}
     </button>
   )
 }

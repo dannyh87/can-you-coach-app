@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-import type { InvitationType } from '@prisma/client'
+import { Prisma, type InvitationType } from '@prisma/client'
 
 import { isOwnerForClub } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
@@ -38,16 +38,84 @@ function getExpiresAt() {
   return expiresAt
 }
 
-async function createUniqueInvitationToken() {
+type InvitationTarget = {
+  clubId: string
+  teamId?: string | null
+  playerId?: string | null
+}
+
+type InvitationCreateInput = InvitationTarget & {
+  email: string
+  normalizedEmail: string
+  type: InvitationType
+  invitedByUserId: string
+}
+
+async function createUniqueInvitationToken(db: Pick<typeof prisma, 'invitation'> = prisma) {
   while (true) {
     const token = generateInvitationToken()
-    const existing = await prisma.invitation.findUnique({
+    const existing = await db.invitation.findUnique({
       where: { token },
       select: { id: true },
     })
 
     if (!existing) return token
   }
+}
+
+function getActiveInvitationWhere({ clubId, teamId = null, playerId = null, normalizedEmail, type }: InvitationCreateInput, now: Date) {
+  return {
+    clubId,
+    teamId,
+    playerId,
+    normalizedEmail,
+    type,
+    status: 'PENDING' as const,
+    expiresAt: { gt: now },
+  }
+}
+
+function isSerializationConflict(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034'
+}
+
+async function createOrReuseActiveInvitation(input: InvitationCreateInput) {
+  const maxAttempts = 3
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const now = new Date()
+        const existing = await tx.invitation.findFirst({
+          where: getActiveInvitationWhere(input, now),
+          orderBy: { createdAt: 'desc' },
+          select: { token: true },
+        })
+        if (existing) return existing
+
+        const token = await createUniqueInvitationToken(tx)
+        return tx.invitation.create({
+          data: {
+            token,
+            email: input.email,
+            normalizedEmail: input.normalizedEmail,
+            type: input.type,
+            clubId: input.clubId,
+            teamId: input.teamId ?? null,
+            playerId: input.playerId ?? null,
+            invitedByUserId: input.invitedByUserId,
+            expiresAt: getExpiresAt(),
+          },
+          select: { token: true },
+        })
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    } catch (error) {
+      if (attempt < maxAttempts && isSerializationConflict(error)) continue
+      throw error
+    }
+  }
+
+  throw new Error('Could not create invite safely.')
 }
 
 export async function createTeamInvitation({
@@ -78,21 +146,16 @@ export async function createTeamInvitation({
   })
   if (!team) return { ok: false, reason: 'Selected team is invalid.' }
 
-  const token = await createUniqueInvitationToken()
-  await prisma.invitation.create({
-    data: {
-      token,
-      email: displayEmail,
-      normalizedEmail,
-      type,
-      clubId,
-      teamId,
-      invitedByUserId,
-      expiresAt: getExpiresAt(),
-    },
+  const invitation = await createOrReuseActiveInvitation({
+    clubId,
+    teamId,
+    email: displayEmail,
+    normalizedEmail,
+    type,
+    invitedByUserId,
   })
 
-  return { ok: true, inviteLink: getInvitationAcceptUrl(token, origin) }
+  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token, origin) }
 }
 
 export async function createPlayerInvitation({
@@ -123,21 +186,16 @@ export async function createPlayerInvitation({
   })
   if (!player) return { ok: false, reason: 'Selected player is invalid.' }
 
-  const token = await createUniqueInvitationToken()
-  await prisma.invitation.create({
-    data: {
-      token,
-      email: displayEmail,
-      normalizedEmail,
-      type,
-      clubId,
-      playerId,
-      invitedByUserId,
-      expiresAt: getExpiresAt(),
-    },
+  const invitation = await createOrReuseActiveInvitation({
+    clubId,
+    playerId,
+    email: displayEmail,
+    normalizedEmail,
+    type,
+    invitedByUserId,
   })
 
-  return { ok: true, inviteLink: getInvitationAcceptUrl(token, origin) }
+  return { ok: true, inviteLink: getInvitationAcceptUrl(invitation.token, origin) }
 }
 
 export async function revokeInvitation({

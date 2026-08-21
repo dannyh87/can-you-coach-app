@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+
 type SquadStatus = 'STARTER' | 'SUBSTITUTE'
 
 type MatchActionResult =
@@ -110,16 +112,20 @@ export default function MatchTrackingFocusClient({
       selectedPlayerIds.forEach((playerId) => formData.append('trackedPlayerId', playerId))
     }
 
-    const result = await updateMatchTrackingFocusAction(formData)
+    try {
+      const result = await updateMatchTrackingFocusAction(formData)
 
-    if (result.ok) {
-      setMessage('Tracking focus saved.')
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage('Tracking focus saved.')
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setIsSaving(false)
     }
-
-    setIsSaving(false)
   }
 
   return (
@@ -150,7 +156,7 @@ export default function MatchTrackingFocusClient({
             <button type="button" onClick={() => { setTrackingMode('SELECTED'); setSelectedPlayerIds(players.map((player) => player.playerId)) }} className={`rounded-lg border p-4 text-left font-semibold disabled:opacity-50 ${trackingMode === 'SELECTED' ? 'border-blue-600 bg-blue-600 text-white' : 'bg-white text-gray-900'}`} disabled={isSaving}>Selected players</button>
           </div>
           {trackingMode === 'SELECTED' && <div className="mt-5"><h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">Players to track</h3><div className="mt-2 grid gap-2 sm:grid-cols-2">{teamPlayers.map((player) => { const isSelected = selectedPlayerIds.includes(player.id); return <button key={player.id} type="button" onClick={() => setSelectedPlayerIds((currentIds) => currentIds.includes(player.id) ? currentIds.filter((id) => id !== player.id) : [...currentIds, player.id])} className={`rounded-lg border p-4 text-left disabled:opacity-50 ${isSelected ? 'border-blue-600 bg-blue-50 text-blue-900' : 'bg-white text-gray-900'}`} disabled={isSaving}><span className="block text-base font-bold">{player.firstName} {player.surname}</span><span className="mt-1 block text-sm text-gray-500">{formatSquadNumber(player.squadNumber)} · {isSelected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>}
-          <button type="button" onClick={saveTrackingFocus} className="mt-4 w-full rounded bg-blue-600 px-4 py-3 font-medium text-white disabled:opacity-50" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save tracking focus'}</button>
+          <Button type="button" onClick={saveTrackingFocus} className="mt-4" fullWidth isPending={isSaving} pendingText="Saving tracking focus...">Save tracking focus</Button>
         </>
       ) : trackingMode === 'TEAM' ? (
         <>
@@ -159,7 +165,7 @@ export default function MatchTrackingFocusClient({
             <button type="button" onClick={setAllMode} className="rounded-lg border bg-white p-4 text-left font-semibold text-gray-900 disabled:opacity-50" disabled={isSaving || players.length === 0}>Selected players</button>
           </div>
           <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">Events will be recorded for the team. Player minutes and substitutions remain available separately.</p>
-          <button type="button" onClick={saveTrackingFocus} className="mt-4 w-full rounded bg-blue-600 px-4 py-3 font-medium text-white disabled:opacity-50" disabled={isSaving}>{isSaving ? 'Saving...' : 'Save tracking focus'}</button>
+          <Button type="button" onClick={saveTrackingFocus} className="mt-4" fullWidth isPending={isSaving} pendingText="Saving tracking focus...">Save tracking focus</Button>
         </>
       ) : players.length === 0 ? (
         <p className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
@@ -208,6 +214,7 @@ export default function MatchTrackingFocusClient({
                     <button
                       key={player.matchDayPlayerId}
                       type="button"
+                      aria-pressed={isSelected}
                       onClick={() => togglePlayer(player.matchDayPlayerId)}
                       className={`rounded-lg border p-4 text-left disabled:opacity-50 ${
                         isSelected
@@ -227,14 +234,16 @@ export default function MatchTrackingFocusClient({
             </div>
           )}
 
-          <button
+          <Button
             type="button"
             onClick={saveTrackingFocus}
-            className="mt-4 w-full rounded bg-blue-600 px-4 py-3 font-medium text-white disabled:opacity-50"
-            disabled={isSaving}
+            className="mt-4"
+            fullWidth
+            isPending={isSaving}
+            pendingText="Saving tracking focus..."
           >
-            {isSaving ? 'Saving...' : 'Save tracking focus'}
-          </button>
+            Save tracking focus
+          </Button>
         </>
       )}
     </section>

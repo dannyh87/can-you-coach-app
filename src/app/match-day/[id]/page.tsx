@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
+import CopySetupSubmitButton from '@/app/match-day/[id]/CopySetupSubmitButton'
 import MatchEventSetupClient from '@/app/match-day/[id]/MatchEventSetupClient'
 import MatchEventsClient from '@/app/match-day/[id]/MatchEventsClient'
 import MatchLiveDetailsButton from '@/app/match-day/[id]/MatchLiveDetailsButton'
@@ -320,20 +321,27 @@ async function duplicateMatchDaySetup(formData: FormData) {
       eventType: eventType.eventType,
       category: eventType.category,
     }))
+  const activePlayers = await prisma.player.findMany({
+    where: { teamId: sourceMatch.teamId, isActive: true },
+    select: { id: true },
+  })
+  const activePlayerIds = new Set(activePlayers.map((player) => player.id))
 
-  const copiedPlayers = sourceMatch.matchDayPlayers.map((player) => ({
-    playerId: player.playerId,
-    squadStatus: player.squadStatus,
-    startingPosition: player.startingPosition,
-    shirtNumberSnapshot: player.shirtNumberSnapshot,
-    isTracked: player.isTracked,
-  }))
+  const copiedPlayers = sourceMatch.matchDayPlayers
+    .filter((player) => activePlayerIds.has(player.playerId))
+    .map((player) => ({
+      playerId: player.playerId,
+      squadStatus: player.squadStatus,
+      startingPosition: player.startingPosition,
+      shirtNumberSnapshot: player.shirtNumberSnapshot,
+      isTracked: player.isTracked,
+    }))
 
   const newMatch = await prisma.matchDay.create({
     data: {
       teamId: sourceMatch.teamId,
       kickoffAt: sourceMatch.kickoffAt,
-      opposition: sourceMatch.opposition,
+      opposition: `Copy of ${sourceMatch.opposition}`,
       matchType: sourceMatch.matchType,
       venue: sourceMatch.venue,
       status: 'DRAFT',
@@ -1756,12 +1764,7 @@ export default async function MatchDayDetailPage({
               {canManageThisMatch && (
                 <form action={duplicateMatchDaySetup}>
                   <input type="hidden" name="matchDayId" value={match.id} />
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-blue-200 bg-white px-4 py-2 text-sm font-bold text-blue-800 hover:bg-blue-50"
-                  >
-                    Copy setup
-                  </button>
+                  <CopySetupSubmitButton />
                 </form>
               )}
             </div>

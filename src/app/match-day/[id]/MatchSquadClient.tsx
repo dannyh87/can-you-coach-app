@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import Button from '@/components/ui/Button'
+
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 
 type SquadActionResult =
@@ -85,16 +87,20 @@ export default function MatchSquadClient({
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
 
-    const result = await setupMatchSquadAction(formData)
+    try {
+      const result = await setupMatchSquadAction(formData)
 
-    if (result.ok) {
-      setMessage('Squad set up from active team players.')
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage('Squad set up from active team players.')
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setIsSettingUp(false)
     }
-
-    setIsSettingUp(false)
   }
 
   const updatePlayer = async ({
@@ -118,16 +124,20 @@ export default function MatchSquadClient({
     formData.set('squadStatus', squadStatus)
     formData.set('startingPosition', startingPosition)
 
-    const result = await updateMatchSquadPlayerAction(formData)
+    try {
+      const result = await updateMatchSquadPlayerAction(formData)
 
-    if (result.ok) {
-      setMessage(`${getPlayerName(player)} updated.`)
-      router.refresh()
-    } else {
-      setError(result.reason)
+      if (result.ok) {
+        setMessage(`${getPlayerName(player)} updated.`)
+        router.refresh()
+      } else {
+        setError(result.reason)
+      }
+    } catch {
+      setError('Something went wrong. Try again.')
+    } finally {
+      setPendingPlayerId(null)
     }
-
-    setPendingPlayerId(null)
   }
 
   return (
@@ -141,14 +151,15 @@ export default function MatchSquadClient({
         </div>
 
         {!isReadOnly && !hasSquadRecords && players.length > 0 && (
-          <button
+          <Button
             type="button"
             onClick={setupSquad}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
             disabled={isSettingUp}
+            isPending={isSettingUp}
+            pendingText="Setting up squad..."
           >
-            {isSettingUp ? 'Setting up...' : 'Set up squad'}
-          </button>
+            Set up squad
+          </Button>
         )}
       </div>
 
@@ -268,7 +279,7 @@ function SquadPlayerCard({
             const isSelected = player.squadStatus === option.value
 
             return (
-              <button
+              <Button
                 key={option.value}
                 type="button"
                 onClick={() =>
@@ -278,15 +289,15 @@ function SquadPlayerCard({
                     startingPosition,
                   })
                 }
-                className={`rounded-lg border px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
-                  isSelected
-                    ? 'border-blue-600 bg-blue-600 text-white'
-                    : 'bg-white text-gray-800'
-                }`}
+                variant={isSelected ? 'primary' : 'secondary'}
+                className="px-4 py-3 text-sm font-semibold"
+                aria-pressed={isSelected}
+                isPending={isPending}
+                pendingText="Saving..."
                 disabled={isPending}
               >
-                {isPending ? 'Saving...' : option.label}
-              </button>
+                {option.label}{isSelected ? ' selected' : ''}
+              </Button>
             )
           })}
         </div>
