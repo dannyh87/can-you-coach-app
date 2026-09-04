@@ -2,7 +2,7 @@
 
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MatchDayWizard from '@/app/match-day/new/MatchDayWizard'
 
@@ -33,6 +33,10 @@ describe('MatchDayWizard event selector', () => {
     await clickButton('Choose events myself')
     await clickInput('Add Pass complete')
 
+    expect(getInputByLabel('Remove Pass complete').checked).toBe(true)
+    expect(document.body.textContent).toContain('Selected ✓')
+    expect(document.body.textContent).not.toContain('RemoveLimit reachedAdd')
+
     const searchInput = getInputByLabel('Search events')
     await focusInput(searchInput)
 
@@ -47,7 +51,7 @@ describe('MatchDayWizard event selector', () => {
     expect(document.body.textContent).toContain('Pass complete')
     expect(document.body.textContent).not.toContain('Goal')
     expect(getInputByLabel('Remove Pass complete').checked).toBe(true)
-    expect(document.body.textContent).toContain('1 of 8 selected')
+    expect(document.body.textContent).toContain('1 event selected of 8')
 
     await typeIntoInput(searchInput, '')
 
@@ -56,9 +60,90 @@ describe('MatchDayWizard event selector', () => {
     expect(document.body.textContent).toContain('Goal')
     expect(getInputByLabel('Remove Pass complete').checked).toBe(true)
   })
+
+  it('exposes selected semantics for category filters', async () => {
+    renderWizard()
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Choose events myself')
+    await clickButton('Passing')
+
+    const passingCategory = getButtonByText('Passing')
+    const allCategory = getButtonByText('All')
+
+    expect(passingCategory.getAttribute('role')).toBe('radio')
+    expect(passingCategory.getAttribute('aria-checked')).toBe('true')
+    expect(passingCategory.textContent).toContain('selected ✓')
+    expect(allCategory.getAttribute('aria-checked')).toBe('false')
+    expect(document.body.textContent).toContain('Pass complete')
+    expect(document.body.textContent).not.toContain('Goal')
+  })
+
+  it('exposes previous setup selection as a radio group', async () => {
+    renderWizard({ previousSetups: previousSetups() })
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Use my last setup')
+
+    const firstSetup = getButtonByText('Test FC vs Old Rival')
+    const secondSetup = getButtonByText('Test FC vs Older Rival')
+
+    expect(firstSetup.closest('[role="radiogroup"]')?.getAttribute('aria-label')).toBe('Previous setups')
+    expect(firstSetup.getAttribute('role')).toBe('radio')
+    expect(firstSetup.getAttribute('aria-checked')).toBe('true')
+    expect(firstSetup.textContent).toContain('Selected ✓')
+
+    await clickButton('Older Rival')
+
+    expect(firstSetup.getAttribute('aria-checked')).toBe('false')
+    expect(secondSetup.getAttribute('aria-checked')).toBe('true')
+    expect(secondSetup.textContent).toContain('Selected ✓')
+  })
+
+  it('prevents duplicate create submissions while pending and clears loading after failure', async () => {
+    const pendingCreate = deferred<{ ok: false; reason: string } | void>()
+    const createAction = vi.fn(() => pendingCreate.promise)
+
+    renderWizard({ createAction })
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Choose events myself')
+    await clickInput('Add Pass complete')
+    await clickButton('Done')
+    await clickButton('Next')
+
+    await clickButton('Create Match')
+
+    const pendingButton = getButtonByText('Creating Match Day…')
+    expect(pendingButton.getAttribute('aria-busy')).toBe('true')
+    expect(pendingButton.hasAttribute('disabled')).toBe(true)
+
+    await clickButton('Creating Match Day…')
+
+    expect(createAction).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      pendingCreate.resolve({ ok: false, reason: 'Could not create the match.' })
+      await pendingCreate.promise
+    })
+
+    const createButton = getButtonByText('Create Match')
+    expect(createButton.getAttribute('aria-busy')).toBe(null)
+    expect(createButton.hasAttribute('disabled')).toBe(false)
+    expect(document.body.textContent).toContain('Could not create the match.')
+  })
 })
 
-function renderWizard() {
+function renderWizard(overrides: Partial<React.ComponentProps<typeof MatchDayWizard>> = {}) {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -115,6 +200,7 @@ function renderWizard() {
         previousSetups: [],
         validateTemplateAction: async () => ({ ok: true as const }),
         createAction: async () => undefined,
+        ...overrides,
       })
     )
   })
@@ -145,13 +231,52 @@ function eventDefinition(overrides: {
   }
 }
 
+function previousSetups() {
+  return [
+    {
+      id: 'setup-1',
+      teamId: 'team-1',
+      teamName: 'Test FC',
+      clubName: 'Test Club',
+      opposition: 'Old Rival',
+      kickoffAt: '2026-01-01T10:30:00.000Z',
+      eventTrackingScope: 'TEAM' as const,
+      trackPlayerMinutes: false,
+      locationTrackingEnabled: false,
+      selectedEventDefinitionIds: ['event-pass-complete'],
+      eventLabels: ['Pass complete'],
+      players: [],
+    },
+    {
+      id: 'setup-2',
+      teamId: 'team-1',
+      teamName: 'Test FC',
+      clubName: 'Test Club',
+      opposition: 'Older Rival',
+      kickoffAt: '2025-01-01T10:30:00.000Z',
+      eventTrackingScope: 'TEAM' as const,
+      trackPlayerMinutes: false,
+      locationTrackingEnabled: false,
+      selectedEventDefinitionIds: ['event-goal'],
+      eventLabels: ['Goal'],
+      players: [],
+    },
+  ]
+}
+
 async function clickButton(name: string) {
-  const button = Array.from(document.querySelectorAll('button')).find((element) => element.textContent?.includes(name))
-  if (!button) throw new Error(`Button not found: ${name}`)
+  const button = getButtonByText(name)
 
   await act(async () => {
     button.click()
   })
+}
+
+function getButtonByText(name: string) {
+  const button = Array.from(document.querySelectorAll('button')).find((element) => element.textContent?.includes(name))
+  if (!button) throw new Error(`Button not found: ${name}`)
+
+  return button
 }
 
 async function clickInput(label: string) {
@@ -182,4 +307,13 @@ function getInputByLabel(label: string) {
   if (labelledInput instanceof HTMLInputElement) return labelledInput
 
   throw new Error(`Input not found: ${label}`)
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+
+  return { promise, resolve }
 }

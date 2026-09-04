@@ -102,6 +102,15 @@ const getRecommendedEventDefinitionIds = (events: TaxonomyEvent[], locationTrack
     .map((event) => event.id)
 
 const zeroEventValidationMessage = 'Select at least one event to track for this match.'
+const controlInteractionClassName = 'transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0 disabled:active:scale-100 motion-reduce:transition-none motion-reduce:active:translate-y-0 motion-reduce:active:scale-100'
+const primaryBlueButtonClassName = `${controlInteractionClassName} rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-800 active:bg-blue-900`
+const secondaryButtonClassName = `${controlInteractionClassName} rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 active:border-slate-400 active:bg-slate-100`
+const subtleBlueButtonClassName = `${controlInteractionClassName} rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:border-blue-200 hover:bg-blue-100 active:bg-blue-200`
+const chipButtonClassName = `${controlInteractionClassName} rounded-full px-3 py-2 text-sm font-bold`
+const selectedChipClassName = 'bg-blue-700 text-white ring-2 ring-blue-200'
+const unselectedChipClassName = 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100'
+const selectedCardButtonClassName = `${controlInteractionClassName} border-blue-800 bg-blue-700 text-white ring-2 ring-blue-200`
+const unselectedCardButtonClassName = `${controlInteractionClassName} border-slate-200 bg-white text-slate-900 hover:border-blue-300 hover:bg-blue-50 active:bg-blue-100`
 
 export default function MatchDayWizard({
   teams,
@@ -298,7 +307,7 @@ export default function MatchDayWizard({
   }
 
   const applyTemplate = (template: PreviousSetup) => {
-    if (!selectedTeam) return
+    if (!selectedTeam || isTemplatePending) return
 
     const validEventDefinitionIds = new Set(scopedEvents.map((event) => event.id))
     setIsTemplatePending(true)
@@ -340,6 +349,8 @@ export default function MatchDayWizard({
   }
 
   const createMatch = () => {
+    if (isPending) return
+
     setError(null)
     if (selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
@@ -461,13 +472,13 @@ export default function MatchDayWizard({
           <section className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
             <h2 className="text-lg font-extrabold text-slate-950">Who are you observing?</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <button type="button" role="radio" aria-checked={eventTrackingScope === 'TEAM'} onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>The whole team<span className="mt-1 block text-sm font-normal">Record team totals without choosing a player.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'TEAM' ? 'Selected' : 'Not selected'}</span></button>
-              <button type="button" role="radio" aria-checked={eventTrackingScope === 'PLAYER'} onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Individual players<span className="mt-1 block text-sm font-normal">Record which player completed each action.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'PLAYER' ? 'Selected' : 'Not selected'}</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'TEAM'} onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? selectedCardButtonClassName : unselectedCardButtonClassName}`}>The whole team<span className={`mt-1 block text-sm font-normal ${eventTrackingScope === 'TEAM' ? 'text-blue-50' : 'text-slate-700'}`}>Record team totals without choosing a player.</span><span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${eventTrackingScope === 'TEAM' ? 'bg-white text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{eventTrackingScope === 'TEAM' ? 'Selected ✓' : 'Not selected'}</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'PLAYER'} onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? selectedCardButtonClassName : unselectedCardButtonClassName}`}>Individual players<span className={`mt-1 block text-sm font-normal ${eventTrackingScope === 'PLAYER' ? 'text-blue-50' : 'text-slate-700'}`}>Record which player completed each action.</span><span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${eventTrackingScope === 'PLAYER' ? 'bg-white text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{eventTrackingScope === 'PLAYER' ? 'Selected ✓' : 'Not selected'}</span></button>
             </div>
           </section>
           <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
             <label className="flex items-start gap-3 text-sm font-bold text-slate-950">
-              <input type="checkbox" checked={trackPlayerMinutes} onChange={(event) => setTrackPlayerMinutes(event.target.checked)} className="mt-1 h-5 w-5" />
+              <input type="checkbox" checked={trackPlayerMinutes} onChange={(event) => setTrackPlayerMinutes(event.target.checked)} className="mt-1 h-5 w-5 accent-blue-700" />
               <span>
                 Track player minutes and substitutions
                 <span className="mt-1 block font-normal leading-6 text-slate-700">Turn this on if you want to record starters, substitutes and how long each player plays.</span>
@@ -495,7 +506,7 @@ export default function MatchDayWizard({
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{formatStatus(status)}</span>
                       </div>
                       <div className="mt-3 grid grid-cols-3 gap-2">
-                        {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => <button key={option} type="button" role="radio" aria-checked={status === option} onClick={() => setPlayerStatus(player.id, option)} className={`rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-200 bg-white text-slate-700'}`}>{formatStatus(option)}{status === option ? ' selected' : ''}</button>)}
+                        {(['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as SquadStatus[]).map((option) => <button key={option} type="button" role="radio" aria-checked={status === option} onClick={() => setPlayerStatus(player.id, option)} className={`${controlInteractionClassName} rounded-lg border px-2 py-2 text-xs font-bold ${status === option ? 'border-blue-700 bg-blue-700 text-white ring-2 ring-blue-200' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100'}`}>{formatStatus(option)}{status === option ? ' selected ✓' : ''}</button>)}
                       </div>
                       {(status === 'STARTER' || status === 'SUBSTITUTE') && <input className={`${fieldClassName} mt-3`} placeholder="Starting position or role" value={startingPositions[player.id] ?? ''} onChange={(event) => setStartingPositions({ ...startingPositions, [player.id]: event.target.value })} />}
                     </article>
@@ -505,7 +516,7 @@ export default function MatchDayWizard({
             </>
           ) : eventTrackingScope === 'PLAYER' ? (
             <div className="space-y-4">
-              <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" aria-pressed={selected} onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-900'}`}><span className="block font-bold">{player.name}</span><span className="mt-1 block text-sm text-slate-500">{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected' : 'Not selected'}</span></button> })}</div></div>
+              <div><h2 className="text-sm font-bold uppercase tracking-wide text-slate-500">Players to track</h2><div className="mt-2 grid gap-2 sm:grid-cols-2">{selectedTeam.players.map((player) => { const selected = trackedPlayerIds.includes(player.id); return <button key={player.id} type="button" aria-pressed={selected} onClick={() => toggleTrackedPlayer(player.id)} className={`rounded-xl border p-4 text-left ${selected ? selectedCardButtonClassName : unselectedCardButtonClassName}`}><span className="block font-bold">{player.name}</span><span className={`mt-1 block text-sm ${selected ? 'text-blue-50' : 'text-slate-500'}`}>{player.squadNumber === null ? 'No squad number' : `#${player.squadNumber}`} · {selected ? 'Selected ✓' : 'Not selected'}</span></button> })}</div></div>
             </div>
           ) : (
             <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No player selection is needed for team event tracking.</p>
@@ -574,7 +585,7 @@ export default function MatchDayWizard({
           <ReviewRow label="Playing-time tracking" value={trackPlayerMinutes ? 'On' : 'Off'} />
           <ReviewRow label="Players" value={trackPlayerMinutes ? `${starterCount} starters, ${substituteCount} substitutes` : eventTrackingScope === 'PLAYER' ? `${trackedPlayerIds.length} selected players` : 'Not required'} />
           <ReviewRow label="Age suggestion" value={agePhaseLabels[selectedTeam.inferredAgePhase]} />
-          <ReviewRow label="Events" value={`${selectedEventDefinitionIds.length} selected`} />
+          <ReviewRow label="Events" value={`${formatEventCount(selectedEventDefinitionIds.length)} selected`} />
           <ReviewRow label="Location tracking" value={locationTrackingEnabled ? 'On' : 'Off'} />
         </div>
       )}
@@ -585,7 +596,7 @@ export default function MatchDayWizard({
           {step < totalSteps ? (
             <Button type="button" onClick={goNext}>Next</Button>
           ) : (
-            <Button type="button" onClick={createMatch} disabled={!canCreateMatch} isPending={isPending} pendingText="Creating match...">Create Match</Button>
+            <Button type="button" onClick={createMatch} disabled={!canCreateMatch || isPending} isPending={isPending} pendingText="Creating Match Day…">Create Match</Button>
           )}
         </div>
       </WizardActions>
@@ -840,9 +851,9 @@ function EventStartMethodSelection({
       <h2 className="text-2xl font-extrabold text-slate-950">How would you like to start?</h2>
       <p className="mt-2 text-sm text-slate-700">Choose one starting point. You can adjust the events before creating the match.</p>
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        <button type="button" onClick={onUseRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50" disabled={!recommendationAvailable}>Recommended for this team<span className="mt-1 block font-normal text-slate-600">Start with a focused set based on this team&apos;s age group.</span></button>
-        <button type="button" onClick={onUsePrevious} className="rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 hover:bg-blue-50">Use my last setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
-        <button type="button" onClick={onChooseManual} className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50">Choose events myself<span className="mt-1 block font-normal text-slate-600">Open a focused event selector.</span></button>
+        <button type="button" onClick={onUseRecommendation} className={`${controlInteractionClassName} rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 shadow-sm hover:bg-emerald-50 active:border-emerald-400 active:bg-emerald-100`} disabled={!recommendationAvailable}>Recommended for this team<span className="mt-1 block font-normal text-slate-600">Start with a focused set based on this team&apos;s age group.</span></button>
+        <button type="button" onClick={onUsePrevious} className={`${controlInteractionClassName} rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 shadow-sm hover:bg-blue-50 active:border-blue-400 active:bg-blue-100`}>Use my last setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
+        <button type="button" onClick={onChooseManual} className={`${controlInteractionClassName} rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 active:border-slate-400 active:bg-slate-100`}>Choose events myself<span className="mt-1 block font-normal text-slate-600">Open a focused event selector.</span></button>
       </div>
     </section>
   )
@@ -900,20 +911,20 @@ function SelectedEventSummary({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Events selected</p>
-          <h3 className="mt-1 text-xl font-extrabold text-slate-950">{selectedEventCount} of {MAX_CLASSIC_OBSERVATIONS} selected</h3>
+          <h3 className="mt-1 text-xl font-extrabold text-slate-950">{formatEventCount(selectedEventCount)} selected of {MAX_CLASSIC_OBSERVATIONS}</h3>
           <p className="mt-1 text-sm font-semibold text-slate-700">{limitState.message}</p>
           <p className="mt-1 text-sm text-slate-600">{eventTrackingScope === 'PLAYER' ? 'These events will be attributed to your selected players.' : 'These events will be recorded for the whole team.'}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button ref={selectorTriggerRef} type="button" onClick={onOpenSelector} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Add or change events</button>
-          <button type="button" onClick={onStartAgain} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Start again</button>
+          <button ref={selectorTriggerRef} type="button" onClick={onOpenSelector} className={primaryBlueButtonClassName}>Add or change events</button>
+          <button type="button" onClick={onStartAgain} className={secondaryButtonClassName}>Start again</button>
         </div>
       </div>
       {notice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{notice}</p>}
       {selectedEvents.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {selectedEvents.map((event) => (
-            <button key={event.id} type="button" onClick={() => onToggleEvent(event.id)} className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900 hover:bg-blue-200" aria-label={`Remove ${event.label}`}>
+            <button key={event.id} type="button" onClick={() => onToggleEvent(event.id)} className={`${controlInteractionClassName} rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900 ring-1 ring-blue-200 hover:bg-blue-200 active:bg-blue-300`} aria-label={`Remove ${event.label}`}>
               {event.label} <span aria-hidden="true">×</span>
             </button>
           ))}
@@ -936,7 +947,7 @@ function LocationTrackingPrompt({ locationTrackingEnabled, setLocationTrackingEn
   return (
     <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
       <label className="flex items-start gap-3 font-bold">
-        <input type="checkbox" checked={locationTrackingEnabled} onChange={(event) => setLocationTrackingEnabled(event.target.checked)} className="mt-1 h-5 w-5" />
+        <input type="checkbox" checked={locationTrackingEnabled} onChange={(event) => setLocationTrackingEnabled(event.target.checked)} className="mt-1 h-5 w-5 accent-blue-700" />
         <span>
           Add pitch locations?
           <span className="mt-1 block font-normal leading-6 text-amber-900">Record where selected events happen.</span>
@@ -1043,9 +1054,9 @@ function EventSelectorModal({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 id="event-selector-title" ref={titleRef} tabIndex={-1} className="text-2xl font-extrabold text-slate-950">Add or change events</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-700">{selectedEventCount} of {MAX_CLASSIC_OBSERVATIONS} selected · {limitState.label}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">{formatEventCount(selectedEventCount)} selected of {MAX_CLASSIC_OBSERVATIONS} · {limitState.label}</p>
             </div>
-            <button type="button" onClick={onClose} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Done</button>
+            <button type="button" onClick={onClose} className={primaryBlueButtonClassName}>Done</button>
           </div>
           {notice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{notice}</p>}
         </div>
@@ -1060,13 +1071,13 @@ function EventSelectorModal({
               <p className="text-sm font-semibold text-slate-700">Category</p>
               <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Event category">
                 {[{ value: 'ALL', label: 'All' }, ...categoryOptions].map((option) => (
-                  <button key={option.value} type="button" role="radio" aria-checked={eventCategoryFilter === option.value} onClick={() => setEventCategoryFilter(option.value)} className={`rounded-full px-3 py-2 text-sm font-bold ${eventCategoryFilter === option.value ? 'bg-blue-700 text-white' : 'bg-white text-slate-700'}`}>{option.label}</button>
+                  <button key={option.value} type="button" role="radio" aria-checked={eventCategoryFilter === option.value} onClick={() => setEventCategoryFilter(option.value)} className={`${chipButtonClassName} ${eventCategoryFilter === option.value ? selectedChipClassName : unselectedChipClassName}`}>{option.label}{eventCategoryFilter === option.value ? ' selected ✓' : ''}</button>
                 ))}
               </div>
             </div>
             <div>
-              <button type="button" onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50" aria-expanded={advancedFiltersOpen}>
-                Filters{hasAdvancedFilters ? ' active' : ''}
+              <button type="button" onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)} className={`${secondaryButtonClassName} ${advancedFiltersOpen ? 'border-blue-700 bg-blue-50 text-blue-900 ring-2 ring-blue-100' : ''}`} aria-expanded={advancedFiltersOpen}>
+                Filters{advancedFiltersOpen ? ' open' : ''}{hasAdvancedFilters ? ' active' : ''}
               </button>
               {advancedFiltersOpen && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1080,9 +1091,9 @@ function EventSelectorModal({
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <button type="button" onClick={onSelectRecommendedDefaults} className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100">Use recommended defaults</button>
-            <button type="button" onClick={onSelectVisibleEvents} className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100" disabled={events.length === 0}>Select visible</button>
-            <button type="button" onClick={onClearAll} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200" disabled={selectedEventCount === 0}>Clear all</button>
+            <button type="button" onClick={onSelectRecommendedDefaults} className={subtleBlueButtonClassName}>Replace with recommended events</button>
+            <button type="button" onClick={onSelectVisibleEvents} className={subtleBlueButtonClassName} disabled={events.length === 0}>Select visible</button>
+            <button type="button" onClick={onClearAll} className={secondaryButtonClassName} disabled={selectedEventCount === 0}>Clear all</button>
           </div>
 
           <div className="mt-4 grid gap-2">
@@ -1090,7 +1101,7 @@ function EventSelectorModal({
               <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No events match the current filters.</p>
             ) : eventGroups.map((group) => (
               <section key={group.label} className="rounded-2xl border bg-white p-3">
-                <h3 className="font-extrabold text-slate-950">{group.label} <span className="text-xs font-bold text-slate-500">{group.events.length} events · {group.events.filter((event) => selectedEventDefinitionIdSet.has(event.id)).length} selected</span></h3>
+                <h3 className="font-extrabold text-slate-950">{group.label} <span className="text-xs font-bold text-slate-500">{formatEventCount(group.events.length)} · {formatEventCount(group.events.filter((event) => selectedEventDefinitionIdSet.has(event.id)).length)} selected</span></h3>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {group.events.map((event) => <EventSelectionCard key={event.id} event={event} selected={selectedEventDefinitionIdSet.has(event.id)} selectedEventCount={selectedEventCount} onToggleEvent={onToggleEvent} />)}
                 </div>
@@ -1098,7 +1109,7 @@ function EventSelectorModal({
             ))}
           </div>
 
-          <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Showing {events.length} of {totalEventCount} live-recordable observation events. Suggested for {agePhaseLabels[agePhase]}: 4-6 events.</p>
+          <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Showing {formatEventCount(events.length)} of {formatEventCount(totalEventCount)} live-recordable observations. Suggested for {agePhaseLabels[agePhase]}: 4-6 events.</p>
         </div>
       </div>
     </div>
@@ -1107,23 +1118,23 @@ function EventSelectorModal({
 
 function EventSelectionCard({ event, selected, selectedEventCount, onToggleEvent }: { event: TaxonomyEvent; selected: boolean; selectedEventCount: number; onToggleEvent: (eventType: string) => void }) {
   const cannotAdd = !selected && selectedEventCount >= MAX_CLASSIC_OBSERVATIONS
+  const checkboxId = `event-definition-${event.id}`
 
   return (
-    <article className={`rounded-xl border p-3 text-left transition ${selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'}`}>
+    <article className={`rounded-xl border p-3 text-left transition ${selected ? 'border-blue-800 bg-blue-50 shadow-sm ring-2 ring-blue-100' : cannotAdd ? 'border-slate-200 bg-slate-50 opacity-75' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'} motion-reduce:transition-none`}>
       <div className="flex min-h-24 flex-col gap-3">
-        <div className="flex items-start gap-3">
-          <input type="checkbox" checked={selected} disabled={cannotAdd} onChange={() => onToggleEvent(event.id)} className="mt-1 h-5 w-5" aria-label={`${selected ? 'Remove' : 'Add'} ${event.label}`} />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-bold text-slate-950">{event.label}</p>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${selected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'}`}>{selected ? 'Selected' : 'Not selected'}</span>
-            </div>
-            <p className="mt-1 text-sm text-slate-600">{event.description ?? 'Record when this action occurs.'}</p>
-          </div>
-        </div>
-        <button type="button" onClick={() => onToggleEvent(event.id)} disabled={cannotAdd} className={`w-full rounded-lg px-3 py-2 text-sm font-bold ${selected ? 'bg-blue-100 text-blue-900 hover:bg-blue-200' : cannotAdd ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-blue-700 text-white hover:bg-blue-800'}`}>{selected ? 'Remove' : cannotAdd ? 'Limit reached' : 'Add'}</button>
+        <label htmlFor={checkboxId} className={`flex cursor-pointer items-start gap-3 rounded-lg p-2 ${controlInteractionClassName} ${selected ? 'bg-white text-blue-950' : cannotAdd ? 'text-slate-500' : 'text-slate-950 hover:bg-blue-50 active:bg-blue-100'}`}>
+          <input id={checkboxId} type="checkbox" checked={selected} disabled={cannotAdd} onChange={() => onToggleEvent(event.id)} className="mt-1 h-5 w-5 accent-blue-700" aria-label={`${selected ? 'Remove' : 'Add'} ${event.label}`} />
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="font-bold">{event.label}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${selected ? 'bg-blue-700 text-white' : cannotAdd ? 'bg-slate-200 text-slate-500' : 'bg-slate-100 text-slate-700'}`}>{selected ? 'Selected ✓' : cannotAdd ? 'Limit reached' : 'Not selected'}</span>
+            </span>
+            <span className={`mt-1 block text-sm ${selected ? 'text-blue-900' : 'text-slate-600'}`}>{event.description ?? 'Record when this action occurs.'}</span>
+          </span>
+        </label>
         <details className="rounded-lg border border-slate-200 bg-white/80 p-2 text-sm">
-          <summary className="cursor-pointer text-xs font-bold text-blue-800">Details</summary>
+          <summary className={`cursor-pointer rounded px-1 text-xs font-bold text-blue-800 ${controlInteractionClassName}`}>Details</summary>
           <div className="mt-2 space-y-2 text-slate-700">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{event.matchPhaseLabel} · {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''} · {formatEventMeta(event.fourCorner)}</p>
             <p className="text-xs text-slate-500">Relevant: {event.positionRelevance.map(formatEventMeta).join(', ')}</p>
@@ -1173,10 +1184,10 @@ function CurriculumRecommendationPanel({
         <button
           type="button"
           onClick={onUseCurriculumRecommendation}
-          className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${controlInteractionClassName} rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-800 active:bg-emerald-900`}
           disabled={recommendation.matchedEventDefinitionIds.length === 0}
         >
-          Use recommended events
+          Replace with recommended events
         </button>
       </div>
 
@@ -1302,6 +1313,10 @@ function formatEventMeta(value: string) {
     .join(' ')
 }
 
+function formatEventCount(count: number) {
+  return `${count} ${count === 1 ? 'event' : 'events'}`
+}
+
 function getStepDescription(step: number) {
   if (step === 3) return 'Choose what you want to track. Add squad details only if you need them.'
   if (step === 4) return 'Choose only what helps your coaching observation.'
@@ -1330,18 +1345,19 @@ function TemplatePickerModal({
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No previous setups are available for the selected team.</p>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <div className="space-y-2">
+          <div className="space-y-2" role="radiogroup" aria-label="Previous setups">
             {templates.map((template) => (
               <button
                 key={template.id}
                 type="button"
-                aria-pressed={selectedTemplate?.id === template.id}
+                role="radio"
+                aria-checked={selectedTemplate?.id === template.id}
                 onClick={() => onSelectTemplate(template.id)}
-                className={`w-full rounded-xl border p-3 text-left text-sm ${selectedTemplate?.id === template.id ? 'border-blue-700 bg-blue-50 text-blue-950' : 'border-slate-200 bg-white text-slate-800'}`}
+                className={`w-full rounded-xl border p-3 text-left text-sm ${selectedTemplate?.id === template.id ? selectedCardButtonClassName : unselectedCardButtonClassName}`}
               >
                 <span className="block font-bold">{template.teamName} vs {template.opposition}</span>
-                <span className="mt-1 block text-xs text-slate-500">{template.clubName} · {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(template.kickoffAt))}</span>
-                <span className="mt-1 block text-xs font-bold">{selectedTemplate?.id === template.id ? 'Selected' : 'Not selected'}</span>
+                <span className={`mt-1 block text-xs ${selectedTemplate?.id === template.id ? 'text-blue-50' : 'text-slate-500'}`}>{template.clubName} · {new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(template.kickoffAt))}</span>
+                <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${selectedTemplate?.id === template.id ? 'bg-white text-blue-800' : 'bg-slate-100 text-slate-600'}`}>{selectedTemplate?.id === template.id ? 'Selected ✓' : 'Not selected'}</span>
               </button>
             ))}
           </div>
@@ -1352,7 +1368,7 @@ function TemplatePickerModal({
                 <PreviewItem label="Event tracking" value={selectedTemplate.eventTrackingScope === 'PLAYER' ? 'Selected players' : 'Whole team'} />
                 <PreviewItem label="Player minutes" value={selectedTemplate.trackPlayerMinutes ? 'On' : 'Off'} />
                 <PreviewItem label="Location tracking" value={selectedTemplate.locationTrackingEnabled ? 'On' : 'Off'} />
-                <PreviewItem label="Events" value={`${selectedTemplate.selectedEventDefinitionIds.length} selected`} />
+                <PreviewItem label="Events" value={`${formatEventCount(selectedTemplate.selectedEventDefinitionIds.length)} selected`} />
                 <PreviewItem label="Tracked targets" value={`${selectedTemplate.players.filter((player) => player.isTracked).length} players`} />
                 <PreviewItem label="Squad setup" value={`${selectedTemplate.players.filter((player) => player.squadStatus === 'STARTER').length} starters, ${selectedTemplate.players.filter((player) => player.squadStatus === 'SUBSTITUTE').length} subs`} />
               </dl>
@@ -1366,7 +1382,7 @@ function TemplatePickerModal({
               <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-950">This applies reusable setup only. It will not copy score, match clock, stints, recorded events, reports, fixture date, kick-off, opposition, match type or venue.</p>
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
-                <Button type="button" onClick={() => onApplyTemplate(selectedTemplate)} isPending={isPending} pendingText="Applying setup...">Use this setup</Button>
+                <Button type="button" onClick={() => onApplyTemplate(selectedTemplate)} disabled={isPending} isPending={isPending} pendingText="Applying setup…">Use this setup</Button>
               </div>
             </section>
           )}

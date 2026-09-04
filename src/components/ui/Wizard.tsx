@@ -73,22 +73,23 @@ export function WizardOptionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl border p-4 text-left transition ${
+      aria-pressed={selected}
+      className={`w-full rounded-xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700 focus-visible:ring-offset-2 active:translate-y-px active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:translate-y-0 motion-reduce:active:scale-100 ${
         selected
-          ? 'border-blue-700 bg-blue-50 ring-2 ring-blue-100'
+          ? 'border-blue-800 bg-blue-700 text-white ring-2 ring-blue-200'
           : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-bold text-slate-950">{title}</h2>
-          {description && <p className="mt-1 text-sm text-slate-600">{description}</p>}
+          <h2 className={`font-bold ${selected ? 'text-white' : 'text-slate-950'}`}>{title}</h2>
+          {description && <p className={`mt-1 text-sm ${selected ? 'text-blue-50' : 'text-slate-600'}`}>{description}</p>}
         </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${selected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
-          {selected ? 'Selected' : 'Choose'}
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${selected ? 'bg-white text-blue-800' : 'bg-slate-100 text-slate-600'}`}>
+          {selected ? 'Selected ✓' : 'Choose'}
         </span>
       </div>
-      {meta && <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">{meta}</p>}
+      {meta && <p className={`mt-3 text-xs font-semibold uppercase tracking-wide ${selected ? 'text-blue-50' : 'text-slate-500'}`}>{meta}</p>}
     </button>
   )
 }
