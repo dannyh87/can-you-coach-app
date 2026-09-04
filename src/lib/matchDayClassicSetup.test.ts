@@ -6,7 +6,11 @@ import { describe, expect, it } from 'vitest'
 import {
   applyClassicTrackingModeSwitch,
   buildClassicMatchDayPlayerCreates,
+  getClassicObservationLimitState,
   getClassicRecordingRequirement,
+  limitClassicRecommendedEventIds,
+  MAX_CLASSIC_OBSERVATIONS,
+  MAX_CLASSIC_RECOMMENDED_OBSERVATIONS,
   sanitizeClassicTemplateSetup,
 } from '@/lib/matchDayClassicSetup'
 import { buildMatchEventCsvRows, resolveMatchReportEvents } from '@/lib/matchReportCsvRows'
@@ -123,7 +127,79 @@ describe('classic match day setup rules', () => {
     expect(wizardSource).toContain('Select at least one event to track for this match.')
     expect(wizardSource).toContain('These events will be recorded for the whole team.')
     expect(wizardSource).toContain('These events will be attributed to your selected players.')
-    expect(wizardSource).toContain('recommendationApplied ?')
+    expect(wizardSource).toContain("recommendationApplied && eventStartMethod === 'RECOMMENDED'")
+  })
+
+  it('wizard starts event selection with three explicit starting choices', () => {
+    const wizardSource = readFileSync(join(process.cwd(), 'src/app/match-day/new/MatchDayWizard.tsx'), 'utf8')
+
+    expect(wizardSource).toContain('How would you like to start?')
+    expect(wizardSource).toContain('Recommended for this team')
+    expect(wizardSource).toContain('Use my last setup')
+    expect(wizardSource).toContain('Choose events myself')
+    expect(wizardSource).toContain('Add or change events')
+    expect(wizardSource).toContain('Start again')
+    expect(wizardSource).not.toContain('Open an existing match and use Copy setup.')
+  })
+
+  it('wizard keeps team/player observation wording separate from minutes tracking', () => {
+    const wizardSource = readFileSync(join(process.cwd(), 'src/app/match-day/new/MatchDayWizard.tsx'), 'utf8')
+
+    expect(wizardSource).toContain('Who are you observing?')
+    expect(wizardSource).toContain('The whole team')
+    expect(wizardSource).toContain('Record team totals without choosing a player.')
+    expect(wizardSource).toContain('Individual players')
+    expect(wizardSource).toContain('Record which player completed each action.')
+    expect(wizardSource).toContain("onClick={() => setEventTrackingScope('TEAM')}")
+    expect(wizardSource).toContain("onClick={() => setEventTrackingScope('PLAYER')}")
+    expect(wizardSource).toContain('Track player minutes and substitutions')
+  })
+
+  it('event selection uses a focused accessible selector and delayed location prompt', () => {
+    const wizardSource = readFileSync(join(process.cwd(), 'src/app/match-day/new/MatchDayWizard.tsx'), 'utf8')
+
+    expect(wizardSource).toContain('role="dialog"')
+    expect(wizardSource).toContain('aria-modal="true"')
+    expect(wizardSource).toContain("event.key === 'Escape'")
+    expect(wizardSource).toContain('Add pitch locations?')
+    expect(wizardSource).toContain('selectedEventCount > 0 && hasLocationEvents')
+    expect(wizardSource).toContain('Limit reached')
+  })
+
+  it('limits classic observations and caps recommendation defaults', () => {
+    expect(MAX_CLASSIC_OBSERVATIONS).toBe(8)
+    expect(MAX_CLASSIC_RECOMMENDED_OBSERVATIONS).toBe(6)
+    expect(limitClassicRecommendedEventIds(['1', '2', '3', '4', '5', '6', '7'])).toEqual(['1', '2', '3', '4', '5', '6'])
+    expect(getClassicObservationLimitState(0)).toMatchObject({ canProceed: false, canAddMore: true, tone: 'empty' })
+    expect(getClassicObservationLimitState(6)).toMatchObject({ canProceed: true, canAddMore: true, tone: 'ideal' })
+    expect(getClassicObservationLimitState(8)).toMatchObject({ canProceed: true, canAddMore: false, tone: 'near-limit' })
+    expect(getClassicObservationLimitState(9)).toMatchObject({ canProceed: false, canAddMore: false, overLimitBy: 1, tone: 'over-limit' })
+  })
+
+  it('preserves over-limit copied setups so coaches can remove extras before continuing', () => {
+    const copiedEventIds = ['event-1', 'event-2', 'event-3', 'event-4', 'event-5', 'event-6', 'event-7', 'event-8', 'event-9']
+    const result = sanitizeClassicTemplateSetup({
+      template: {
+        eventTrackingScope: 'TEAM',
+        trackPlayerMinutes: false,
+        locationTrackingEnabled: false,
+        selectedEventDefinitionIds: copiedEventIds,
+        players: [],
+      },
+      activePlayers,
+      validEventDefinitionIds: new Set(copiedEventIds),
+    })
+
+    expect(result.selectedEventDefinitionIds).toEqual(copiedEventIds)
+    expect(getClassicObservationLimitState(result.selectedEventDefinitionIds.length).message).toBe('Remove 1 event before continuing.')
+  })
+
+  it('server validates that classic match creation cannot exceed eight events', () => {
+    const pageSource = readFileSync(join(process.cwd(), 'src/app/match-day/new/page.tsx'), 'utf8')
+
+    expect(pageSource).toContain('MAX_CLASSIC_OBSERVATIONS')
+    expect(pageSource).toContain('selectedEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS')
+    expect(pageSource).toContain('Select no more than')
   })
 
   it('clears stale selected players when switching to team-only tracking', () => {

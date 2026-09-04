@@ -1,6 +1,10 @@
 export type ClassicSquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 export type ClassicEventTrackingScope = 'TEAM' | 'PLAYER'
 
+export const MAX_CLASSIC_OBSERVATIONS = 8
+export const MAX_CLASSIC_RECOMMENDED_OBSERVATIONS = 6
+export const CLASSIC_RECOMMENDED_OBSERVATION_RANGE = { min: 4, max: 6 } as const
+
 export type ClassicActivePlayer = {
   id: string
   squadNumber: number | null
@@ -134,5 +138,64 @@ export function sanitizeClassicTemplateSetup({
     startingPositions: Object.fromEntries(validPlayers.map((player) => [player.playerId, player.startingPosition ?? ''])) as Record<string, string>,
     omittedPlayers: omittedPlayers.map((player) => player.playerName ?? player.playerId),
     omittedEventDefinitionCount: template.selectedEventDefinitionIds.length - selectedEventDefinitionIds.length,
+  }
+}
+
+export function limitClassicRecommendedEventIds(eventDefinitionIds: string[]) {
+  return eventDefinitionIds.slice(0, MAX_CLASSIC_RECOMMENDED_OBSERVATIONS)
+}
+
+export function getClassicObservationLimitState(selectedObservationCount: number) {
+  if (selectedObservationCount === 0) {
+    return {
+      canProceed: false,
+      canAddMore: true,
+      overLimitBy: 0,
+      label: 'No events selected yet.',
+      message: 'Choose at least one event to record.',
+      tone: 'empty' as const,
+    }
+  }
+
+  if (selectedObservationCount <= 3) {
+    return {
+      canProceed: true,
+      canAddMore: true,
+      overLimitBy: 0,
+      label: 'Light setup.',
+      message: 'Add a few more if they will help your observation.',
+      tone: 'light' as const,
+    }
+  }
+
+  if (selectedObservationCount <= CLASSIC_RECOMMENDED_OBSERVATION_RANGE.max) {
+    return {
+      canProceed: true,
+      canAddMore: true,
+      overLimitBy: 0,
+      label: 'Ideal for one observer.',
+      message: 'This is a focused set for live recording.',
+      tone: 'ideal' as const,
+    }
+  }
+
+  if (selectedObservationCount <= MAX_CLASSIC_OBSERVATIONS) {
+    return {
+      canProceed: true,
+      canAddMore: selectedObservationCount < MAX_CLASSIC_OBSERVATIONS,
+      overLimitBy: 0,
+      label: 'Approaching the maximum.',
+      message: 'Keep this manageable from the touchline.',
+      tone: 'near-limit' as const,
+    }
+  }
+
+  return {
+    canProceed: false,
+    canAddMore: false,
+    overLimitBy: selectedObservationCount - MAX_CLASSIC_OBSERVATIONS,
+    label: 'Too many events selected.',
+    message: `Remove ${selectedObservationCount - MAX_CLASSIC_OBSERVATIONS} event${selectedObservationCount - MAX_CLASSIC_OBSERVATIONS === 1 ? '' : 's'} before continuing.`,
+    tone: 'over-limit' as const,
   }
 }

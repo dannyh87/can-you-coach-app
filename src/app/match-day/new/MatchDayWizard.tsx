@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 
 import Button from '@/components/ui/Button'
@@ -14,7 +14,12 @@ import {
   inferMatchFormat,
   type CurriculumFocus,
 } from '@/lib/curriculumRecommendations'
-import { sanitizeClassicTemplateSetup } from '@/lib/matchDayClassicSetup'
+import {
+  getClassicObservationLimitState,
+  limitClassicRecommendedEventIds,
+  MAX_CLASSIC_OBSERVATIONS,
+  sanitizeClassicTemplateSetup,
+} from '@/lib/matchDayClassicSetup'
 import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
@@ -64,6 +69,7 @@ type MatchPhaseGroup = {
 type WizardResult = { ok: false; reason: string } | void
 type TemplateValidationResult = { ok: true } | { ok: false; reason: string }
 type CurriculumRecommendation = ReturnType<typeof getCurriculumRecommendation>
+type EventStartMethod = 'UNSET' | 'RECOMMENDED' | 'PREVIOUS' | 'MANUAL'
 
 type PreviousSetup = {
   id: string
@@ -137,6 +143,10 @@ export default function MatchDayWizard({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [templateWarning, setTemplateWarning] = useState<string | null>(null)
   const [recommendationApplied, setRecommendationApplied] = useState(false)
+  const [eventStartMethod, setEventStartMethod] = useState<EventStartMethod>('UNSET')
+  const [eventSelectorOpen, setEventSelectorOpen] = useState(false)
+  const [advancedEventFiltersOpen, setAdvancedEventFiltersOpen] = useState(false)
+  const [eventSelectionNotice, setEventSelectionNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [isTemplatePending, setIsTemplatePending] = useState(false)
@@ -175,6 +185,7 @@ export default function MatchDayWizard({
   const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
   const totalSteps = 5
   const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
+  const eventLimitState = getClassicObservationLimitState(selectedEventDefinitionIds.length)
   const selectedTeamPreviousSetups = previousSetups.filter((setup) => setup.teamId === selectedTeam?.id)
   const selectedTemplate = selectedTeamPreviousSetups.find((setup) => setup.id === selectedTemplateId) ?? selectedTeamPreviousSetups[0]
   const starterCount = selectedTeam?.players.filter((player) => (playerStatuses[player.id] ?? 'NOT_INVOLVED') === 'STARTER').length ?? 0
@@ -194,6 +205,11 @@ export default function MatchDayWizard({
     }
     if (step === 4 && selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
+      eventSelectionRef.current?.focus()
+      return
+    }
+    if (step === 4 && !eventLimitState.canProceed) {
+      setError(eventLimitState.message)
       eventSelectionRef.current?.focus()
       return
     }
@@ -219,14 +235,16 @@ export default function MatchDayWizard({
     setTrackedPlayerIds((currentIds) => currentIds.includes(playerId) ? currentIds.filter((id) => id !== playerId) : [...currentIds, playerId])
     setTrackedStateById((currentTracked) => ({ ...currentTracked, [playerId]: !(currentTracked[playerId] ?? trackedPlayerIds.includes(playerId)) }))
   }
-  const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(recommendedEventDefinitionIds)
+  const selectRecommendedDefaults = () => setSelectedEventDefinitionIds(limitClassicRecommendedEventIds(recommendedEventDefinitionIds))
   const selectCurriculumRecommendation = () => {
     const nextEventDefinitionIds = curriculumRecommendation.matchedEventDefinitionIds.filter((eventDefinitionId) => {
       const event = scopedEvents.find((scopedEvent) => scopedEvent.id === eventDefinitionId)
       return event && (locationTrackingEnabled || !event.requiresLocation)
     })
-    setSelectedEventDefinitionIds(nextEventDefinitionIds)
+    setSelectedEventDefinitionIds(limitClassicRecommendedEventIds(nextEventDefinitionIds))
     setRecommendationApplied(true)
+    setEventStartMethod('RECOMMENDED')
+    setEventSelectionNotice(null)
   }
   const setLocationTracking = (enabled: boolean) => {
     setLocationTrackingEnabled(enabled)
@@ -248,16 +266,34 @@ export default function MatchDayWizard({
     }
   }
   const selectVisibleEvents = (visibleEventDefinitionIds: string[]) => {
-    setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
-      Array.from(new Set([...currentEventDefinitionIds, ...visibleEventDefinitionIds]))
-    )
+    setSelectedEventDefinitionIds((currentEventDefinitionIds) => {
+      const nextEventDefinitionIds = Array.from(new Set([...currentEventDefinitionIds, ...visibleEventDefinitionIds]))
+      if (nextEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS) {
+        setEventSelectionNotice(`You can select up to ${MAX_CLASSIC_OBSERVATIONS} events for one match setup.`)
+        return nextEventDefinitionIds.slice(0, MAX_CLASSIC_OBSERVATIONS)
+      }
+      setEventSelectionNotice(null)
+      return nextEventDefinitionIds
+    })
   }
-  const clearSelectedEvents = () => setSelectedEventDefinitionIds([])
+  const clearSelectedEvents = () => {
+    setSelectedEventDefinitionIds([])
+    setEventSelectionNotice(null)
+  }
   const toggleEventDefinition = (eventDefinitionId: string) => {
     setSelectedEventDefinitionIds((currentEventDefinitionIds) =>
-      currentEventDefinitionIds.includes(eventDefinitionId)
-        ? currentEventDefinitionIds.filter((value) => value !== eventDefinitionId)
-        : [...currentEventDefinitionIds, eventDefinitionId]
+      {
+        if (currentEventDefinitionIds.includes(eventDefinitionId)) {
+          setEventSelectionNotice(null)
+          return currentEventDefinitionIds.filter((value) => value !== eventDefinitionId)
+        }
+        if (currentEventDefinitionIds.length >= MAX_CLASSIC_OBSERVATIONS) {
+          setEventSelectionNotice(`You can select up to ${MAX_CLASSIC_OBSERVATIONS} events for one match setup.`)
+          return currentEventDefinitionIds
+        }
+        setEventSelectionNotice(null)
+        return [...currentEventDefinitionIds, eventDefinitionId]
+      }
     )
   }
 
@@ -291,6 +327,8 @@ export default function MatchDayWizard({
         setStartingPositions(sanitizedTemplate.startingPositions)
         setTrackedStateById(Object.fromEntries(sanitizedTemplate.trackedPlayerIds.map((playerId) => [playerId, true])))
         setTemplateWarning(getTemplateWarning(sanitizedTemplate.omittedPlayers, sanitizedTemplate.omittedEventDefinitionCount))
+        setEventStartMethod('PREVIOUS')
+        setEventSelectionNotice(sanitizedTemplate.selectedEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS ? getClassicObservationLimitState(sanitizedTemplate.selectedEventDefinitionIds.length).message : null)
         setError(null)
         setTemplateModalOpen(false)
       } catch {
@@ -305,6 +343,11 @@ export default function MatchDayWizard({
     setError(null)
     if (selectedEventDefinitionIds.length === 0) {
       setError(zeroEventValidationMessage)
+      eventSelectionRef.current?.focus()
+      return
+    }
+    if (!eventLimitState.canProceed) {
+      setError(eventLimitState.message)
       eventSelectionRef.current?.focus()
       return
     }
@@ -416,10 +459,10 @@ export default function MatchDayWizard({
       {step === 3 && selectedTeam && (
         <div>
           <section className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-            <h2 className="text-lg font-extrabold text-slate-950">What are you tracking?</h2>
+            <h2 className="text-lg font-extrabold text-slate-950">Who are you observing?</h2>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <button type="button" role="radio" aria-checked={eventTrackingScope === 'TEAM'} onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Team events<span className="mt-1 block text-sm font-normal">Record totals and observations for the team without selecting a player.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'TEAM' ? 'Selected' : 'Not selected'}</span></button>
-              <button type="button" role="radio" aria-checked={eventTrackingScope === 'PLAYER'} onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Selected players<span className="mt-1 block text-sm font-normal">Attribute recorded events to one or more selected players.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'PLAYER' ? 'Selected' : 'Not selected'}</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'TEAM'} onClick={() => setEventTrackingScope('TEAM')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'TEAM' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>The whole team<span className="mt-1 block text-sm font-normal">Record team totals without choosing a player.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'TEAM' ? 'Selected' : 'Not selected'}</span></button>
+              <button type="button" role="radio" aria-checked={eventTrackingScope === 'PLAYER'} onClick={() => setEventTrackingScope('PLAYER')} className={`rounded-xl border p-4 text-left font-bold ${eventTrackingScope === 'PLAYER' ? 'border-blue-700 bg-white text-blue-950' : 'border-blue-100 bg-blue-50 text-slate-800'}`}>Individual players<span className="mt-1 block text-sm font-normal">Record which player completed each action.</span><span className="mt-2 block text-xs">{eventTrackingScope === 'PLAYER' ? 'Selected' : 'Not selected'}</span></button>
             </div>
           </section>
           <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
@@ -506,6 +549,14 @@ export default function MatchDayWizard({
           recommendationApplied={recommendationApplied}
           eventTrackingScope={eventTrackingScope}
           eventSelectionRef={eventSelectionRef}
+          eventStartMethod={eventStartMethod}
+          setEventStartMethod={setEventStartMethod}
+          eventSelectorOpen={eventSelectorOpen}
+          setEventSelectorOpen={setEventSelectorOpen}
+          advancedFiltersOpen={advancedEventFiltersOpen}
+          setAdvancedFiltersOpen={setAdvancedEventFiltersOpen}
+          eventSelectionNotice={eventSelectionNotice}
+          setEventSelectionNotice={setEventSelectionNotice}
         />
       )}
 
@@ -595,6 +646,14 @@ function EventPicker({
   recommendationApplied,
   eventTrackingScope,
   eventSelectionRef,
+  eventStartMethod,
+  setEventStartMethod,
+  eventSelectorOpen,
+  setEventSelectorOpen,
+  advancedFiltersOpen,
+  setAdvancedFiltersOpen,
+  eventSelectionNotice,
+  setEventSelectionNotice,
 }: {
   agePhase: AgePhase
   teamAgeGroup: string
@@ -630,8 +689,16 @@ function EventPicker({
   recommendationApplied: boolean
   eventTrackingScope: 'TEAM' | 'PLAYER'
   eventSelectionRef: RefObject<HTMLDivElement | null>
+  eventStartMethod: EventStartMethod
+  setEventStartMethod: (method: EventStartMethod) => void
+  eventSelectorOpen: boolean
+  setEventSelectorOpen: (open: boolean) => void
+  advancedFiltersOpen: boolean
+  setAdvancedFiltersOpen: (open: boolean) => void
+  eventSelectionNotice: string | null
+  setEventSelectionNotice: (notice: string | null) => void
 }) {
-  const [eventBrowserOpen, setEventBrowserOpen] = useState(false)
+  const selectorTriggerRef = useRef<HTMLButtonElement>(null)
   const normalizedSearchTerm = eventSearchTerm.trim().toLowerCase()
   const matchPhaseOptions = getUniqueOptions(events, 'matchPhase', 'matchPhaseLabel')
   const categoryOptions = getUniqueOptions(events, 'category', 'categoryLabel')
@@ -653,152 +720,421 @@ function EventPicker({
   const selectedEvents = events.filter((event) => selectedEventDefinitionIdSet.has(event.id))
   const visibleEventIds = visibleEvents.map((event) => event.id)
   const eventGroups = getTaxonomyEventGroups(visibleEvents)
+  const recommendedEventIds = new Set(recommendation.matchedEventDefinitionIds)
+  const recommendedEvents = events.filter((event) => recommendedEventIds.has(event.id) && (locationTrackingEnabled || !event.requiresLocation))
+  const defaultEvents = events.filter((event) => event.enabledByDefault && (locationTrackingEnabled || !event.requiresLocation))
+  const hasAdvancedFilters = eventMatchPhaseFilter !== 'ALL' || eventSubcategoryFilter !== 'ALL' || eventPositionFilter !== 'ALL' || eventFourCornerFilter !== 'ALL'
+  const selectorEvents = normalizedSearchTerm || eventCategoryFilter !== 'ALL' || hasAdvancedFilters
+    ? visibleEvents
+    : (recommendedEvents.length > 0 ? recommendedEvents : defaultEvents)
+  const limitState = getClassicObservationLimitState(selectedEventCount)
+  const shouldShowStart = eventStartMethod === 'UNSET' && selectedEventCount === 0
+
+  const openSelector = () => {
+    setEventStartMethod(eventStartMethod === 'UNSET' ? 'MANUAL' : eventStartMethod)
+    setEventSelectorOpen(true)
+  }
+
+  const chooseManual = () => {
+    setEventStartMethod('MANUAL')
+    setEventSelectorOpen(true)
+  }
+
+  const startAgain = () => {
+    onClearAll()
+    setEventStartMethod('UNSET')
+    setEventSelectorOpen(false)
+    setAdvancedFiltersOpen(false)
+    setEventSelectionNotice(null)
+  }
 
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-        <h2 className="text-2xl font-extrabold text-slate-950">What do you want to record in this match?</h2>
-        <p className="mt-2 text-sm text-slate-700">Choose what you want to track. Add squad details only if you need them.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <button type="button" onClick={onOpenTemplatePicker} className="rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 hover:bg-blue-50">Copy previous setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
-          <button type="button" onClick={onUseCurriculumRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50" disabled={recommendation.matchedEventDefinitionIds.length === 0}>Use recommended events<span className="mt-1 block font-normal text-slate-600">{recommendationApplied ? 'Recommended events applied.' : 'Apply suggestions explicitly.'}</span></button>
-          <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50">Choose my own events<span className="mt-1 block font-normal text-slate-600">Open the event browser.</span></button>
-        </div>
-      </section>
-
-      <section ref={eventSelectionRef} tabIndex={-1} className="rounded-xl border border-emerald-100 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Selected events</p>
-            <h3 className="mt-1 text-xl font-extrabold text-slate-950">{selectedEventCount} event{selectedEventCount === 1 ? '' : 's'} selected</h3>
-            <p className="mt-1 text-sm text-slate-600">{eventTrackingScope === 'PLAYER' ? 'These events will be attributed to your selected players.' : 'These events will be recorded for the whole team.'}</p>
-          </div>
-          <button type="button" onClick={() => setEventBrowserOpen(true)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Add or change events</button>
-        </div>
-        {selectedEvents.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {selectedEvents.map((event) => (
-              <button
-                key={event.id}
-                type="button"
-                onClick={() => onToggleEvent(event.id)}
-                className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-900 hover:bg-blue-200"
-              >
-                {event.label} ×
-              </button>
-            ))}
-          </div>
-        ) : <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">No events selected yet.</p>}
-      </section>
-
-      <details className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        <summary className="cursor-pointer text-sm font-bold">Advanced options</summary>
-        <div className="mt-3">
-          <OptionalTrackingExtras locationTrackingEnabled={locationTrackingEnabled} setLocationTrackingEnabled={setLocationTrackingEnabled} locationTrackingWarning={locationTrackingWarning} />
-        </div>
-      </details>
-
-      <details className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-        <summary className="cursor-pointer text-sm font-bold">Recommendation details</summary>
-        <div className="mt-3"><CurriculumRecommendationPanel teamAgeGroup={teamAgeGroup} recommendation={recommendation} curriculumFocus={curriculumFocus} setCurriculumFocus={setCurriculumFocus} curriculumWeekNumber={curriculumWeekNumber} setCurriculumWeekNumber={setCurriculumWeekNumber} onUseCurriculumRecommendation={onUseCurriculumRecommendation} /></div>
-      </details>
-
-      {eventBrowserOpen && <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h3 className="text-xl font-extrabold text-slate-950">Event browser</h3><p className="mt-1 text-sm text-slate-600">Search and expand categories to choose event buttons.</p></div>
-          <button type="button" onClick={() => setEventBrowserOpen(false)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white">Save selection</button>
-        </div>
-        <EventSetupHeader agePhase={agePhase} selectedEventCount={selectedEventCount} visibleEventCount={visibleEvents.length} onSelectRecommendedDefaults={onSelectRecommendedDefaults} onSelectAllVisible={() => onSelectVisibleEvents(visibleEventIds)} onClearAll={onClearAll} />
-        <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2">
-        <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
-          Search events
-          <input
-            value={eventSearchTerm}
-            onChange={(event) => setEventSearchTerm(event.target.value)}
-            className={fieldClassName}
-            placeholder="Search by event name"
-          />
-        </label>
-        <EventFilterSelect label="Match phase" value={eventMatchPhaseFilter} onChange={setEventMatchPhaseFilter} options={matchPhaseOptions} />
-        <EventFilterSelect label="Category" value={eventCategoryFilter} onChange={setEventCategoryFilter} options={categoryOptions} />
-        <EventFilterSelect label="Subcategory" value={eventSubcategoryFilter} onChange={setEventSubcategoryFilter} options={subcategoryOptions} />
-        <EventFilterSelect
-          label="Position relevance"
-          value={eventPositionFilter}
-          onChange={setEventPositionFilter}
-          options={positionOptions.map((value) => ({ value, label: formatEventMeta(value) }))}
+      {shouldShowStart ? (
+        <EventStartMethodSelection
+          onUseRecommendation={onUseCurriculumRecommendation}
+          onUsePrevious={onOpenTemplatePicker}
+          onChooseManual={chooseManual}
+          recommendationAvailable={recommendation.matchedEventDefinitionIds.length > 0}
         />
-        <EventFilterSelect
-          label="4 Corner"
-          value={eventFourCornerFilter}
-          onChange={setEventFourCornerFilter}
-          options={fourCornerOptions.map((value) => ({ value, label: formatEventMeta(value) }))}
+      ) : (
+        <SelectedEventSummary
+          eventSelectionRef={eventSelectionRef}
+          selectedEvents={selectedEvents}
+          selectedEventCount={selectedEventCount}
+          eventTrackingScope={eventTrackingScope}
+          limitState={limitState}
+          recommendationApplied={recommendationApplied && eventStartMethod === 'RECOMMENDED'}
+          recommendation={recommendation}
+          teamAgeGroup={teamAgeGroup}
+          curriculumFocus={curriculumFocus}
+          setCurriculumFocus={setCurriculumFocus}
+          curriculumWeekNumber={curriculumWeekNumber}
+          setCurriculumWeekNumber={setCurriculumWeekNumber}
+          onUseCurriculumRecommendation={onUseCurriculumRecommendation}
+          onToggleEvent={onToggleEvent}
+          onOpenSelector={openSelector}
+          onStartAgain={startAgain}
+          selectorTriggerRef={selectorTriggerRef}
+          locationTrackingEnabled={locationTrackingEnabled}
+          setLocationTrackingEnabled={setLocationTrackingEnabled}
+          locationTrackingWarning={locationTrackingWarning}
+          hasLocationEvents={events.some((event) => event.requiresLocation)}
+          notice={eventSelectionNotice}
         />
-        {/* TODO: Add tag filters when event tags exist in the data model. */}
-        </div>
+      )}
 
-        <div className="mt-4 grid gap-2">
-        {eventGroups.length === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
-            No events match the current filters.
-          </p>
-        ) : eventGroups.map((group) => <details key={group.label} className="rounded-2xl border bg-white"><summary className="cursor-pointer px-4 py-4 font-extrabold text-slate-950">{group.label} <span className="text-xs font-bold text-slate-500">{group.events.length} events · {group.events.filter((event) => selectedEventDefinitionIdSet.has(event.id)).length} selected</span></summary><div className="grid gap-2 border-t p-3 sm:grid-cols-2">{group.events.map((event) => {
-          const selected = selectedEventDefinitionIdSet.has(event.id)
-
-          return (
-            <article
-              key={event.id}
-              className={`rounded-xl border p-3 text-left transition ${
-                selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'
-              }`}
-            >
-              <label className="flex min-h-20 cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => onToggleEvent(event.id)}
-                    className="mt-1"
-                    aria-label={`Select ${event.label}`}
-                  />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-bold text-slate-950">{event.label}</p>
-                    {event.enabledByDefault && (
-                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-bold text-green-800">
-                        Default
-                      </span>
-                    )}
-                    {event.requiresLocation && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-                        Requires pitch location
-                      </span>
-                    )}
-                    {selected && (
-                      <span className="rounded-full bg-blue-800 px-2 py-0.5 text-[11px] font-bold text-white">
-                        Selected
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {event.matchPhaseLabel} · {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''} · {formatEventMeta(event.fourCorner)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Relevant: {event.positionRelevance.map(formatEventMeta).join(', ')}
-                  </p>
-                  <EventGuidanceDetails event={event} />
-                </div>
-              </label>
-            </article>
-          )
-        })}</div></details>)}
-        </div>
-
-      <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        Showing {visibleEvents.length} of {events.length} live-recordable observation events.
-      </p>
-      </section>}
+      {eventSelectorOpen && (
+        <EventSelectorModal
+          agePhase={agePhase}
+          events={selectorEvents}
+          totalEventCount={events.length}
+          selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
+          selectedEventCount={selectedEventCount}
+          eventSearchTerm={eventSearchTerm}
+          setEventSearchTerm={setEventSearchTerm}
+          eventCategoryFilter={eventCategoryFilter}
+          setEventCategoryFilter={setEventCategoryFilter}
+          categoryOptions={categoryOptions}
+          advancedFiltersOpen={advancedFiltersOpen}
+          setAdvancedFiltersOpen={setAdvancedFiltersOpen}
+          hasAdvancedFilters={hasAdvancedFilters}
+          eventMatchPhaseFilter={eventMatchPhaseFilter}
+          setEventMatchPhaseFilter={setEventMatchPhaseFilter}
+          matchPhaseOptions={matchPhaseOptions}
+          eventSubcategoryFilter={eventSubcategoryFilter}
+          setEventSubcategoryFilter={setEventSubcategoryFilter}
+          subcategoryOptions={subcategoryOptions}
+          eventPositionFilter={eventPositionFilter}
+          setEventPositionFilter={setEventPositionFilter}
+          positionOptions={positionOptions}
+          eventFourCornerFilter={eventFourCornerFilter}
+          setEventFourCornerFilter={setEventFourCornerFilter}
+          fourCornerOptions={fourCornerOptions}
+          eventGroups={eventGroups}
+          onToggleEvent={onToggleEvent}
+          onSelectRecommendedDefaults={onSelectRecommendedDefaults}
+          onSelectVisibleEvents={() => onSelectVisibleEvents(visibleEventIds)}
+          onClearAll={onClearAll}
+          onClose={() => setEventSelectorOpen(false)}
+          notice={eventSelectionNotice}
+        />
+      )}
     </div>
   )
+}
+
+function EventStartMethodSelection({
+  onUseRecommendation,
+  onUsePrevious,
+  onChooseManual,
+  recommendationAvailable,
+}: {
+  onUseRecommendation: () => void
+  onUsePrevious: () => void
+  onChooseManual: () => void
+  recommendationAvailable: boolean
+}) {
+  return (
+    <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+      <h2 className="text-2xl font-extrabold text-slate-950">How would you like to start?</h2>
+      <p className="mt-2 text-sm text-slate-700">Choose one starting point. You can adjust the events before creating the match.</p>
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <button type="button" onClick={onUseRecommendation} className="rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50" disabled={!recommendationAvailable}>Recommended for this team<span className="mt-1 block font-normal text-slate-600">Start with a focused set based on this team&apos;s age group.</span></button>
+        <button type="button" onClick={onUsePrevious} className="rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 hover:bg-blue-50">Use my last setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
+        <button type="button" onClick={onChooseManual} className="rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 hover:bg-slate-50">Choose events myself<span className="mt-1 block font-normal text-slate-600">Open a focused event selector.</span></button>
+      </div>
+    </section>
+  )
+}
+
+function SelectedEventSummary({
+  eventSelectionRef,
+  selectedEvents,
+  selectedEventCount,
+  eventTrackingScope,
+  limitState,
+  recommendationApplied,
+  recommendation,
+  teamAgeGroup,
+  curriculumFocus,
+  setCurriculumFocus,
+  curriculumWeekNumber,
+  setCurriculumWeekNumber,
+  onUseCurriculumRecommendation,
+  onToggleEvent,
+  onOpenSelector,
+  onStartAgain,
+  selectorTriggerRef,
+  locationTrackingEnabled,
+  setLocationTrackingEnabled,
+  locationTrackingWarning,
+  hasLocationEvents,
+  notice,
+}: {
+  eventSelectionRef: RefObject<HTMLDivElement | null>
+  selectedEvents: TaxonomyEvent[]
+  selectedEventCount: number
+  eventTrackingScope: 'TEAM' | 'PLAYER'
+  limitState: ReturnType<typeof getClassicObservationLimitState>
+  recommendationApplied: boolean
+  recommendation: CurriculumRecommendation
+  teamAgeGroup: string
+  curriculumFocus: CurriculumFocus
+  setCurriculumFocus: (value: CurriculumFocus) => void
+  curriculumWeekNumber: number
+  setCurriculumWeekNumber: (value: number) => void
+  onUseCurriculumRecommendation: () => void
+  onToggleEvent: (eventType: string) => void
+  onOpenSelector: () => void
+  onStartAgain: () => void
+  selectorTriggerRef: RefObject<HTMLButtonElement | null>
+  locationTrackingEnabled: boolean
+  setLocationTrackingEnabled: (enabled: boolean) => void
+  locationTrackingWarning: string | null
+  hasLocationEvents: boolean
+  notice: string | null
+}) {
+  return (
+    <section ref={eventSelectionRef} tabIndex={-1} className={`rounded-xl border bg-white p-4 ${getLimitStateClassName(limitState.tone)}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Events selected</p>
+          <h3 className="mt-1 text-xl font-extrabold text-slate-950">{selectedEventCount} of {MAX_CLASSIC_OBSERVATIONS} selected</h3>
+          <p className="mt-1 text-sm font-semibold text-slate-700">{limitState.message}</p>
+          <p className="mt-1 text-sm text-slate-600">{eventTrackingScope === 'PLAYER' ? 'These events will be attributed to your selected players.' : 'These events will be recorded for the whole team.'}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button ref={selectorTriggerRef} type="button" onClick={onOpenSelector} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Add or change events</button>
+          <button type="button" onClick={onStartAgain} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Start again</button>
+        </div>
+      </div>
+      {notice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{notice}</p>}
+      {selectedEvents.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {selectedEvents.map((event) => (
+            <button key={event.id} type="button" onClick={() => onToggleEvent(event.id)} className="rounded-full bg-blue-100 px-3 py-2 text-xs font-bold text-blue-900 hover:bg-blue-200" aria-label={`Remove ${event.label}`}>
+              {event.label} <span aria-hidden="true">×</span>
+            </button>
+          ))}
+        </div>
+      ) : <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">No events selected yet. Choose at least one event to continue.</p>}
+      {selectedEventCount > 0 && hasLocationEvents && (
+        <LocationTrackingPrompt locationTrackingEnabled={locationTrackingEnabled} setLocationTrackingEnabled={setLocationTrackingEnabled} locationTrackingWarning={locationTrackingWarning} />
+      )}
+      {recommendationApplied && (
+        <details className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+          <summary className="cursor-pointer text-sm font-bold">Why these events?</summary>
+          <div className="mt-3"><CurriculumRecommendationPanel teamAgeGroup={teamAgeGroup} recommendation={recommendation} curriculumFocus={curriculumFocus} setCurriculumFocus={setCurriculumFocus} curriculumWeekNumber={curriculumWeekNumber} setCurriculumWeekNumber={setCurriculumWeekNumber} onUseCurriculumRecommendation={onUseCurriculumRecommendation} /></div>
+        </details>
+      )}
+    </section>
+  )
+}
+
+function LocationTrackingPrompt({ locationTrackingEnabled, setLocationTrackingEnabled, locationTrackingWarning }: { locationTrackingEnabled: boolean; setLocationTrackingEnabled: (enabled: boolean) => void; locationTrackingWarning: string | null }) {
+  return (
+    <section className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <label className="flex items-start gap-3 font-bold">
+        <input type="checkbox" checked={locationTrackingEnabled} onChange={(event) => setLocationTrackingEnabled(event.target.checked)} className="mt-1 h-5 w-5" />
+        <span>
+          Add pitch locations?
+          <span className="mt-1 block font-normal leading-6 text-amber-900">Record where selected events happen.</span>
+        </span>
+      </label>
+      {locationTrackingWarning && <p className="mt-3 rounded-lg border border-amber-300 bg-white/80 p-3 font-semibold text-amber-950">{locationTrackingWarning}</p>}
+    </section>
+  )
+}
+
+function EventSelectorModal({
+  agePhase,
+  events,
+  totalEventCount,
+  selectedEventDefinitionIdSet,
+  selectedEventCount,
+  eventSearchTerm,
+  setEventSearchTerm,
+  eventCategoryFilter,
+  setEventCategoryFilter,
+  categoryOptions,
+  advancedFiltersOpen,
+  setAdvancedFiltersOpen,
+  hasAdvancedFilters,
+  eventMatchPhaseFilter,
+  setEventMatchPhaseFilter,
+  matchPhaseOptions,
+  eventSubcategoryFilter,
+  setEventSubcategoryFilter,
+  subcategoryOptions,
+  eventPositionFilter,
+  setEventPositionFilter,
+  positionOptions,
+  eventFourCornerFilter,
+  setEventFourCornerFilter,
+  fourCornerOptions,
+  eventGroups,
+  onToggleEvent,
+  onSelectRecommendedDefaults,
+  onSelectVisibleEvents,
+  onClearAll,
+  onClose,
+  notice,
+}: {
+  agePhase: AgePhase
+  events: TaxonomyEvent[]
+  totalEventCount: number
+  selectedEventDefinitionIdSet: Set<string>
+  selectedEventCount: number
+  eventSearchTerm: string
+  setEventSearchTerm: (value: string) => void
+  eventCategoryFilter: string
+  setEventCategoryFilter: (value: string) => void
+  categoryOptions: Array<{ value: string; label: string }>
+  advancedFiltersOpen: boolean
+  setAdvancedFiltersOpen: (open: boolean) => void
+  hasAdvancedFilters: boolean
+  eventMatchPhaseFilter: string
+  setEventMatchPhaseFilter: (value: string) => void
+  matchPhaseOptions: Array<{ value: string; label: string }>
+  eventSubcategoryFilter: string
+  setEventSubcategoryFilter: (value: string) => void
+  subcategoryOptions: Array<{ value: string; label: string }>
+  eventPositionFilter: string
+  setEventPositionFilter: (value: string) => void
+  positionOptions: string[]
+  eventFourCornerFilter: string
+  setEventFourCornerFilter: (value: string) => void
+  fourCornerOptions: string[]
+  eventGroups: Array<{ label: string; events: TaxonomyEvent[] }>
+  onToggleEvent: (eventType: string) => void
+  onSelectRecommendedDefaults: () => void
+  onSelectVisibleEvents: () => void
+  onClearAll: () => void
+  onClose: () => void
+  notice: string | null
+}) {
+  const titleRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    titleRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [onClose])
+
+  const limitState = getClassicObservationLimitState(selectedEventCount)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="event-selector-title">
+      <div className="flex max-h-screen w-full flex-col overflow-hidden bg-white shadow-xl sm:max-h-[90vh] sm:max-w-5xl sm:rounded-2xl">
+        <div className="sticky top-0 z-10 border-b bg-white p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 id="event-selector-title" ref={titleRef} tabIndex={-1} className="text-2xl font-extrabold text-slate-950">Add or change events</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-700">{selectedEventCount} of {MAX_CLASSIC_OBSERVATIONS} selected · {limitState.label}</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800">Done</button>
+          </div>
+          {notice && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{notice}</p>}
+        </div>
+
+        <div className="overflow-y-auto p-4 sm:p-5">
+          <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <label className="text-sm font-semibold text-slate-700">
+              Search events
+              <input value={eventSearchTerm} onChange={(event) => setEventSearchTerm(event.target.value)} className={fieldClassName} placeholder="Search by event name" />
+            </label>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Category</p>
+              <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Event category">
+                {[{ value: 'ALL', label: 'All' }, ...categoryOptions].map((option) => (
+                  <button key={option.value} type="button" role="radio" aria-checked={eventCategoryFilter === option.value} onClick={() => setEventCategoryFilter(option.value)} className={`rounded-full px-3 py-2 text-sm font-bold ${eventCategoryFilter === option.value ? 'bg-blue-700 text-white' : 'bg-white text-slate-700'}`}>{option.label}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <button type="button" onClick={() => setAdvancedFiltersOpen(!advancedFiltersOpen)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-800 hover:bg-slate-50" aria-expanded={advancedFiltersOpen}>
+                Filters{hasAdvancedFilters ? ' active' : ''}
+              </button>
+              {advancedFiltersOpen && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <EventFilterSelect label="Match phase" value={eventMatchPhaseFilter} onChange={setEventMatchPhaseFilter} options={matchPhaseOptions} />
+                  <EventFilterSelect label="Subcategory" value={eventSubcategoryFilter} onChange={setEventSubcategoryFilter} options={subcategoryOptions} />
+                  <EventFilterSelect label="Position relevance" value={eventPositionFilter} onChange={setEventPositionFilter} options={positionOptions.map((value) => ({ value, label: formatEventMeta(value) }))} />
+                  <EventFilterSelect label="4 Corner" value={eventFourCornerFilter} onChange={setEventFourCornerFilter} options={fourCornerOptions.map((value) => ({ value, label: formatEventMeta(value) }))} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button type="button" onClick={onSelectRecommendedDefaults} className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100">Use recommended defaults</button>
+            <button type="button" onClick={onSelectVisibleEvents} className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-800 hover:bg-blue-100" disabled={events.length === 0}>Select visible</button>
+            <button type="button" onClick={onClearAll} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200" disabled={selectedEventCount === 0}>Clear all</button>
+          </div>
+
+          <div className="mt-4 grid gap-2">
+            {eventGroups.length === 0 ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">No events match the current filters.</p>
+            ) : eventGroups.map((group) => (
+              <section key={group.label} className="rounded-2xl border bg-white p-3">
+                <h3 className="font-extrabold text-slate-950">{group.label} <span className="text-xs font-bold text-slate-500">{group.events.length} events · {group.events.filter((event) => selectedEventDefinitionIdSet.has(event.id)).length} selected</span></h3>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {group.events.map((event) => <EventSelectionCard key={event.id} event={event} selected={selectedEventDefinitionIdSet.has(event.id)} selectedEventCount={selectedEventCount} onToggleEvent={onToggleEvent} />)}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          <p className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">Showing {events.length} of {totalEventCount} live-recordable observation events. Suggested for {agePhaseLabels[agePhase]}: 4-6 events.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EventSelectionCard({ event, selected, selectedEventCount, onToggleEvent }: { event: TaxonomyEvent; selected: boolean; selectedEventCount: number; onToggleEvent: (eventType: string) => void }) {
+  const cannotAdd = !selected && selectedEventCount >= MAX_CLASSIC_OBSERVATIONS
+
+  return (
+    <article className={`rounded-xl border p-3 text-left transition ${selected ? 'border-blue-700 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-blue-200 hover:bg-blue-50/40'}`}>
+      <div className="flex min-h-24 flex-col gap-3">
+        <div className="flex items-start gap-3">
+          <input type="checkbox" checked={selected} disabled={cannotAdd} onChange={() => onToggleEvent(event.id)} className="mt-1 h-5 w-5" aria-label={`${selected ? 'Remove' : 'Add'} ${event.label}`} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-bold text-slate-950">{event.label}</p>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${selected ? 'bg-blue-800 text-white' : 'bg-slate-100 text-slate-700'}`}>{selected ? 'Selected' : 'Not selected'}</span>
+            </div>
+            <p className="mt-1 text-sm text-slate-600">{event.description ?? 'Record when this action occurs.'}</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => onToggleEvent(event.id)} disabled={cannotAdd} className={`w-full rounded-lg px-3 py-2 text-sm font-bold ${selected ? 'bg-blue-100 text-blue-900 hover:bg-blue-200' : cannotAdd ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-blue-700 text-white hover:bg-blue-800'}`}>{selected ? 'Remove' : cannotAdd ? 'Limit reached' : 'Add'}</button>
+        <details className="rounded-lg border border-slate-200 bg-white/80 p-2 text-sm">
+          <summary className="cursor-pointer text-xs font-bold text-blue-800">Details</summary>
+          <div className="mt-2 space-y-2 text-slate-700">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{event.matchPhaseLabel} · {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''} · {formatEventMeta(event.fourCorner)}</p>
+            <p className="text-xs text-slate-500">Relevant: {event.positionRelevance.map(formatEventMeta).join(', ')}</p>
+            {event.requiresLocation && <p className="text-xs font-bold text-emerald-700">Requires pitch location</p>}
+            {event.videoUrl && <a href={event.videoUrl} target="_blank" rel="noreferrer" className="inline-flex text-sm font-bold text-blue-700 hover:underline">Watch guidance</a>}
+          </div>
+        </details>
+      </div>
+    </article>
+  )
+}
+
+function getLimitStateClassName(tone: ReturnType<typeof getClassicObservationLimitState>['tone']) {
+  if (tone === 'over-limit') return 'border-red-200'
+  if (tone === 'empty') return 'border-amber-200'
+  return 'border-emerald-100'
 }
 
 function CurriculumRecommendationPanel({
@@ -903,141 +1239,6 @@ function CurriculumRecommendationPanel({
   )
 }
 
-function OptionalTrackingExtras({
-  locationTrackingEnabled,
-  setLocationTrackingEnabled,
-  locationTrackingWarning,
-}: {
-  locationTrackingEnabled: boolean
-  setLocationTrackingEnabled: (enabled: boolean) => void
-  locationTrackingWarning: string | null
-}) {
-  return (
-    <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-      <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Optional tracking extras</p>
-      <label className="mt-3 flex items-start gap-3 font-bold">
-        <input
-          type="checkbox"
-          checked={locationTrackingEnabled}
-          onChange={(event) => setLocationTrackingEnabled(event.target.checked)}
-          className="mt-1"
-        />
-        <span>
-          Location tracking
-          <span className="mt-1 block font-normal leading-6 text-amber-900">
-            Location tracking adds extra taps during the match. Choose a small number of events if you are recording live on your own.
-          </span>
-        </span>
-      </label>
-      {locationTrackingWarning && (
-        <p className="mt-3 rounded-lg border border-amber-300 bg-white/80 p-3 font-semibold text-amber-950">
-          {locationTrackingWarning}
-        </p>
-      )}
-    </section>
-  )
-}
-
-function EventSetupHeader({
-  agePhase,
-  selectedEventCount,
-  visibleEventCount,
-  onSelectRecommendedDefaults,
-  onSelectAllVisible,
-  onClearAll,
-}: {
-  agePhase: AgePhase
-  selectedEventCount: number
-  visibleEventCount: number
-  onSelectRecommendedDefaults: () => void
-  onSelectAllVisible: () => void
-  onClearAll: () => void
-}) {
-  const workloadGuidance = getWorkloadGuidance(selectedEventCount)
-
-  return (
-    <div className={`rounded-xl border p-3 text-sm ${workloadGuidance.className}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide opacity-80">Choose what you want to observe</p>
-          <p className="mt-1 text-xl font-extrabold">
-            {selectedEventCount} event{selectedEventCount === 1 ? '' : 's'} selected
-          </p>
-          <p className="mt-1 font-semibold">{workloadGuidance.label}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={onSelectRecommendedDefaults} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white">
-            Use default event set
-          </button>
-          <button type="button" onClick={onSelectAllVisible} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-blue-800 hover:bg-white" disabled={visibleEventCount === 0}>
-            Select all visible
-          </button>
-          <button type="button" onClick={onClearAll} className="rounded-lg bg-white/80 px-3 py-2 font-semibold text-slate-700 hover:bg-white" disabled={selectedEventCount === 0}>
-            Clear all
-          </button>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-        <span className="rounded-full bg-white/70 px-2.5 py-1">Suggested for {agePhaseLabels[agePhase]}</span>
-        <span className="rounded-full bg-white/70 px-2.5 py-1">4-8 focused</span>
-        <span className="rounded-full bg-white/70 px-2.5 py-1">9-12 busy</span>
-        <span className="rounded-full bg-white/70 px-2.5 py-1">13+ too much</span>
-      </div>
-      <p className="mt-2">
-        These are coaching observation buttons, not match admin fields. Choose only what you can realistically record live.
-      </p>
-    </div>
-  )
-}
-
-function EventGuidanceDetails({ event }: { event: TaxonomyEvent }) {
-  const hasGuidance = event.description || event.videoUrl || event.requiresLocation || event.subcategory
-  if (!hasGuidance) return null
-
-  return (
-    <details
-      className="mt-2 rounded-lg border border-slate-200 bg-white/80 p-2 text-sm"
-      onClick={(clickEvent) => clickEvent.stopPropagation()}
-      onToggle={(toggleEvent) => toggleEvent.stopPropagation()}
-    >
-      <summary className="cursor-pointer text-xs font-bold text-blue-800">
-        Recording guidance
-      </summary>
-      <div className="mt-2 space-y-2 text-slate-700">
-        <div>
-          <p className="font-bold text-slate-950">{event.label}</p>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {event.categoryLabel}{event.subcategory ? ` · ${event.subcategory}` : ''}
-          </p>
-        </div>
-        {event.description && (
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">What to count</p>
-            <p className="mt-1 text-sm">{event.description}</p>
-          </div>
-        )}
-        <div className="flex flex-wrap gap-1.5">
-          {event.requiresLocation && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
-              Requires pitch location
-            </span>
-          )}
-        </div>
-        {event.videoUrl && (
-          <a
-            href={event.videoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex text-sm font-bold text-blue-700 hover:underline"
-          >
-            Watch guidance
-          </a>
-        )}
-      </div>
-    </details>
-  )
-}
-
 function EventFilterSelect({
   label,
   value,
@@ -1094,32 +1295,6 @@ function formatEventMeta(value: string) {
     .split('_')
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
     .join(' ')
-}
-
-function getWorkloadGuidance(selectedEventCount: number) {
-  if (selectedEventCount === 0) {
-    return {
-      label: 'Select a few events or use defaults.',
-      className: 'border-amber-200 bg-amber-50 text-amber-950',
-    }
-  }
-  if (selectedEventCount <= 8) {
-    return {
-      label: 'Focused match view.',
-      className: 'border-green-200 bg-green-50 text-green-950',
-    }
-  }
-  if (selectedEventCount <= 12) {
-    return {
-      label: 'Busy but manageable.',
-      className: 'border-blue-200 bg-blue-50 text-blue-950',
-    }
-  }
-
-  return {
-    label: 'This may be too much for one person to record live.',
-    className: 'border-red-200 bg-red-50 text-red-950',
-  }
 }
 
 function getStepDescription(step: number) {

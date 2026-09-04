@@ -5,7 +5,7 @@ import MatchDayWizard from '@/app/match-day/new/MatchDayWizard'
 import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
-import { buildClassicMatchDayPlayerCreates } from '@/lib/matchDayClassicSetup'
+import { buildClassicMatchDayPlayerCreates, MAX_CLASSIC_OBSERVATIONS } from '@/lib/matchDayClassicSetup'
 import {
   getActiveRecordableEventDefinitions,
   getMatchDayEventCategoryFallback,
@@ -94,6 +94,9 @@ async function createMatchFromWizard(formData: FormData) {
   )
   if (selectedEventDefinitionIds.length === 0) {
     return { ok: false as const, reason: 'Select at least one event to track for this match.' }
+  }
+  if (selectedEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS) {
+    return { ok: false as const, reason: `Select no more than ${MAX_CLASSIC_OBSERVATIONS} events for this match.` }
   }
 
   const selectedEvents = await prisma.eventDefinition.findMany({
