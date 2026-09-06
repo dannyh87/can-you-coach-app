@@ -101,22 +101,25 @@ model TeamAssignment {
 }
 
 model Team {
-  id                  String                  @id @default(cuid())
-  clubId              String
-  name                String
-  ageGroup            String
-  season              String
-  league              String?
-  footballPyramidStep String?
-  createdAt           DateTime                @default(now())
-  updatedAt           DateTime                @updatedAt
-  club                Club                    @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  invitations         Invitation[]
-  players             Player[]
-  fitnessTestSessions FitnessTestSession[]
-  matchDays           MatchDay[]
-  assignments         TeamAssignment[]
-  trackingTemplates   TrackingSetupTemplate[]
+  id                      String                   @id @default(cuid())
+  clubId                  String
+  name                    String
+  ageGroup                String
+  season                  String
+  league                  String?
+  footballPyramidStep     String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  club                    Club                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  invitations             Invitation[]
+  players                 Player[]
+  fitnessTestSessions     FitnessTestSession[]
+  matchDays               MatchDay[]
+  assignments             TeamAssignment[]
+  trackingTemplates       TrackingSetupTemplate[]
+  clubTrackingDefinitions ClubTrackingDefinition[]
+
+  @@unique([id, clubId])
 }
 
 enum TrackingTemplateVisibility {
@@ -139,6 +142,17 @@ enum ClubTrackingDefinitionStatus {
   APPROVED
   REJECTED
   RETIRED
+}
+
+enum ClubTrackingDefinitionVisibilityScope {
+  TEAM
+  CLUB
+}
+
+enum ClubTrackingObservationPolarity {
+  POSITIVE
+  NEGATIVE
+  NEUTRAL
 }
 
 enum ClubTrackingMappingStatus {
@@ -242,20 +256,24 @@ model MatchDay {
 }
 
 model MatchDayEventType {
-  id                 String                   @id @default(cuid())
-  matchDayId         String
-  eventType          MatchEventType?
-  category           MatchEventCategory
-  eventDefinitionId  String?
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-  matchDay           MatchDay                 @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
-  eventDefinition    EventDefinition?         @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
-  trackingTaskEvents MatchTrackingTaskEvent[]
+  id                       String                   @id @default(cuid())
+  matchDayId               String
+  eventType                MatchEventType?
+  category                 MatchEventCategory
+  eventDefinitionId        String?
+  clubTrackingDefinitionId String?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  matchDay                 MatchDay                 @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  eventDefinition          EventDefinition?         @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
+  clubTrackingDefinition   ClubTrackingDefinition?  @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
+  trackingTaskEvents       MatchTrackingTaskEvent[]
 
   @@unique([matchDayId, eventType])
   @@unique([matchDayId, eventDefinitionId])
+  @@unique([matchDayId, clubTrackingDefinitionId])
   @@index([eventDefinitionId])
+  @@index([clubTrackingDefinitionId])
 }
 
 model MatchTrackingTask {
@@ -610,6 +628,8 @@ model TrackingSetupTemplateApplication {
 model ClubTrackingDefinition {
   id                               String                                        @id @default(cuid())
   clubId                           String
+  teamId                           String?
+  visibilityScope                  ClubTrackingDefinitionVisibilityScope         @default(CLUB)
   kind                             ClubTrackingDefinitionKind
   status                           ClubTrackingDefinitionStatus
   name                             String
@@ -617,6 +637,9 @@ model ClubTrackingDefinition {
   slug                             String
   description                      String?
   guidance                         String?
+  countingDefinition               String?
+  eventCategory                    EventDefinitionCategory?
+  polarity                         ClubTrackingObservationPolarity               @default(NEUTRAL)
   scopeType                        MatchTrackingScope?
   targetContext                    TrackingTargetContext?
   phase                            TrackingTopicPhase?
@@ -645,6 +668,7 @@ model ClubTrackingDefinition {
   updatedAt                        DateTime                                      @updatedAt
 
   club                         Club                                      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  team                         Team?                                     @relation(fields: [teamId, clubId], references: [id, clubId], onDelete: Restrict)
   mappedEventDefinition        EventDefinition?                          @relation("ClubTrackingDefinitionsMappedEvent", fields: [mappedEventDefinitionId], references: [id], onDelete: Restrict)
   mappedPatternDefinition      TrackingPatternDefinition?                @relation("ClubTrackingDefinitionsMappedPattern", fields: [mappedPatternDefinitionId], references: [id], onDelete: Restrict)
   createdBy                    User                                      @relation("ClubTrackingDefinitionsCreated", fields: [createdByUserId], references: [id], onDelete: Cascade)
@@ -656,13 +680,16 @@ model ClubTrackingDefinition {
   officialMatchEvents          MatchEvent[]
   submittedPatternObservations SubmittedTrackingPatternObservation[]
   officialPatternObservations  MatchTrackingPatternObservation[]
+  matchDayEventTypes           MatchDayEventType[]
   taskLinks                    MatchTrackingTaskClubDefinition[]
   templateTaskLinks            TrackingSetupTemplateTaskClubDefinition[]
   topicLinks                   ClubTrackingDefinitionTopic[]
 
-  @@unique([clubId, kind, normalizedName])
   @@unique([clubId, slug])
   @@index([clubId])
+  @@index([teamId])
+  @@index([clubId, visibilityScope])
+  @@index([clubId, teamId])
   @@index([kind])
   @@index([status])
   @@index([active])

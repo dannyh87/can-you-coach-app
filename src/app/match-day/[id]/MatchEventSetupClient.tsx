@@ -16,41 +16,78 @@ type EventOption = {
 
 type EventDisplayGroup = {
   label: string
-  events: RecordableEventOption[]
+  events: MixedEventOption[]
 }
+
+type CustomEventOption = {
+  id: string
+  label: string
+  description: string | null
+  category: string | null
+  categoryLabel: string
+  subcategory: string | null
+  requiresLocation: boolean
+  sourceLabel: string
+}
+
+type MixedEventOption = (RecordableEventOption & { source: 'STANDARD'; key: string }) | (CustomEventOption & { source: 'CUSTOM'; key: string; enabledByDefault: false; matchDayGroup: null; matchPhase: string; legacyEventType: null; videoUrl: null })
 
 type MatchEventSetupClientProps = {
   matchDayId: string
   eventOptions: readonly RecordableEventOption[]
+  customEventOptions?: readonly CustomEventOption[]
   categoryOptions: readonly EventOption[]
   selectedEventDefinitionIds: string[]
+  selectedClubTrackingDefinitionIds?: string[]
+  maxCustomObservations?: number
   updateMatchEventSetupAction: (formData: FormData) => Promise<MatchActionResult>
 }
 
 export default function MatchEventSetupClient({
   matchDayId,
   eventOptions,
+  customEventOptions = [],
   selectedEventDefinitionIds,
+  selectedClubTrackingDefinitionIds = [],
+  maxCustomObservations = 2,
   updateMatchEventSetupAction,
 }: MatchEventSetupClientProps) {
   const router = useRouter()
-  const [selectedValues, setSelectedValues] = useState<string[]>(selectedEventDefinitionIds)
+  const mixedEventOptions: MixedEventOption[] = [
+    ...eventOptions.map((eventOption) => ({ ...eventOption, source: 'STANDARD' as const, key: `event:${eventOption.id}` })),
+    ...customEventOptions.map((eventOption) => ({ ...eventOption, source: 'CUSTOM' as const, key: `custom:${eventOption.id}`, enabledByDefault: false as const, matchDayGroup: null, matchPhase: 'IN_POSSESSION', legacyEventType: null, videoUrl: null })),
+  ]
+  const [selectedValues, setSelectedValues] = useState<string[]>([
+    ...selectedEventDefinitionIds.map((id) => `event:${id}`),
+    ...selectedClubTrackingDefinitionIds.map((id) => `custom:${id}`),
+  ])
   const [openGroupLabels, setOpenGroupLabels] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [subcategoryFilter, setSubcategoryFilter] = useState('ALL')
   const [locationTrackingEnabled, setLocationTrackingEnabled] = useState(
-    eventOptions.some((eventOption) => eventOption.requiresLocation && selectedEventDefinitionIds.includes(eventOption.id))
+    mixedEventOptions.some((eventOption) => eventOption.requiresLocation && selectedValues.includes(eventOption.key))
   )
   const [locationTrackingWarning, setLocationTrackingWarning] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const toggleEventDefinition = (eventDefinitionId: string) => {
+  const toggleEventDefinition = (key: string) => {
     setSelectedValues((currentValues) =>
-      currentValues.includes(eventDefinitionId)
-        ? currentValues.filter((value) => value !== eventDefinitionId)
-        : [...currentValues, eventDefinitionId]
+      {
+        if (currentValues.includes(key)) return currentValues.filter((value) => value !== key)
+        const customCount = currentValues.filter((value) => value.startsWith('custom:')).length
+        if (currentValues.length >= 8) {
+          setError(`You can select up to 8 observations in total, including up to ${maxCustomObservations} custom observations.`)
+          return currentValues
+        }
+        if (key.startsWith('custom:') && customCount >= maxCustomObservations) {
+          setError(`You can select up to 8 observations in total, including up to ${maxCustomObservations} custom observations.`)
+          return currentValues
+        }
+        setError(null)
+        return [...currentValues, key]
+      }
     )
   }
 
@@ -58,14 +95,14 @@ export default function MatchEventSetupClient({
     setSelectedValues(eventOptions
       .filter((eventOption) => eventOption.enabledByDefault)
       .filter((eventOption) => locationTrackingEnabled || !eventOption.requiresLocation)
-      .map((eventOption) => eventOption.id))
+      .map((eventOption) => `event:${eventOption.id}`))
   }
   const setLocationTracking = (enabled: boolean) => {
     setLocationTrackingEnabled(enabled)
     setLocationTrackingWarning(null)
 
     if (!enabled) {
-      const locationEventIds = new Set(eventOptions.filter((eventOption) => eventOption.requiresLocation).map((eventOption) => eventOption.id))
+      const locationEventIds = new Set(mixedEventOptions.filter((eventOption) => eventOption.requiresLocation).map((eventOption) => eventOption.key))
       setSelectedValues((currentValues) => {
         const nextValues = currentValues.filter((eventDefinitionId) => !locationEventIds.has(eventDefinitionId))
 
@@ -77,15 +114,15 @@ export default function MatchEventSetupClient({
       })
     }
   }
-  const subcategoryOptions = Array.from(new Set(eventOptions.map((eventOption) => eventOption.subcategory).filter((subcategory): subcategory is string => Boolean(subcategory)))).sort()
+  const subcategoryOptions = Array.from(new Set(mixedEventOptions.map((eventOption) => eventOption.subcategory).filter((subcategory): subcategory is string => Boolean(subcategory)))).sort()
   const normalizedSearchTerm = searchTerm.trim().toLowerCase()
-  const visibleEventOptions = eventOptions.filter((eventOption) => {
+  const visibleEventOptions = mixedEventOptions.filter((eventOption) => {
     if (!locationTrackingEnabled && eventOption.requiresLocation) return false
     if (normalizedSearchTerm && !`${eventOption.label} ${eventOption.description ?? ''}`.toLowerCase().includes(normalizedSearchTerm)) return false
     if (subcategoryFilter !== 'ALL' && eventOption.subcategory !== subcategoryFilter) return false
     return true
   })
-  const selectedEventOptions = eventOptions.filter((eventOption) => selectedValues.includes(eventOption.id))
+  const selectedEventOptions = mixedEventOptions.filter((eventOption) => selectedValues.includes(eventOption.key))
   const selectedSummaryEvents = selectedEventOptions.slice(0, 8)
   const hiddenSelectedCount = Math.max(0, selectedEventOptions.length - selectedSummaryEvents.length)
   const eventGroups = getEventDisplayGroups(visibleEventOptions)
@@ -97,7 +134,10 @@ export default function MatchEventSetupClient({
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    selectedValues.forEach((eventDefinitionId) => formData.append('eventDefinitionId', eventDefinitionId))
+    selectedValues.forEach((value) => {
+      if (value.startsWith('event:')) formData.append('eventDefinitionId', value.slice('event:'.length))
+      if (value.startsWith('custom:')) formData.append('clubTrackingDefinitionId', value.slice('custom:'.length))
+    })
 
     const result = await updateMatchEventSetupAction(formData)
 
@@ -207,9 +247,9 @@ export default function MatchEventSetupClient({
             </p>
           ) : (
             <div className="mt-3 flex flex-wrap gap-2">
-              {selectedSummaryEvents.map((eventOption) => (
-                <span key={eventOption.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                  {eventOption.label}
+                {selectedSummaryEvents.map((eventOption) => (
+                <span key={eventOption.key} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                  {eventOption.label}{eventOption.source === 'CUSTOM' ? ' · Custom' : ''}
                 </span>
               ))}
               {hiddenSelectedCount > 0 && (
@@ -226,7 +266,7 @@ export default function MatchEventSetupClient({
             No events match the current filters.
           </p>
         ) : eventGroups.map((group) => {
-          const selectedCount = group.events.filter((eventOption) => selectedValues.includes(eventOption.id)).length
+          const selectedCount = group.events.filter((eventOption) => selectedValues.includes(eventOption.key)).length
           const isGroupOpen = openGroupLabels.includes(group.label)
 
           return (
@@ -258,11 +298,11 @@ export default function MatchEventSetupClient({
               </summary>
               <div className="grid grid-cols-1 gap-2 border-t border-slate-100 p-3 sm:grid-cols-2">
                 {group.events.map((eventOption) => {
-                    const isSelected = selectedValues.includes(eventOption.id)
+                    const isSelected = selectedValues.includes(eventOption.key)
 
                     return (
                       <article
-                        key={eventOption.id}
+                        key={eventOption.key}
                         className={`rounded-2xl border text-left text-sm transition ${
                           isSelected
                             ? 'border-blue-600 bg-blue-50 text-blue-950 shadow-sm'
@@ -273,12 +313,13 @@ export default function MatchEventSetupClient({
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => toggleEventDefinition(eventOption.id)}
+                            onChange={() => toggleEventDefinition(eventOption.key)}
                             className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-blue-700 focus:ring-blue-700"
                             disabled={isSaving}
                           />
                           <div className="min-w-0 flex-1">
                             <span className="block text-base font-extrabold">{eventOption.label}</span>
+                            {eventOption.source === 'CUSTOM' && <span className="mt-1 inline-flex rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-bold text-purple-800">{eventOption.sourceLabel}</span>}
                             <span className="mt-1 block text-xs font-semibold uppercase tracking-wide opacity-70">
                               {eventOption.subcategory ?? eventOption.categoryLabel}
                             </span>
@@ -311,7 +352,7 @@ export default function MatchEventSetupClient({
   )
 }
 
-function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGroup[] {
+function getEventDisplayGroups(events: MixedEventOption[]): EventDisplayGroup[] {
   const groupOrder = [
     'Goals & Outcomes',
     'Shooting',
@@ -322,7 +363,7 @@ function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGro
     'Goalkeeping',
     'Custom / Other',
   ]
-  const groups = new Map(groupOrder.map((label) => [label, [] as RecordableEventOption[]]))
+  const groups = new Map(groupOrder.map((label) => [label, [] as MixedEventOption[]]))
 
   for (const event of events) {
     const groupLabel = getEventDisplayGroupLabel(event)
@@ -334,7 +375,7 @@ function getEventDisplayGroups(events: RecordableEventOption[]): EventDisplayGro
     .filter((group) => group.events.length > 0)
 }
 
-function getEventDisplayGroupLabel(event: RecordableEventOption) {
+function getEventDisplayGroupLabel(event: MixedEventOption) {
   const configuredGroupLabel = getMatchDayGroupLabel(event.matchDayGroup)
   if (configuredGroupLabel) return configuredGroupLabel
 
@@ -352,7 +393,7 @@ function getEventDisplayGroupLabel(event: RecordableEventOption) {
   return 'Custom / Other'
 }
 
-function EventGuidanceDetails({ event }: { event: RecordableEventOption }) {
+function EventGuidanceDetails({ event }: { event: Pick<RecordableEventOption, 'label' | 'categoryLabel' | 'description' | 'videoUrl' | 'requiresLocation' | 'subcategory'> }) {
   const hasGuidance = event.description || event.videoUrl || event.requiresLocation || event.subcategory
   if (!hasGuidance) return null
 

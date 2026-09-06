@@ -45,6 +45,7 @@ type RecentEvent = {
 type EventOption = {
   matchDayEventTypeId: string
   eventDefinitionId: string | null
+  clubTrackingDefinitionId: string | null
   legacyEventType: MatchEventType | null
   label: string
   category: string
@@ -85,7 +86,7 @@ const formatMatchTime = (matchSecond: number) => {
 }
 
 const getEventOptionKey = (eventOption: EventOption) =>
-  eventOption.eventDefinitionId ?? eventOption.legacyEventType ?? eventOption.matchDayEventTypeId
+  eventOption.clubTrackingDefinitionId ? `custom:${eventOption.clubTrackingDefinitionId}` : eventOption.eventDefinitionId ? `event:${eventOption.eventDefinitionId}` : eventOption.legacyEventType ? `legacy:${eventOption.legacyEventType}` : `selected:${eventOption.matchDayEventTypeId}`
 
 const getPendingEventKey = (eventOption: EventOption, matchDayPlayerId: string) =>
   `${getEventOptionKey(eventOption)}:${matchDayPlayerId}`
@@ -165,6 +166,8 @@ export default function MatchEventsClient({
   const appendEventFields = (formData: FormData, eventOption: EventOption) => {
     if (eventOption.eventDefinitionId) {
       formData.set('eventDefinitionId', eventOption.eventDefinitionId)
+    } else if (eventOption.clubTrackingDefinitionId) {
+      formData.set('clubTrackingDefinitionId', eventOption.clubTrackingDefinitionId)
     } else if (eventOption.legacyEventType) {
       formData.set('eventType', eventOption.legacyEventType)
     }

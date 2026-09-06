@@ -6,8 +6,13 @@ import {
   approveStandardMapping,
   createClubTrackingDefinitionDraft,
   deleteUnusedClubTrackingDefinitionDraft,
+  findClubTrackingDefinitionDuplicates,
+  getActiveSelectableCustomObservationsForTeam,
   getClubTrackingReportingIdentity,
   getClubDefinitionLocalSelectionEligibility,
+  getSelectedClubTrackingDefinitionForMatchDay,
+  isClubTrackingDefinitionVisibleToTeam,
+  MAX_CLASSIC_CUSTOM_OBSERVATIONS,
   observationContributesToStandardReporting,
   normalizeClubTrackingDefinitionName,
   proposeClubTrackingDefinitionMapping,
@@ -18,9 +23,15 @@ import {
   searchExistingTrackingDefinitions,
   submitClubTrackingDefinitionForReview,
   updateClubTrackingDefinition,
+  validateClassicObservationSelectionCounts,
+  validateClubTrackingDefinitionVisibility,
+  validateCustomObservationForNewMatchSelection,
+  validateMatchDayEventTypeIdentityShape,
+  validatePureCustomSelectionIdentity,
 } from '@/lib/clubTrackingDefinitions'
 
 vi.mock('@/lib/auth', () => ({ isClerkEnabled: () => false }))
+vi.mock('@/lib/permissions', () => ({ canManageMatchDay: vi.fn(async () => true), canManageTeamData: vi.fn(async () => true) }))
 
 const standardEvent = { id: 'event-1', name: 'Forward pass completed', normalizedName: 'completed forward pas', description: null, benchmarkable: true }
 const standardPattern = { id: 'pattern-1', name: 'Third player combination', normalizedName: 'combination player third', description: null, aliases: [], outcomes: [{ id: 'outcome-1' }] }
@@ -29,6 +40,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
   const state = {
     membershipRole: 'OWNER',
     definitions: [] as Array<Record<string, unknown>>,
+    teams: [{ id: 'team-1', clubId: 'club-1' }, { id: 'team-2', clubId: 'club-1' }, { id: 'team-x', clubId: 'club-x' }],
     usage: 0,
     globalEventDuplicate: null as null | { id: string; name: string; normalizedName: string },
     clubDuplicate: null as null | { id: string; name: string; kind: string },
@@ -53,11 +65,16 @@ function createDb(overrides: Record<string, unknown> = {}) {
       findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => where.id === 'pattern-1' ? standardPattern : null),
       findUnique: vi.fn(async () => ({ benchmarkable: false })),
     },
+    team: {
+      findUnique: vi.fn(async ({ where }: { where: { id: string } }) => state.teams.find((team) => team.id === where.id) ?? null),
+    },
     clubTrackingDefinition: {
-      findMany: vi.fn(async () => state.definitions),
+      findMany: vi.fn(async ({ where }: { where?: Record<string, unknown> } = {}) => state.definitions.filter((definition) => matchesWhere(definition, where))),
       findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
         if (where.slug) return null
         if (where.normalizedName && state.clubDuplicate) return state.clubDuplicate
+        const existing = state.definitions.find((definition) => matchesWhere(definition, where))
+        if (existing) return existing
         if ((where.id as { not?: string } | undefined)?.not) return null
         return null
       }),
@@ -74,11 +91,22 @@ function createDb(overrides: Record<string, unknown> = {}) {
     },
     submittedMatchEvent: { findMany: vi.fn(async () => Array.from({ length: state.usage }, () => ({ createdAt: new Date('2026-01-01'), matchDay: { teamId: 'team-1' } }))) },
     matchEvent: { findMany: vi.fn(async () => []) },
+    matchDayEventType: { findFirst: vi.fn(async ({ where }: { where: { clubTrackingDefinitionId?: string | null } }) => ({ clubTrackingDefinition: state.definitions.find((definition) => definition.id === where.clubTrackingDefinitionId) ?? null })) },
     submittedTrackingPatternObservation: { findMany: vi.fn(async () => []) },
     matchTrackingPatternObservation: { findMany: vi.fn(async () => []) },
     ...overrides,
   }
   return db as never
+}
+
+function matchesWhere(row: Record<string, unknown>, where?: Record<string, unknown>): boolean {
+  if (!where) return true
+  return Object.entries(where).every(([key, value]) => {
+    if (key === 'OR' && Array.isArray(value)) return value.some((item) => matchesWhere(row, item as Record<string, unknown>))
+    if (value && typeof value === 'object' && 'not' in value) return row[key] !== (value as { not: unknown }).not
+    if (value && typeof value === 'object' && 'in' in value && Array.isArray((value as { in: unknown[] }).in)) return (value as { in: unknown[] }).in.includes(row[key])
+    return row[key] === value
+  })
 }
 
 async function tokenFor(db: never, role = 'OWNER', query = 'Break the line') {
@@ -259,5 +287,92 @@ describe('club tracking definitions governance', () => {
     await createClubTrackingDefinitionDraft({ db, userId: 'coach-1', input: { clubId: 'club-1', kind: 'EVENT_CUSTOM', name: 'Lock the six', searchToken, proposalType: 'EVENT' } })
     ;(db as { state: { usage: number } }).state.usage = 1
     await expect(deleteUnusedClubTrackingDefinitionDraft({ db, userId: 'coach-1', definitionId: 'definition-1' })).resolves.toMatchObject({ ok: false })
+  })
+
+  it('treats existing definitions without visibility fields as club-wide', () => {
+    expect(isClubTrackingDefinitionVisibleToTeam({ clubId: 'club-1' }, { id: 'team-1', clubId: 'club-1' })).toBe(true)
+    expect(isClubTrackingDefinitionVisibleToTeam({ clubId: 'club-1' }, { id: 'team-x', clubId: 'club-x' })).toBe(false)
+  })
+
+  it('validates TEAM and CLUB visibility invariants', () => {
+    expect(validateClubTrackingDefinitionVisibility({ clubId: 'club-1', visibilityScope: 'TEAM', teamId: null }, null)).toMatchObject({ ok: false })
+    expect(validateClubTrackingDefinitionVisibility({ clubId: 'club-1', visibilityScope: 'CLUB', teamId: 'team-1' }, { id: 'team-1', clubId: 'club-1' })).toMatchObject({ ok: false })
+    expect(validateClubTrackingDefinitionVisibility({ clubId: 'club-1', visibilityScope: 'TEAM', teamId: 'team-x' }, { id: 'team-x', clubId: 'club-x' })).toMatchObject({ ok: false })
+    expect(validateClubTrackingDefinitionVisibility({ clubId: 'club-1', visibilityScope: 'TEAM', teamId: 'team-1' }, { id: 'team-1', clubId: 'club-1' })).toMatchObject({ ok: true })
+    expect(validateClubTrackingDefinitionVisibility({ clubId: 'club-1', visibilityScope: 'CLUB', teamId: null }, null)).toMatchObject({ ok: true })
+  })
+
+  it('filters selectable custom observations by visibility, club and active state', async () => {
+    const db = createDb()
+    const state = (db as { state: { definitions: Array<Record<string, unknown>> } }).state
+    state.definitions.push(
+      { id: 'club-wide', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Club custom' },
+      { id: 'team-private', clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Team custom' },
+      { id: 'other-team', clubId: 'club-1', teamId: 'team-2', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Other team custom' },
+      { id: 'other-club', clubId: 'club-x', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Other club custom' },
+      { id: 'retired', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'RETIRED', active: false, retiredAt: new Date('2026-01-01'), name: 'Retired custom' },
+      { id: 'mapped', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_MAPPED', status: 'APPROVED', active: true, retiredAt: null, name: 'Mapped event' }
+    )
+    const result = await getActiveSelectableCustomObservationsForTeam({ db, userId: 'coach-1', teamId: 'team-1' })
+    expect(result).toMatchObject({ ok: true })
+    expect(result.ok ? result.value.map((definition) => definition.id).sort() : []).toEqual(['club-wide', 'team-private'])
+  })
+
+  it('rejects custom selections from another team, another club, inactive or retired definitions', async () => {
+    const db = createDb()
+    const state = (db as { state: { definitions: Array<Record<string, unknown>> } }).state
+    state.definitions.push(
+      { id: 'valid', clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' },
+      { id: 'other-team', clubId: 'club-1', teamId: 'team-2', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' },
+      { id: 'other-club', clubId: 'club-x', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' },
+      { id: 'inactive', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: false, retiredAt: null, mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' },
+      { id: 'retired', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', status: 'RETIRED', active: false, retiredAt: new Date('2026-01-01'), mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' }
+    )
+    await expect(validateCustomObservationForNewMatchSelection({ db, userId: 'coach-1', teamId: 'team-1', clubTrackingDefinitionId: 'valid' })).resolves.toMatchObject({ ok: true })
+    await expect(validateCustomObservationForNewMatchSelection({ db, userId: 'coach-1', teamId: 'team-1', clubTrackingDefinitionId: 'other-team' })).resolves.toMatchObject({ ok: false })
+    await expect(validateCustomObservationForNewMatchSelection({ db, userId: 'coach-1', teamId: 'team-1', clubTrackingDefinitionId: 'other-club' })).resolves.toMatchObject({ ok: false })
+    await expect(validateCustomObservationForNewMatchSelection({ db, userId: 'coach-1', teamId: 'team-1', clubTrackingDefinitionId: 'inactive' })).resolves.toMatchObject({ ok: false })
+    await expect(validateCustomObservationForNewMatchSelection({ db, userId: 'coach-1', teamId: 'team-1', clubTrackingDefinitionId: 'retired' })).resolves.toMatchObject({ ok: false })
+  })
+
+  it('loads already selected retired definitions by Match Day identity', async () => {
+    const db = createDb()
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions.push({ id: 'retired', status: 'RETIRED', active: false, retiredAt: new Date('2026-01-01') })
+    await expect(getSelectedClubTrackingDefinitionForMatchDay({ db, matchDayId: 'match-1', clubTrackingDefinitionId: 'retired' })).resolves.toMatchObject({ id: 'retired' })
+  })
+
+  it('identifies same-scope duplicates without blocking other teams', async () => {
+    const db = createDb()
+    const state = (db as { state: { definitions: Array<Record<string, unknown>> } }).state
+    state.definitions.push(
+      { id: 'team-duplicate', clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', normalizedName: 'pres won', name: 'Press won' },
+      { id: 'other-team-same-name', clubId: 'club-1', teamId: 'team-2', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', normalizedName: 'pres won', name: 'Press won' },
+      { id: 'club-duplicate', clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', kind: 'EVENT_CUSTOM', normalizedName: 'counter pres', name: 'Counter press' }
+    )
+    await expect(findClubTrackingDefinitionDuplicates({ db, clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', name: 'Press won' })).resolves.toMatchObject({ exact: [expect.objectContaining({ id: 'team-duplicate' })] })
+    await expect(findClubTrackingDefinitionDuplicates({ db, clubId: 'club-1', teamId: 'team-2', visibilityScope: 'TEAM', name: 'Press won' })).resolves.toMatchObject({ exact: [expect.objectContaining({ id: 'other-team-same-name' })] })
+    await expect(findClubTrackingDefinitionDuplicates({ db, clubId: 'club-1', teamId: null, visibilityScope: 'CLUB', name: 'Counter press' })).resolves.toMatchObject({ exact: [expect.objectContaining({ id: 'club-duplicate' })] })
+  })
+
+  it('represents classic total and custom selection limits', () => {
+    expect(MAX_CLASSIC_CUSTOM_OBSERVATIONS).toBe(2)
+    expect(validateClassicObservationSelectionCounts({ eventDefinitionIds: ['event-1', 'event-2', 'event-3', 'event-4', 'event-5', 'event-6'], clubTrackingDefinitionIds: ['custom-1', 'custom-2'] })).toMatchObject({ ok: true })
+    expect(validateClassicObservationSelectionCounts({ eventDefinitionIds: ['event-1', 'event-2', 'event-3', 'event-4', 'event-5', 'event-6', 'event-7'], clubTrackingDefinitionIds: ['custom-1', 'custom-2'] })).toMatchObject({ ok: false })
+    expect(validateClassicObservationSelectionCounts({ eventDefinitionIds: ['event-1'], clubTrackingDefinitionIds: ['custom-1', 'custom-2', 'custom-3'] })).toMatchObject({ ok: false })
+  })
+
+  it('validates MatchDayEventType legacy, standard and future custom row shapes', () => {
+    expect(validateMatchDayEventTypeIdentityShape({ eventDefinitionId: 'event-1', clubTrackingDefinitionId: null, eventType: 'PASS_COMPLETE' })).toMatchObject({ ok: true })
+    expect(validateMatchDayEventTypeIdentityShape({ eventDefinitionId: null, clubTrackingDefinitionId: null, eventType: 'PASS_COMPLETE' })).toMatchObject({ ok: true })
+    expect(validateMatchDayEventTypeIdentityShape({ eventDefinitionId: null, clubTrackingDefinitionId: 'custom-1', eventType: null })).toMatchObject({ ok: true })
+    expect(validateMatchDayEventTypeIdentityShape({ eventDefinitionId: 'event-1', clubTrackingDefinitionId: 'custom-1', eventType: null })).toMatchObject({ ok: false })
+    expect(validateMatchDayEventTypeIdentityShape({ eventDefinitionId: null, clubTrackingDefinitionId: 'custom-1', eventType: 'PASS_COMPLETE' })).toMatchObject({ ok: false })
+  })
+
+  it('rejects pure custom selections that claim standard mapping identity', () => {
+    expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_CUSTOM', mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'NONE' })).toMatchObject({ ok: true })
+    expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_CUSTOM', mappedEventDefinitionId: 'event-1', mappedPatternDefinitionId: null, mappingStatus: 'NONE' })).toMatchObject({ ok: false })
+    expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_CUSTOM', mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'PROPOSED' })).toMatchObject({ ok: false })
+    expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_MAPPED', mappedEventDefinitionId: 'event-1', mappedPatternDefinitionId: null, mappingStatus: 'CLUB_APPROVED' })).toMatchObject({ ok: false })
   })
 })

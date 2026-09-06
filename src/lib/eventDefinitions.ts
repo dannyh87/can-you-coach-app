@@ -19,7 +19,7 @@ const eventDefinitionMatchPhaseLabels = {
   DISCIPLINE: 'Discipline',
 } satisfies Record<MatchPhase, string>
 
-const eventDefinitionCategoryLabels: Record<string, string> = {
+export const eventDefinitionCategoryLabels: Record<string, string> = {
   PASSING: 'Passing',
   RECEIVING: 'Receiving',
   DRIBBLING_1V1: 'Dribbling / 1v1',

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { revalidatePath } from 'next/cache'
 import { notFound, redirect } from 'next/navigation'
+import type { MatchEventType } from '@prisma/client'
 
 import MatchControlClient from '@/app/match-day/[id]/MatchControlClient'
 import CopySetupSubmitButton from '@/app/match-day/[id]/CopySetupSubmitButton'
@@ -14,7 +15,15 @@ import MatchSquadClient from '@/app/match-day/[id]/MatchSquadClient'
 import MatchTrackingFocusClient from '@/app/match-day/[id]/MatchTrackingFocusClient'
 import TouchMap from '@/components/TouchMap'
 import { getCurrentUser } from '@/lib/auth'
-import { observationContributesToStandardReporting } from '@/lib/clubTrackingDefinitions'
+import {
+  getActiveSelectableCustomObservationsForTeam,
+  getSelectedClubTrackingDefinitionForMatchDay,
+  observationContributesToStandardReporting,
+  validateClassicObservationSelectionCounts,
+  validateCustomObservationForNewMatchSelection,
+  validateMatchDayEventTypeIdentityShape,
+  validatePureCustomSelectionIdentity,
+} from '@/lib/clubTrackingDefinitions'
 import {
   getActiveRecordableEventDefinitions,
   getEventDisplayName,
@@ -34,7 +43,7 @@ import {
 import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
-import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { isMatchDayCustomObservationsEnabled, isMatchDayTrackingV2Enabled } from '@/lib/features'
 import {
   buildMatchEventCsvRows,
   buildMatchPatternCsvRows,
@@ -185,6 +194,27 @@ const getMatchEventIdentity = (event: {
 
 const getMatchEventLabel = getMatchReportEventLabel
 
+function getCustomMatchEventCategory(category: string | null | undefined) {
+  if (category === 'DEFENDING') return 'OUT_OF_POSSESSION' as const
+  if (category === 'PASSING' || category === 'RECEIVING' || category === 'DRIBBLING_1V1') return 'IN_POSSESSION' as const
+  return 'ATTACKING' as const
+}
+
+type SelectedEventOption = {
+  matchDayEventTypeId: string
+  eventDefinitionId: string | null
+  clubTrackingDefinitionId: string | null
+  legacyEventType: MatchEventType | null
+  label: string
+  category: string
+  categoryLabel: string
+  subcategory: string | null
+  description: string | null
+  videoUrl: string | null
+  requiresLocation: boolean
+  isActive: boolean
+}
+
 const getSubmissionTargetLabel = (submission: {
   assignment?: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
 }) => {
@@ -315,9 +345,10 @@ async function duplicateMatchDaySetup(formData: FormData) {
   if (!(await canManageTeamData(user.id, sourceMatch.teamId))) redirect(`/match-day/${sourceMatch.id}`)
 
   const copiedEventTypes = sourceMatch.matchDayEventTypes
-    .filter((eventType) => eventType.eventDefinitionId || eventType.eventType)
+    .filter((eventType) => eventType.eventDefinitionId || eventType.eventType || (isMatchDayCustomObservationsEnabled() && eventType.clubTrackingDefinitionId))
     .map((eventType) => ({
       eventDefinitionId: eventType.eventDefinitionId,
+      clubTrackingDefinitionId: isMatchDayCustomObservationsEnabled() ? eventType.clubTrackingDefinitionId : null,
       eventType: eventType.eventType,
       category: eventType.category,
     }))
@@ -584,17 +615,26 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
       .map((value) => value.trim())
       .filter(Boolean)
   ))
+  const clubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled() ? Array.from(new Set(
+    formData
+      .getAll('clubTrackingDefinitionId')
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+  )) : []
 
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
-  if (eventDefinitionIds.length === 0) {
-    return { ok: false, reason: 'Select at least one event to track for this match.' }
-  }
+  const countValidation = isMatchDayCustomObservationsEnabled()
+    ? validateClassicObservationSelectionCounts({ eventDefinitionIds, clubTrackingDefinitionIds })
+    : eventDefinitionIds.length === 0 ? { ok: false as const, reason: 'Select at least one event to track for this match.' } : { ok: true as const, value: true }
+  if (!countValidation.ok) return { ok: false, reason: countValidation.reason }
 
   const match = await getActionableMatch(matchDayId, 'manage')
   if (!match) return { ok: false, reason: 'Match was not found.' }
   if (match.status !== 'DRAFT') {
     return { ok: false, reason: 'Event setup can only be changed before the match starts.' }
   }
+  const user = await getCurrentUser()
 
   const eventDefinitions = await prisma.eventDefinition.findMany({
     where: {
@@ -605,6 +645,20 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
   if (eventDefinitions.length !== eventDefinitionIds.length) {
     return { ok: false, reason: 'One or more selected events are no longer available.' }
   }
+  const retainedCustomSelectionIds = new Set(clubTrackingDefinitionIds.length ? (await prisma.matchDayEventType.findMany({ where: { matchDayId: match.id, clubTrackingDefinitionId: { in: clubTrackingDefinitionIds } }, select: { clubTrackingDefinitionId: true } })).map((eventType) => eventType.clubTrackingDefinitionId).filter((id): id is string => Boolean(id)) : [])
+  const customValidationResults = await Promise.all(clubTrackingDefinitionIds.map(async (clubTrackingDefinitionId) => {
+    if (!retainedCustomSelectionIds.has(clubTrackingDefinitionId)) {
+      return validateCustomObservationForNewMatchSelection({ userId: user.id, teamId: match.teamId, clubTrackingDefinitionId })
+    }
+    const retainedDefinition = await getSelectedClubTrackingDefinitionForMatchDay({ matchDayId: match.id, clubTrackingDefinitionId })
+    if (!retainedDefinition) return { ok: false as const, reason: 'Custom observation was not found.' }
+    if (retainedDefinition.status !== 'APPROVED') return { ok: false as const, reason: 'Custom observation is no longer approved.' }
+    return validatePureCustomSelectionIdentity(retainedDefinition)
+  }))
+  const invalidCustom = customValidationResults.find((result) => !result.ok)
+  if (invalidCustom && !invalidCustom.ok) return { ok: false, reason: invalidCustom.reason }
+  const customDefinitions = clubTrackingDefinitionIds.length ? await prisma.clubTrackingDefinition.findMany({ where: { id: { in: clubTrackingDefinitionIds } } }) : []
+  if (customDefinitions.length !== clubTrackingDefinitionIds.length) return { ok: false, reason: 'One or more custom observations are no longer available.' }
 
   const eventDefinitionsById = new Map(eventDefinitions.map((eventDefinition) => [eventDefinition.id, eventDefinition]))
   const selectedEventDefinitions = eventDefinitionIds.map((eventDefinitionId) => eventDefinitionsById.get(eventDefinitionId))
@@ -614,14 +668,22 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
     ...selectedEventDefinitions.map((eventDefinition) => {
       if (!eventDefinition) throw new Error('Event definition is invalid.')
 
-      return prisma.matchDayEventType.create({
-        data: {
+      const data = {
           matchDayId: match.id,
           eventDefinitionId: eventDefinition.id,
+          clubTrackingDefinitionId: null,
           eventType: eventDefinition.legacyEventType ?? null,
           category: getMatchDayEventCategoryFallback(eventDefinition),
-        },
-      })
+      }
+      const shape = validateMatchDayEventTypeIdentityShape(data)
+      if (!shape.ok) throw new Error(shape.reason)
+      return prisma.matchDayEventType.create({ data })
+    }),
+    ...customDefinitions.map((definition) => {
+      const data = { matchDayId: match.id, eventDefinitionId: null, clubTrackingDefinitionId: definition.id, eventType: null, category: getCustomMatchEventCategory(definition.eventCategory) }
+      const shape = validateMatchDayEventTypeIdentityShape(data)
+      if (!shape.ok) throw new Error(shape.reason)
+      return prisma.matchDayEventType.create({ data })
     }),
   ])
 
@@ -992,13 +1054,15 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const matchDayId = getTextValue(formData, 'matchDayId')
   const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
   const eventDefinitionId = getTextValue(formData, 'eventDefinitionId')
+  const clubTrackingDefinitionId = isMatchDayCustomObservationsEnabled() ? getTextValue(formData, 'clubTrackingDefinitionId') : ''
   const eventType = getTextValue(formData, 'eventType')
   const x = getOptionalPitchCoordinate(formData, 'x')
   const y = getOptionalPitchCoordinate(formData, 'y')
 
-  if (!matchDayId || (!eventDefinitionId && !eventType)) {
+  if (!matchDayId || (!eventDefinitionId && !eventType && !clubTrackingDefinitionId)) {
     return { ok: false, reason: 'Match and event are required.' }
   }
+  if (clubTrackingDefinitionId && (eventDefinitionId || eventType)) return { ok: false, reason: 'Custom observations cannot be recorded as standard events.' }
 
   if (!x.ok || !y.ok) {
     return { ok: false, reason: 'Event location must be a number between 0 and 100.' }
@@ -1015,31 +1079,36 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Events can only be recorded during live match play.' }
   }
 
-  const selectedEvent = eventDefinitionId
+  const selectedEvent = clubTrackingDefinitionId
+    ? await prisma.matchDayEventType.findFirst({
+        where: { matchDayId: match.id, clubTrackingDefinitionId },
+        include: { eventDefinition: true, clubTrackingDefinition: true },
+      })
+    : eventDefinitionId
     ? await prisma.matchDayEventType.findFirst({
         where: {
           matchDayId: match.id,
           eventDefinitionId,
         },
-        include: { eventDefinition: true },
+        include: { eventDefinition: true, clubTrackingDefinition: true },
       })
     : await prisma.matchDayEventType.findFirst({
         where: {
           matchDayId: match.id,
           eventType: legacyEventType,
         },
-        include: { eventDefinition: true },
+        include: { eventDefinition: true, clubTrackingDefinition: true },
       })
 
   if (!selectedEvent) {
     return { ok: false, reason: 'This event was not selected for this match.' }
   }
 
-  if (!selectedEvent.eventDefinitionId && !selectedEvent.eventType) {
+  if (!selectedEvent.eventDefinitionId && !selectedEvent.eventType && !selectedEvent.clubTrackingDefinitionId) {
     return { ok: false, reason: 'Selected event is not recordable.' }
   }
 
-  const requiresLocation = selectedEvent.eventDefinition?.requiresLocation ?? false
+  const requiresLocation = selectedEvent.clubTrackingDefinition?.requiresLocation ?? selectedEvent.eventDefinition?.requiresLocation ?? false
   if (requiresLocation && (x.value === undefined || y.value === undefined)) {
     return { ok: false, reason: 'Event location is required.' }
   }
@@ -1088,9 +1157,13 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     data: {
       matchDayId: match.id,
       playerId: squadPlayer?.playerId ?? null,
-      eventDefinitionId: selectedEvent.eventDefinitionId,
+      eventDefinitionId: selectedEvent.clubTrackingDefinitionId ? null : selectedEvent.eventDefinitionId,
       // Temporary fallback for older UI paths until all clients submit eventDefinitionId.
-      eventType: selectedEvent.eventDefinition?.legacyEventType ?? selectedEvent.eventType ?? null,
+      eventType: selectedEvent.clubTrackingDefinitionId ? null : selectedEvent.eventDefinition?.legacyEventType ?? selectedEvent.eventType ?? null,
+      clubTrackingDefinitionId: selectedEvent.clubTrackingDefinitionId,
+      standardEventDefinitionIdAtRecording: null,
+      clubMappingRevisionAtRecording: selectedEvent.clubTrackingDefinition?.mappingRevision ?? null,
+      clubMappingStatusAtRecording: selectedEvent.clubTrackingDefinition?.mappingStatus ?? null,
       half: activeHalf.half,
       matchSecond,
       ownScoreAtTime: match.ownScore,
@@ -1284,6 +1357,7 @@ export default async function MatchDayDetailPage({
       matchDayEventTypes: {
         include: {
           eventDefinition: true,
+          clubTrackingDefinition: true,
         },
         orderBy: { createdAt: 'asc' },
       },
@@ -1344,6 +1418,10 @@ export default async function MatchDayDetailPage({
     legacyOnly: false,
     clubId: match.team.clubId,
   })
+  const customObservationsEnabled = isMatchDayCustomObservationsEnabled()
+  const setupCustomObservationResult = customObservationsEnabled ? await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: match.teamId }) : null
+  const setupCustomObservationOptions = setupCustomObservationResult?.ok ? setupCustomObservationResult.value : []
+  const setupCustomObservationIds = new Set(setupCustomObservationOptions.map((observation) => observation.id))
   const setupEventOptionsById = new Map(
     setupEventOptions.map((eventOption) => [eventOption.id, eventOption])
   )
@@ -1455,9 +1533,25 @@ export default async function MatchDayDetailPage({
   const recentEventsForRecording = [...recentEvents]
     .sort((firstEvent, secondEvent) => secondEvent.matchSecond - firstEvent.matchSecond)
     .slice(0, 20)
-  const selectedEventOptions = match.matchDayEventTypes.length > 0
-    ? match.matchDayEventTypes.flatMap((selectedEventType) => {
-        if (!selectedEventType.eventDefinitionId && !selectedEventType.eventType) return []
+  const selectedEventOptions: SelectedEventOption[] = match.matchDayEventTypes.length > 0
+    ? match.matchDayEventTypes.flatMap<SelectedEventOption>((selectedEventType) => {
+        if (!selectedEventType.eventDefinitionId && !selectedEventType.eventType && !selectedEventType.clubTrackingDefinitionId) return []
+        if (selectedEventType.clubTrackingDefinitionId && selectedEventType.clubTrackingDefinition) {
+          return [{
+            matchDayEventTypeId: selectedEventType.id,
+            eventDefinitionId: null,
+            clubTrackingDefinitionId: selectedEventType.clubTrackingDefinitionId,
+            legacyEventType: null,
+            label: selectedEventType.clubTrackingDefinition.name,
+            category: getCustomMatchEventCategory(selectedEventType.clubTrackingDefinition.eventCategory),
+            categoryLabel: selectedEventType.clubTrackingDefinition.eventCategory ? formatStatus(selectedEventType.clubTrackingDefinition.eventCategory) : 'Custom',
+            subcategory: selectedEventType.clubTrackingDefinition.visibilityScope === 'TEAM' ? 'Custom · Your team' : 'Custom · Your club',
+            description: selectedEventType.clubTrackingDefinition.countingDefinition ?? selectedEventType.clubTrackingDefinition.description,
+            videoUrl: null,
+            requiresLocation: selectedEventType.clubTrackingDefinition.requiresLocation,
+            isActive: true,
+          }]
+        }
         const eventDefinition = selectedEventType.eventDefinition
         const setupEventOption = selectedEventType.eventDefinitionId
           ? setupEventOptionsById.get(selectedEventType.eventDefinitionId)
@@ -1466,10 +1560,11 @@ export default async function MatchDayDetailPage({
         return [{
           matchDayEventTypeId: selectedEventType.id,
           eventDefinitionId: selectedEventType.eventDefinitionId,
+          clubTrackingDefinitionId: null,
           legacyEventType: eventDefinition?.legacyEventType ?? selectedEventType.eventType,
           label: getEventDisplayName(selectedEventType),
-          category: eventDefinition?.category ?? selectedEventType.category,
-          categoryLabel: setupEventOption?.categoryLabel ?? formatStatus(eventDefinition?.category ?? selectedEventType.category),
+          category: eventDefinition?.category ?? selectedEventType.category ?? 'ATTACKING',
+          categoryLabel: setupEventOption?.categoryLabel ?? formatStatus(eventDefinition?.category ?? selectedEventType.category ?? 'ATTACKING'),
           subcategory: eventDefinition?.subcategory ?? null,
           description: eventDefinition?.description ?? null,
           videoUrl: eventDefinition?.videoUrl ?? null,
@@ -1521,6 +1616,13 @@ export default async function MatchDayDetailPage({
     if (selectedEventType.eventType) return setupEventDefinitionIdsByLegacyType.get(selectedEventType.eventType) ? [setupEventDefinitionIdsByLegacyType.get(selectedEventType.eventType)!] : []
     return []
   })))
+  const selectedClubTrackingDefinitionIdsForSetup = customObservationsEnabled ? Array.from(new Set(match.matchDayEventTypes.flatMap((selectedEventType) => selectedEventType.clubTrackingDefinitionId ? [selectedEventType.clubTrackingDefinitionId] : []))) : []
+  const selectedRetiredCustomOptions = customObservationsEnabled ? match.matchDayEventTypes.flatMap((selectedEventType) => {
+    const definition = selectedEventType.clubTrackingDefinition
+    if (!definition || setupCustomObservationIds.has(definition.id)) return []
+    return [{ id: definition.id, label: definition.name, description: definition.countingDefinition ?? definition.description, category: definition.eventCategory, categoryLabel: definition.eventCategory ? formatStatus(definition.eventCategory) : 'Custom', subcategory: definition.visibilityScope === 'TEAM' ? 'Custom · Your team' : 'Custom · Your club', requiresLocation: definition.requiresLocation, sourceLabel: definition.visibilityScope === 'TEAM' ? 'Custom · Your team' : 'Custom · Your club' }]
+  }) : []
+  const setupCustomEventOptions = customObservationsEnabled ? [...setupCustomObservationOptions.map((observation) => ({ id: observation.id, label: observation.label, description: observation.countingDefinition, category: observation.category, categoryLabel: observation.categoryLabel, subcategory: observation.sourceLabel, requiresLocation: observation.requiresLocation, sourceLabel: observation.sourceLabel })), ...selectedRetiredCustomOptions] : []
   const minutesRows = pitchPlayers
     .map((player) => ({
       playerId: player.playerId,
@@ -1825,7 +1927,7 @@ export default async function MatchDayDetailPage({
               </details>
               <details className="rounded-2xl border bg-white p-4">
                 <summary className="cursor-pointer text-lg font-bold text-slate-950">Edit events</summary>
-                <div className="mt-4"><MatchEventSetupClient matchDayId={match.id} eventOptions={setupEventOptions} categoryOptions={setupEventCategoryOptions} selectedEventDefinitionIds={selectedEventDefinitionIdsForSetup} updateMatchEventSetupAction={updateMatchEventSetup} /></div>
+                <div className="mt-4"><MatchEventSetupClient matchDayId={match.id} eventOptions={setupEventOptions} customEventOptions={setupCustomEventOptions} categoryOptions={setupEventCategoryOptions} selectedEventDefinitionIds={selectedEventDefinitionIdsForSetup} selectedClubTrackingDefinitionIds={selectedClubTrackingDefinitionIdsForSetup} updateMatchEventSetupAction={updateMatchEventSetup} /></div>
               </details>
             </section>
           )}

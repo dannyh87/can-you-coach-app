@@ -2,9 +2,12 @@ import { createHash } from 'crypto'
 import type {
   ClubTrackingDefinitionKind,
   ClubTrackingDefinitionStatus,
+  ClubTrackingDefinitionVisibilityScope,
   ClubTrackingMappingStatus,
+  ClubTrackingObservationPolarity,
   ClubTrackingStandardMappingRejectionCategory,
   ClubRole,
+  EventDefinitionCategory,
   EventDefinitionAgePhase,
   MatchTrackingScope,
   Prisma,
@@ -13,8 +16,10 @@ import type {
   TrackingTopicPhase,
 } from '@prisma/client'
 
+import { isMatchDayCustomObservationsEnabled } from '@/lib/features'
+import { MAX_CLASSIC_OBSERVATIONS } from '@/lib/matchDayClassicSetup'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
-import { canManageMatchDay } from '@/lib/permissions'
+import { canManageMatchDay, canManageTeamData } from '@/lib/permissions'
 import { prisma } from '@/lib/prisma'
 
 type Db = typeof prisma | Prisma.TransactionClient
@@ -23,10 +28,15 @@ type StructuredResult<T = true> = { ok: true; value: T } | { ok: false; reason: 
 
 export type ClubTrackingDefinitionInput = {
   clubId: string
+  teamId?: string | null
+  visibilityScope?: ClubTrackingDefinitionVisibilityScope
   kind: ClubTrackingDefinitionKind
   name: string
   description?: string | null
   guidance?: string | null
+  countingDefinition?: string | null
+  eventCategory?: EventDefinitionCategory | null
+  polarity?: ClubTrackingObservationPolarity
   scopeType?: MatchTrackingScope | null
   targetContext?: TrackingTargetContext | null
   phase?: TrackingTopicPhase | null
@@ -42,6 +52,50 @@ export type ClubTrackingDefinitionInput = {
   patternConfigurationProvided?: boolean
   createAsDraft?: boolean
 }
+
+export const MAX_CLASSIC_CUSTOM_OBSERVATIONS = 2
+
+export type ClassicObservationSelectionInput = {
+  eventDefinitionIds: string[]
+  clubTrackingDefinitionIds: string[]
+}
+
+export type CustomObservationSelectable = {
+  id: string
+  clubId: string
+  teamId: string | null
+  visibilityScope: ClubTrackingDefinitionVisibilityScope
+  label: string
+  normalizedName: string
+  countingDefinition: string | null
+  guidance: string | null
+  category: EventDefinitionCategory | null
+  categoryLabel: string
+  polarity: ClubTrackingObservationPolarity
+  requiresLocation: boolean
+  sourceLabel: 'Custom · Your team' | 'Custom · Your club'
+}
+
+export type QuickCustomObservationInput = {
+  teamId: string
+  name: string
+  countingDefinition: string
+  eventCategory: EventDefinitionCategory
+  polarity: ClubTrackingObservationPolarity
+  guidance?: string | null
+  requiresLocation?: boolean
+  currentEventDefinitionIds?: string[]
+  currentClubTrackingDefinitionIds?: string[]
+  createAnyway?: boolean
+}
+
+type QuickCustomObservationResult =
+  | { ok: true; value: CustomObservationSelectable }
+  | { ok: false; reason: string; code?: 'featureDisabled' | 'forbidden' | 'validation' | 'exactDuplicate' | 'similarMatches' | 'selectionLimit' | 'duplicateConflict'; existing?: CustomObservationSelectable | { source: 'CORE'; id: string; label: string; countingDefinition: string | null }; similar?: Array<CustomObservationSelectable | { source: 'CORE'; id: string; label: string; countingDefinition: string | null }> }
+
+const quickCustomNameLimit = 80
+const quickCustomCountingLimit = 240
+const quickCustomGuidanceLimit = 500
 
 export type TrackingLibraryRole = Extract<ClubRole, 'OWNER' | 'COACH' | 'ASSISTANT_COACH'>
 
@@ -91,6 +145,19 @@ const locallySelectableRejectionCategories = new Set<ClubTrackingStandardMapping
 const locallyBlockedRejectionCategories = new Set<ClubTrackingStandardMappingRejectionCategory>(['EVENT_PATTERN_MISMATCH', 'SCOPE_CONTEXT_MISMATCH', 'OUTCOME_MISMATCH', 'NEEDS_CLARIFICATION'])
 const semanticFields = ['kind', 'scopeType', 'targetContext', 'phase', 'focusArea', 'requiresLocation', 'mappedEventDefinitionId', 'mappedPatternDefinitionId'] as const
 const reviewableStandardMappingStatuses = new Set<ClubTrackingMappingStatus>(['CLUB_APPROVED'])
+const eventCategoryLabels: Record<string, string> = {
+  PASSING: 'Passing',
+  RECEIVING: 'Receiving',
+  DRIBBLING_1V1: 'Dribbling / 1v1',
+  SHOOTING: 'Shooting',
+  DEFENDING: 'Defending',
+  GOALKEEPING: 'Goalkeeping',
+  DISCIPLINE: 'Discipline',
+  INJURIES: 'Injuries',
+  OTHER: 'Other',
+}
+const eventCategoryValues = new Set<EventDefinitionCategory>(['PASSING', 'RECEIVING', 'DRIBBLING_1V1', 'SHOOTING', 'DEFENDING', 'GOALKEEPING', 'DISCIPLINE', 'INJURIES', 'OTHER'])
+const polarityValues = new Set<ClubTrackingObservationPolarity>(['POSITIVE', 'NEGATIVE', 'NEUTRAL'])
 
 export function normalizeClubTrackingDefinitionName(value: string) {
   return value
@@ -111,6 +178,40 @@ const normalizeOptionalText = (value: string | null | undefined) => value?.trim(
 const unique = <T,>(values: T[]) => Array.from(new Set(values))
 const isPresent = <T,>(value: T | null | false): value is T => Boolean(value)
 const searchTokenFor = ({ clubId, query }: { clubId: string; query: string }) => createHash('sha256').update(`${clubId}:${normalizeClubTrackingDefinitionName(query)}`).digest('hex').slice(0, 24)
+
+function mapCustomObservationSelectable(definition: {
+  id: string
+  clubId: string
+  teamId: string | null
+  visibilityScope: ClubTrackingDefinitionVisibilityScope
+  name: string
+  normalizedName: string
+  countingDefinition: string | null
+  guidance: string | null
+  eventCategory: EventDefinitionCategory | null
+  polarity: ClubTrackingObservationPolarity
+  requiresLocation: boolean
+}): CustomObservationSelectable {
+  return {
+    id: definition.id,
+    clubId: definition.clubId,
+    teamId: definition.teamId,
+    visibilityScope: definition.visibilityScope,
+    label: definition.name,
+    normalizedName: definition.normalizedName,
+    countingDefinition: definition.countingDefinition,
+    guidance: definition.guidance,
+    category: definition.eventCategory,
+    categoryLabel: definition.eventCategory ? eventCategoryLabels[definition.eventCategory] ?? definition.eventCategory : 'Other',
+    polarity: definition.polarity,
+    requiresLocation: definition.requiresLocation,
+    sourceLabel: definition.visibilityScope === 'TEAM' ? 'Custom · Your team' : 'Custom · Your club',
+  }
+}
+
+function isUniqueConflict(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as Prisma.PrismaClientKnownRequestError).code === 'P2002'
+}
 
 export function getClubDefinitionLocalSelectionEligibility(definition: { kind: ClubTrackingDefinitionKind; status: ClubTrackingDefinitionStatus; active: boolean; retiredAt: Date | null; mappingStatus: ClubTrackingMappingStatus; standardMappingRejectionCategory?: ClubTrackingStandardMappingRejectionCategory | null }) {
   if (!selectableKinds.has(definition.kind)) return { selectable: false, reason: 'This definition kind is not supported in Match Day setup.' }
@@ -158,6 +259,49 @@ export function clubDefinitionMatchesTrackingContext(definition: { scopeType: Ma
   if (definition.phase && context.phase && definition.phase !== context.phase) return false
   if (definition.focusArea && context.focusArea && definition.focusArea !== context.focusArea) return false
   return true
+}
+
+export function isClubTrackingDefinitionVisibleToTeam(definition: { clubId: string; teamId?: string | null; visibilityScope?: ClubTrackingDefinitionVisibilityScope | null }, team: { id: string; clubId: string }) {
+  if (definition.clubId !== team.clubId) return false
+  const visibilityScope = definition.visibilityScope ?? 'CLUB'
+  if (visibilityScope === 'CLUB') return definition.teamId == null
+  return definition.teamId === team.id
+}
+
+export function validateClubTrackingDefinitionVisibility(definition: { clubId: string; teamId?: string | null; visibilityScope?: ClubTrackingDefinitionVisibilityScope | null }, team?: { id: string; clubId: string } | null): Result {
+  const visibilityScope = definition.visibilityScope ?? 'CLUB'
+  if (visibilityScope === 'TEAM') {
+    if (!definition.teamId) return { ok: false, reason: 'Team-private definitions require a team.' }
+    if (!team || team.id !== definition.teamId) return { ok: false, reason: 'Team-private definition team was not found.' }
+    if (team.clubId !== definition.clubId) return { ok: false, reason: 'Team-private definitions must belong to the same club as the team.' }
+    return { ok: true, value: true }
+  }
+  if (definition.teamId) return { ok: false, reason: 'Club-wide definitions cannot have a team.' }
+  return { ok: true, value: true }
+}
+
+export function validatePureCustomSelectionIdentity(definition: { kind: ClubTrackingDefinitionKind; mappedEventDefinitionId?: string | null; mappedPatternDefinitionId?: string | null; mappingStatus?: ClubTrackingMappingStatus | null }): Result {
+  if (definition.kind !== 'EVENT_CUSTOM') return { ok: false, reason: 'Only custom event definitions can be selected as pure custom observations.' }
+  if (definition.mappedEventDefinitionId || definition.mappedPatternDefinitionId) return { ok: false, reason: 'Pure custom observations cannot claim a standard mapping identity.' }
+  if (definition.mappingStatus && definition.mappingStatus !== 'NONE') return { ok: false, reason: 'Pure custom observations must not have a standard mapping status.' }
+  return { ok: true, value: true }
+}
+
+export function validateClassicObservationSelectionCounts(selection: ClassicObservationSelectionInput): Result {
+  const standardIds = unique(selection.eventDefinitionIds.filter(Boolean))
+  const customIds = unique(selection.clubTrackingDefinitionIds.filter(Boolean))
+  const total = standardIds.length + customIds.length
+  if (total === 0) return { ok: false, reason: 'Select at least one event to track for this match.' }
+  if (total > MAX_CLASSIC_OBSERVATIONS) return { ok: false, reason: `Select no more than ${MAX_CLASSIC_OBSERVATIONS} events for this match.` }
+  if (customIds.length > MAX_CLASSIC_CUSTOM_OBSERVATIONS) return { ok: false, reason: `Select no more than ${MAX_CLASSIC_CUSTOM_OBSERVATIONS} custom observations for this match.` }
+  return { ok: true, value: true }
+}
+
+export function validateMatchDayEventTypeIdentityShape(selection: { eventDefinitionId?: string | null; clubTrackingDefinitionId?: string | null; eventType?: string | null }): Result {
+  if (selection.eventDefinitionId && selection.clubTrackingDefinitionId) return { ok: false, reason: 'A match selection cannot be both standard and custom.' }
+  if (selection.clubTrackingDefinitionId && selection.eventType) return { ok: false, reason: 'Custom match selections cannot use legacy event type compatibility data.' }
+  if (!selection.eventDefinitionId && !selection.clubTrackingDefinitionId && !selection.eventType) return { ok: false, reason: 'Match selections require a standard, custom or legacy event identity.' }
+  return { ok: true, value: true }
 }
 
 function formatClubIdentityType(kind: ClubTrackingDefinitionKind): 'Club alias' | 'Club mapped' | 'Club specific' {
@@ -208,6 +352,153 @@ export async function getSelectableClubTrackingDefinitionsForMatch({ db = prisma
     return [{ ...snapshot, source: 'CLUB_DEFINITION', kind: definition.kind, identityType: formatClubIdentityType(definition.kind), mappedStandardEventDefinitionId: definition.mappedEventDefinitionId ?? undefined, mappedStandardPatternDefinitionId: definition.mappedPatternDefinitionId ?? undefined, mappingStatus: definition.mappingStatus, mappingRevision: definition.mappingRevision, scopeCompatibility: getDefinitionScopeCompatibility(definition) }]
   })
   return { ok: true, value: items }
+}
+
+export async function getActiveSelectableCustomObservationsForTeam({ db = prisma, userId, teamId }: { db?: Db; userId: string; teamId: string }) {
+  if (!(await canManageTeamData(userId, teamId))) return { ok: false as const, reason: 'You cannot manage tracking setup for this team.' }
+  const team = await db.team.findUnique({ where: { id: teamId }, select: { id: true, clubId: true } })
+  if (!team) return { ok: false as const, reason: 'Team was not found.' }
+  const definitions = await db.clubTrackingDefinition.findMany({
+    where: {
+      clubId: team.clubId,
+      kind: 'EVENT_CUSTOM',
+      status: 'APPROVED',
+      active: true,
+      retiredAt: null,
+      OR: [
+        { visibilityScope: 'CLUB', teamId: null },
+        { visibilityScope: 'TEAM', teamId: team.id },
+      ],
+    },
+    orderBy: [{ visibilityScope: 'asc' }, { name: 'asc' }],
+  })
+  return { ok: true as const, value: definitions.map(mapCustomObservationSelectable) }
+}
+
+export async function findCustomObservationCreationConflicts({ db = prisma, teamId, name }: { db?: Db; teamId: string; name: string }) {
+  const team = await db.team.findUnique({ where: { id: teamId }, select: { id: true, clubId: true } })
+  if (!team) return { ok: false as const, reason: 'Team was not found.' }
+  const normalizedName = normalizeClubTrackingDefinitionName(name)
+  const [coreEvents, customDefinitions] = await Promise.all([
+    db.eventDefinition.findMany({
+      where: {
+        scope: 'GLOBAL',
+        isActive: true,
+        archivedAt: null,
+        OR: [{ normalizedName: { contains: normalizedName, mode: 'insensitive' as const } }, { name: { contains: name, mode: 'insensitive' as const } }],
+      },
+      select: { id: true, name: true, normalizedName: true, description: true },
+      take: 10,
+    }),
+    db.clubTrackingDefinition.findMany({
+      where: {
+        clubId: team.clubId,
+        kind: 'EVENT_CUSTOM',
+        status: 'APPROVED',
+        active: true,
+        retiredAt: null,
+        OR: [
+          { visibilityScope: 'CLUB', teamId: null },
+          { visibilityScope: 'TEAM', teamId: team.id },
+        ],
+      },
+      take: 50,
+    }),
+  ])
+  const exactCore = coreEvents.find((event) => event.normalizedName === normalizedName)
+  const exactCustom = customDefinitions.find((definition) => definition.normalizedName === normalizedName)
+  const similarCore = coreEvents
+    .filter((event) => event.normalizedName !== normalizedName && hasSimilarNormalizedName(normalizedName, event.normalizedName))
+    .map((event) => ({ source: 'CORE' as const, id: event.id, label: event.name, countingDefinition: event.description }))
+  const similarCustom = customDefinitions
+    .filter((definition) => definition.normalizedName !== normalizedName && hasSimilarNormalizedName(normalizedName, definition.normalizedName))
+    .map(mapCustomObservationSelectable)
+  return {
+    ok: true as const,
+    value: {
+      exact: exactCore ? { source: 'CORE' as const, id: exactCore.id, label: exactCore.name, countingDefinition: exactCore.description } : exactCustom ? mapCustomObservationSelectable(exactCustom) : null,
+      similar: [...similarCore, ...similarCustom],
+    },
+  }
+}
+
+export async function createTeamCustomObservationForMatchSetup({ db = prisma, userId, input }: { db?: Db; userId: string; input: QuickCustomObservationInput }): Promise<QuickCustomObservationResult> {
+  if (!isMatchDayCustomObservationsEnabled()) return { ok: false, reason: 'Custom observations are not enabled.', code: 'featureDisabled' }
+  if (!(await canManageTeamData(userId, input.teamId))) return { ok: false, reason: 'You cannot manage tracking setup for this team.', code: 'forbidden' }
+  const team = await db.team.findUnique({ where: { id: input.teamId }, select: { id: true, clubId: true } })
+  if (!team) return { ok: false, reason: 'Team was not found.', code: 'validation' }
+
+  const name = input.name.trim()
+  const countingDefinition = input.countingDefinition.trim()
+  const guidance = normalizeOptionalText(input.guidance)
+  if (!name) return { ok: false, reason: 'Name is required.', code: 'validation' }
+  if (name.length > quickCustomNameLimit) return { ok: false, reason: `Name must be ${quickCustomNameLimit} characters or fewer.`, code: 'validation' }
+  if (!countingDefinition) return { ok: false, reason: 'What should be counted is required.', code: 'validation' }
+  if (countingDefinition.length > quickCustomCountingLimit) return { ok: false, reason: `What should be counted must be ${quickCustomCountingLimit} characters or fewer.`, code: 'validation' }
+  if (guidance && guidance.length > quickCustomGuidanceLimit) return { ok: false, reason: `Recording guidance must be ${quickCustomGuidanceLimit} characters or fewer.`, code: 'validation' }
+  if (!eventCategoryValues.has(input.eventCategory)) return { ok: false, reason: 'Closest category is invalid.', code: 'validation' }
+  if (!polarityValues.has(input.polarity)) return { ok: false, reason: 'Observation type is invalid.', code: 'validation' }
+  const countValidation = validateClassicObservationSelectionCounts({ eventDefinitionIds: input.currentEventDefinitionIds ?? [], clubTrackingDefinitionIds: [...(input.currentClubTrackingDefinitionIds ?? []), 'pending-custom'] })
+  if (!countValidation.ok) return { ok: false, reason: countValidation.reason, code: 'selectionLimit' }
+
+  const conflicts = await findCustomObservationCreationConflicts({ db, teamId: team.id, name })
+  if (!conflicts.ok) return { ok: false, reason: conflicts.reason, code: 'validation' }
+  if (conflicts.value.exact) return { ok: false, reason: 'This matches an existing observation.', code: 'exactDuplicate', existing: conflicts.value.exact }
+  if (conflicts.value.similar.length > 0 && !input.createAnyway) return { ok: false, reason: 'Review similar observations before creating a new one.', code: 'similarMatches', similar: conflicts.value.similar }
+
+  try {
+    const created = await db.clubTrackingDefinition.create({
+      data: {
+        clubId: team.clubId,
+        teamId: team.id,
+        visibilityScope: 'TEAM',
+        kind: 'EVENT_CUSTOM',
+        status: 'APPROVED',
+        name,
+        normalizedName: normalizeClubTrackingDefinitionName(name),
+        slug: await createUniqueSlug(db, team.clubId, name),
+        countingDefinition,
+        eventCategory: input.eventCategory,
+        polarity: input.polarity,
+        guidance,
+        description: countingDefinition,
+        agePhases: [],
+        requiresLocation: Boolean(input.requiresLocation),
+        mappedEventDefinitionId: null,
+        mappedPatternDefinitionId: null,
+        mappingStatus: 'NONE',
+        active: true,
+        createdByUserId: userId,
+        approvedByUserId: userId,
+        approvedAt: new Date(),
+      },
+    })
+    return { ok: true, value: mapCustomObservationSelectable(created) }
+  } catch (error) {
+    if (isUniqueConflict(error)) return { ok: false, reason: 'That observation was just created. Search again and select the existing observation.', code: 'duplicateConflict' }
+    throw error
+  }
+}
+
+export async function validateCustomObservationForNewMatchSelection({ db = prisma, userId, teamId, clubTrackingDefinitionId }: { db?: Db; userId: string; teamId: string; clubTrackingDefinitionId: string }): Promise<Result> {
+  if (!(await canManageTeamData(userId, teamId))) return { ok: false, reason: 'You cannot manage tracking setup for this team.' }
+  const [team, definition] = await Promise.all([
+    db.team.findUnique({ where: { id: teamId }, select: { id: true, clubId: true } }),
+    db.clubTrackingDefinition.findUnique({ where: { id: clubTrackingDefinitionId } }),
+  ])
+  if (!team) return { ok: false, reason: 'Team was not found.' }
+  if (!definition) return { ok: false, reason: 'Custom observation was not found.' }
+  if (!isClubTrackingDefinitionVisibleToTeam(definition, team)) return { ok: false, reason: 'Custom observation is not available for this team.' }
+  if (definition.status !== 'APPROVED' || !definition.active || definition.retiredAt) return { ok: false, reason: 'Inactive or retired custom observations cannot be selected for a new Match Day.' }
+  return validatePureCustomSelectionIdentity(definition)
+}
+
+export async function getSelectedClubTrackingDefinitionForMatchDay({ db = prisma, matchDayId, clubTrackingDefinitionId }: { db?: Db; matchDayId: string; clubTrackingDefinitionId: string }) {
+  const selection = await db.matchDayEventType.findFirst({
+    where: { matchDayId, clubTrackingDefinitionId },
+    include: { clubTrackingDefinition: true },
+  })
+  return selection?.clubTrackingDefinition ?? null
 }
 
 export async function getValidatedClubTrackingSelectionSnapshots({ db = prisma, actorUserId, matchDayId, selections, context = {} }: { db?: Db; actorUserId: string; matchDayId: string; selections: SelectedClubTrackingDefinitionInput[]; context?: { scope?: MatchTrackingScope | null; targetContext?: TrackingTargetContext | null; phase?: TrackingTopicPhase | null; focusArea?: TrackingFocusArea | null } }): Promise<StructuredResult<ClubTrackingSelectionSnapshot[]>> {
@@ -294,13 +585,16 @@ export async function searchExistingTrackingDefinitions({ db = prisma, userId, c
   }
 }
 
-export async function findClubTrackingDefinitionDuplicates({ db = prisma, clubId, name, mappedEventDefinitionId, mappedPatternDefinitionId }: { db?: Db; clubId: string; name: string; mappedEventDefinitionId?: string | null; mappedPatternDefinitionId?: string | null }) {
+export async function findClubTrackingDefinitionDuplicates({ db = prisma, clubId, teamId = null, visibilityScope = 'CLUB', name, mappedEventDefinitionId, mappedPatternDefinitionId }: { db?: Db; clubId: string; teamId?: string | null; visibilityScope?: ClubTrackingDefinitionVisibilityScope; name: string; mappedEventDefinitionId?: string | null; mappedPatternDefinitionId?: string | null }) {
   const normalized = normalizeClubTrackingDefinitionName(name)
+  const scopeWhere = visibilityScope === 'TEAM'
+    ? { visibilityScope: 'TEAM' as const, teamId }
+    : { visibilityScope: 'CLUB' as const, teamId: null }
   const [globalEvent, globalPattern, clubDefinition, sameMapping] = await Promise.all([
     db.eventDefinition.findFirst({ where: { scope: 'GLOBAL', normalizedName: normalized }, select: { id: true, name: true } }),
     db.trackingPatternDefinition.findFirst({ where: { ownerScope: 'GLOBAL', OR: [{ normalizedName: normalized }, { aliases: { some: { normalizedAlias: normalized } } }] }, select: { id: true, name: true } }),
-    db.clubTrackingDefinition.findFirst({ where: { clubId, normalizedName: normalized }, select: { id: true, name: true, kind: true } }),
-    mappedEventDefinitionId || mappedPatternDefinitionId ? db.clubTrackingDefinition.findFirst({ where: { clubId, normalizedName: normalized, mappedEventDefinitionId: mappedEventDefinitionId ?? null, mappedPatternDefinitionId: mappedPatternDefinitionId ?? null }, select: { id: true, name: true } }) : null,
+    db.clubTrackingDefinition.findFirst({ where: { clubId, normalizedName: normalized, ...scopeWhere }, select: { id: true, name: true, kind: true } }),
+    mappedEventDefinitionId || mappedPatternDefinitionId ? db.clubTrackingDefinition.findFirst({ where: { clubId, normalizedName: normalized, ...scopeWhere, mappedEventDefinitionId: mappedEventDefinitionId ?? null, mappedPatternDefinitionId: mappedPatternDefinitionId ?? null }, select: { id: true, name: true } }) : null,
   ])
   return { normalized, exact: [globalEvent && { source: 'STANDARD_EVENT', ...globalEvent }, globalPattern && { source: 'STANDARD_PATTERN', ...globalPattern }, clubDefinition && { source: 'CLUB_DEFINITION', ...clubDefinition }, sameMapping && { source: 'SAME_MAPPING', ...sameMapping }].filter(isPresent) }
 }
@@ -311,13 +605,13 @@ export async function createClubTrackingDefinitionDraft({ db = prisma, userId, i
   const validation = await validateClubTrackingDefinition({ db, input })
   if (!validation.ok) return validation
   if (input.searchToken !== searchTokenFor({ clubId: input.clubId, query: input.name })) return { ok: false, reason: 'Search existing tracking definitions before creating this definition.' }
-  const duplicates = await findClubTrackingDefinitionDuplicates({ db, clubId: input.clubId, name: input.name, mappedEventDefinitionId: input.mappedEventDefinitionId, mappedPatternDefinitionId: input.mappedPatternDefinitionId })
+  const duplicates = await findClubTrackingDefinitionDuplicates({ db, clubId: input.clubId, teamId: input.teamId ?? null, visibilityScope: input.visibilityScope ?? 'CLUB', name: input.name, mappedEventDefinitionId: input.mappedEventDefinitionId, mappedPatternDefinitionId: input.mappedPatternDefinitionId })
   if (duplicates.exact.length > 0) return { ok: false, reason: 'This matches an existing tracking definition.', fieldErrors: { name: duplicates.exact.map((item) => `${item.source}: ${item.name}`) } }
   const warnings = buildPatternLikeWarnings(input)
   if (warnings.length && !input.nearDuplicateAcknowledged) return { ok: false, reason: 'Review warnings before creating this definition.', fieldErrors: { warnings } }
   const status: ClubTrackingDefinitionStatus = owner && !input.createAsDraft ? 'APPROVED' : 'DRAFT'
   const mappingStatus = input.mappingStatus ?? (input.kind === 'EVENT_CUSTOM' ? 'NONE' : owner ? 'CLUB_APPROVED' : 'PROPOSED')
-  const created = await db.clubTrackingDefinition.create({ data: { clubId: input.clubId, kind: input.kind, status, name: input.name.trim(), normalizedName: duplicates.normalized, slug: await createUniqueSlug(db, input.clubId, input.name), description: normalizeOptionalText(input.description), guidance: normalizeOptionalText(input.guidance), scopeType: input.scopeType ?? null, targetContext: input.targetContext ?? null, phase: input.phase ?? null, focusArea: input.focusArea ?? null, agePhases: input.agePhases ?? [], requiresLocation: Boolean(input.requiresLocation), mappedEventDefinitionId: input.mappedEventDefinitionId ?? null, mappedPatternDefinitionId: input.mappedPatternDefinitionId ?? null, mappingStatus, createdByUserId: userId, approvedByUserId: status === 'APPROVED' ? userId : null, approvedAt: status === 'APPROVED' ? new Date() : null }, select: { id: true } })
+  const created = await db.clubTrackingDefinition.create({ data: { clubId: input.clubId, teamId: input.teamId ?? null, visibilityScope: input.visibilityScope ?? 'CLUB', kind: input.kind, status, name: input.name.trim(), normalizedName: duplicates.normalized, slug: await createUniqueSlug(db, input.clubId, input.name), description: normalizeOptionalText(input.description), guidance: normalizeOptionalText(input.guidance), countingDefinition: normalizeOptionalText(input.countingDefinition), eventCategory: input.eventCategory ?? null, polarity: input.polarity ?? 'NEUTRAL', scopeType: input.scopeType ?? null, targetContext: input.targetContext ?? null, phase: input.phase ?? null, focusArea: input.focusArea ?? null, agePhases: input.agePhases ?? [], requiresLocation: Boolean(input.requiresLocation), mappedEventDefinitionId: input.mappedEventDefinitionId ?? null, mappedPatternDefinitionId: input.mappedPatternDefinitionId ?? null, mappingStatus, createdByUserId: userId, approvedByUserId: status === 'APPROVED' ? userId : null, approvedAt: status === 'APPROVED' ? new Date() : null }, select: { id: true } })
   return { ok: true, value: { id: created.id, status, warnings } }
 }
 
@@ -562,10 +856,10 @@ export async function retireClubTrackingDefinition({ db = prisma, userId, defini
 }
 
 export async function restoreClubTrackingDefinition({ db = prisma, userId, definitionId }: { db?: Db; userId: string; definitionId: string }): Promise<Result> {
-  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true, normalizedName: true, kind: true } })
+  const definition = await db.clubTrackingDefinition.findUnique({ where: { id: definitionId }, select: { id: true, clubId: true, teamId: true, visibilityScope: true, normalizedName: true, kind: true } })
   if (!definition) return { ok: false, reason: 'Tracking definition was not found.' }
   if (!(await canManageClubDefinitions(userId, definition.clubId, db))) return { ok: false, reason: 'Only club owners can restore tracking definitions.' }
-  const duplicate = await db.clubTrackingDefinition.findFirst({ where: { clubId: definition.clubId, kind: definition.kind, normalizedName: definition.normalizedName, active: true, id: { not: definition.id } }, select: { id: true } })
+  const duplicate = await db.clubTrackingDefinition.findFirst({ where: { clubId: definition.clubId, kind: definition.kind, normalizedName: definition.normalizedName, visibilityScope: definition.visibilityScope, teamId: definition.teamId, active: true, id: { not: definition.id } }, select: { id: true } })
   if (duplicate) return { ok: false, reason: 'An active duplicate exists. Rename or retire the duplicate before restoring this definition.' }
   await db.clubTrackingDefinition.update({ where: { id: definition.id }, data: { status: 'APPROVED', active: true, retiredAt: null, updatedByUserId: userId } })
   return { ok: true, value: true }
@@ -598,6 +892,10 @@ export async function getClubTrackingDefinitionUsage({ db = prisma, userId, defi
 
 export async function validateClubTrackingDefinition({ db = prisma, input }: { db?: Db; input: ClubTrackingDefinitionInput }): Promise<Result> {
   if (!input.name.trim()) return { ok: false, reason: 'Definition name is required.', fieldErrors: { name: ['Definition name is required.'] } }
+  const visibilityScope = input.visibilityScope ?? 'CLUB'
+  const team = visibilityScope === 'TEAM' && input.teamId ? await db.team.findUnique({ where: { id: input.teamId }, select: { id: true, clubId: true } }) : null
+  const visibility = validateClubTrackingDefinitionVisibility({ clubId: input.clubId, teamId: input.teamId ?? null, visibilityScope }, team)
+  if (!visibility.ok) return visibility
   if (input.kind.startsWith('EVENT') && input.proposalType !== 'EVENT') return { ok: false, reason: 'Event definitions must be proposed as one observable event.' }
   if (input.kind.startsWith('PATTERN') && input.proposalType !== 'PATTERN') return { ok: false, reason: 'Pattern definitions must be proposed as tactical patterns or sequences.' }
   if (input.kind === 'EVENT_CUSTOM' && (input.mappedEventDefinitionId || input.mappedPatternDefinitionId || input.mappingStatus && input.mappingStatus !== 'NONE')) return { ok: false, reason: 'Custom club events cannot have a standard mapping.' }
@@ -651,12 +949,16 @@ async function validateMappingTarget(db: Db, kind: ClubTrackingDefinitionKind, m
 }
 
 function buildNearDuplicateWarnings(normalized: string, candidates: Array<{ normalizedName: string; name: string }>) {
-  const tokens = new Set(normalized.split(' ').filter(Boolean))
   return candidates.filter((candidate) => candidate.normalizedName !== normalized).flatMap((candidate) => {
-    const candidateTokens = candidate.normalizedName.split(' ').filter(Boolean)
-    const overlap = candidateTokens.filter((token) => tokens.has(token)).length
-    return overlap >= Math.max(2, Math.min(tokens.size, candidateTokens.length) - 1) ? [`Similar existing definition: ${candidate.name}`] : []
+    return hasSimilarNormalizedName(normalized, candidate.normalizedName) ? [`Similar existing definition: ${candidate.name}`] : []
   })
+}
+
+function hasSimilarNormalizedName(normalized: string, candidateNormalized: string) {
+  const tokens = new Set(normalized.split(' ').filter(Boolean))
+  const candidateTokens = candidateNormalized.split(' ').filter(Boolean)
+  const overlap = candidateTokens.filter((token) => tokens.has(token)).length
+  return overlap >= Math.max(2, Math.min(tokens.size, candidateTokens.length) - 1)
 }
 
 function buildPatternLikeWarnings(input: ClubTrackingDefinitionInput) {
