@@ -36,6 +36,7 @@ const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const quickCustomCategories = ['PASSING', 'RECEIVING', 'DRIBBLING_1V1', 'SHOOTING', 'DEFENDING', 'GOALKEEPING', 'DISCIPLINE', 'INJURIES', 'OTHER'] as const
 const quickCustomPolarities = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] as const
+const customObservationLoadErrorMessage = 'Could not load custom observations for this team.'
 
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -77,16 +78,6 @@ async function checkCustomObservationConflictsAction(formData: FormData) {
   const teamId = getTextValue(formData, 'teamId')
   if (!(await canManageTeamData(user.id, teamId))) return { ok: false as const, reason: 'You cannot manage tracking setup for this team.' }
   return findCustomObservationCreationConflicts({ teamId, name: getTextValue(formData, 'name') })
-}
-
-async function loadCustomObservationsForTeamAction(formData: FormData) {
-  'use server'
-
-  if (!isMatchDayCustomObservationsEnabled()) return { ok: false as const, reason: 'Custom observations are not enabled.' }
-  const user = await getCurrentUser()
-  const teamId = getTextValue(formData, 'teamId')
-  if (!teamId) return { ok: false as const, reason: 'Team is required.' }
-  return getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId })
 }
 
 async function createMatchFromWizard(formData: FormData) {
@@ -305,6 +296,35 @@ export default async function NewMatchDayPage() {
     orderBy: { kickoffAt: 'desc' },
     take: 24,
   })
+  const customObservationsByTeamId = customObservationsEnabled
+    ? Object.fromEntries(await Promise.all(teams.map(async (team) => {
+        try {
+          const result = await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: team.id })
+          if (!result.ok) return [team.id, { state: 'error' as const, observations: [], error: customObservationLoadErrorMessage }]
+          return [team.id, {
+            state: 'loaded' as const,
+            observations: result.value.map((observation) => ({
+              id: observation.id,
+              clubId: observation.clubId,
+              teamId: observation.teamId,
+              visibilityScope: observation.visibilityScope,
+              label: observation.label,
+              normalizedName: observation.normalizedName,
+              countingDefinition: observation.countingDefinition,
+              guidance: observation.guidance,
+              category: observation.category,
+              categoryLabel: observation.categoryLabel,
+              polarity: observation.polarity,
+              requiresLocation: observation.requiresLocation,
+              sourceLabel: observation.sourceLabel,
+            })),
+            error: null,
+          }]
+        } catch {
+          return [team.id, { state: 'error' as const, observations: [], error: customObservationLoadErrorMessage }]
+        }
+      })))
+    : {}
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -380,7 +400,7 @@ export default async function NewMatchDayPage() {
           })),
         }))}
         customObservationsEnabled={customObservationsEnabled}
-        loadCustomObservationsForTeamAction={loadCustomObservationsForTeamAction}
+        customObservationsByTeamId={customObservationsByTeamId}
         maxCustomObservations={MAX_CLASSIC_CUSTOM_OBSERVATIONS}
         createCustomObservationAction={createCustomObservationAction}
         checkCustomObservationConflictsAction={checkCustomObservationConflictsAction}
