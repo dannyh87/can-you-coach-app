@@ -364,7 +364,7 @@ export default async function NewMatchDayPage() {
           selectedEventDefinitionIds: match.matchDayEventTypes
             .map((eventType) => eventType.eventDefinitionId)
             .filter((eventDefinitionId): eventDefinitionId is string => Boolean(eventDefinitionId)),
-          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.eventType ?? 'Legacy event'),
+          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.clubTrackingDefinition?.name ?? eventType.eventType ?? 'Unavailable observation'),
           selectedClubTrackingDefinitionIds: customObservationsEnabled
             ? match.matchDayEventTypes
                 .map((eventType) => eventType.clubTrackingDefinitionId)
