@@ -174,6 +174,178 @@ describe('MatchDayWizard event selector', () => {
     expect(loadAction).toHaveBeenCalledWith(expect.any(FormData))
   })
 
+  it('keeps custom-only previous setup unavailable while custom observations are still loading', async () => {
+    const load = deferred<{ ok: true; value: Array<ReturnType<typeof customObservation>> }>()
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: () => load.promise,
+      previousSetups: [customOnlyPreviousSetup()],
+    })
+
+    await openPreviousSetupPicker()
+
+    const applyButton = getButtonByText('Loading custom observations…')
+    expect(applyButton.hasAttribute('disabled')).toBe(true)
+    expect(document.body.textContent).toContain('Loading custom observations before this setup can be applied.')
+
+    await clickButton('Loading custom observations…')
+    expect(document.body.textContent).not.toContain('Select at least one event to track for this match.')
+  })
+
+  it('applies a loaded custom-only previous setup and passes event validation', async () => {
+    const createAction = vi.fn(async () => undefined)
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: async () => ({ ok: true as const, value: [customObservation()] }),
+      previousSetups: [customOnlyPreviousSetup()],
+      createAction,
+    })
+
+    await openPreviousSetupPicker()
+    await clickButton('Use this setup')
+    await clickButton('Next')
+    await clickButton('Create Match')
+
+    expect(document.body.textContent).not.toContain('Select at least one event to track for this match.')
+    expect(createAction).toHaveBeenCalledTimes(1)
+    const formData = createAction.mock.calls[0][0] as FormData
+    expect(formData.getAll('eventDefinitionId')).toEqual([])
+    expect(formData.getAll('clubTrackingDefinitionId')).toEqual(['custom-1'])
+  })
+
+  it('preserves both standard and custom identities from a mixed previous setup', async () => {
+    const createAction = vi.fn(async () => undefined)
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: async () => ({ ok: true as const, value: [customObservation()] }),
+      previousSetups: [mixedPreviousSetup()],
+      createAction,
+    })
+
+    await openPreviousSetupPicker()
+    expect(document.body.textContent).toContain('2 events selected')
+    expect(document.body.textContent).toContain('Pass complete')
+    expect(document.body.textContent).toContain('Lock the six')
+
+    await clickButton('Use this setup')
+    await clickButton('Next')
+    await clickButton('Create Match')
+
+    const formData = createAction.mock.calls[0][0] as FormData
+    expect(formData.getAll('eventDefinitionId')).toEqual(['event-pass-complete'])
+    expect(formData.getAll('clubTrackingDefinitionId')).toEqual(['custom-1'])
+  })
+
+  it('uses custom definition labels in previous setup previews', async () => {
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: async () => ({ ok: true as const, value: [customObservation()] }),
+      previousSetups: [customOnlyPreviousSetup()],
+    })
+
+    await openPreviousSetupPicker()
+
+    expect(document.body.textContent).toContain('1 event selected')
+    expect(document.body.textContent).toContain('Lock the six')
+    expect(document.body.textContent).not.toContain('Legacy event')
+  })
+
+  it('omits inaccessible custom observations with a generic warning after loading', async () => {
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: async () => ({ ok: true as const, value: [customObservation()] }),
+      previousSetups: [{
+        ...customOnlyPreviousSetup(),
+        selectedClubTrackingDefinitionIds: ['custom-1', 'retired-custom'],
+        eventLabels: ['Lock the six', 'Retired secret custom'],
+      }],
+    })
+
+    await openPreviousSetupPicker()
+    await clickButton('Use this setup')
+
+    expect(document.body.textContent).toContain('1 unavailable event were omitted.')
+    expect(document.body.textContent).toContain('1 event selected of 8')
+    expect(document.body.textContent).not.toContain('Retired secret custom')
+  })
+
+  it('prevents previous setup application after failed custom loading until retry succeeds', async () => {
+    const loadAction = vi.fn(async () => loadAction.mock.calls.length === 1
+      ? { ok: false as const, reason: 'No access' }
+      : { ok: true as const, value: [customObservation()] })
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: loadAction,
+      previousSetups: [customOnlyPreviousSetup()],
+    })
+
+    await openPreviousSetupPicker()
+
+    const unavailableButton = getButtonByText('Custom observations unavailable')
+    expect(unavailableButton.hasAttribute('disabled')).toBe(true)
+    expect(document.body.textContent).toContain('No access')
+
+    await clickButton('Retry custom observations')
+    await clickButton('Use this setup')
+
+    expect(document.body.textContent).toContain('1 event selected of 8')
+  })
+
+  it('keeps stale custom loads from enabling or populating the wrong previous setup', async () => {
+    const firstLoad = deferred<{ ok: true; value: Array<ReturnType<typeof customObservation>> }>()
+    const secondLoad = deferred<{ ok: true; value: Array<ReturnType<typeof customObservation>> }>()
+    const loadAction = vi.fn((formData: FormData) => formData.get('teamId') === 'team-2' ? firstLoad.promise : secondLoad.promise)
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: loadAction,
+      teams: teamOptions(),
+      previousSetups: [customOnlyPreviousSetup(), customOnlyPreviousSetup({ id: 'setup-2', teamId: 'team-2', teamName: 'Test FC', selectedClubTrackingDefinitionIds: ['team-2-custom'], eventLabels: ['Team two custom'] })],
+    })
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Under 13s')
+    await clickButton('Under 12s')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Use my last setup')
+
+    await act(async () => {
+      firstLoad.resolve({ ok: true, value: [customObservation({ id: 'team-2-custom', teamId: 'team-2', label: 'Team two custom' })] })
+      await firstLoad.promise
+    })
+
+    expect(getButtonByText('Loading custom observations…').hasAttribute('disabled')).toBe(true)
+    expect(document.body.textContent).not.toContain('Team two custom')
+
+    await act(async () => {
+      secondLoad.resolve({ ok: true, value: [customObservation()] })
+      await secondLoad.promise
+    })
+    await clickButton('Use this setup')
+
+    expect(document.body.textContent).toContain('Lock the six')
+    expect(document.body.textContent).not.toContain('Team two custom')
+  })
+
+  it('treats a loaded empty custom result differently from a pending load', async () => {
+    renderWizard({
+      customObservationsEnabled: true,
+      loadCustomObservationsForTeamAction: async () => ({ ok: true as const, value: [] }),
+      previousSetups: [customOnlyPreviousSetup()],
+    })
+
+    await openPreviousSetupPicker()
+
+    const applyButton = getButtonByText('Use this setup')
+    expect(applyButton.hasAttribute('disabled')).toBe(false)
+
+    await clickButton('Use this setup')
+
+    expect(document.body.textContent).toContain('1 unavailable event were omitted.')
+    expect(document.body.textContent).toContain('0 events selected of 8')
+  })
+
   it('shows custom loading failure and retries without selecting results', async () => {
     const loadAction = vi.fn(async () => loadAction.mock.calls.length === 1 ? { ok: false as const, reason: 'No access' } : { ok: true as const, value: [customObservation({ id: 'custom-1', label: 'Lock the six' })] })
     renderWizard({ customObservationsEnabled: true, loadCustomObservationsForTeamAction: loadAction })
@@ -279,6 +451,42 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof MatchDayWiz
       })
     )
   })
+}
+
+function customOnlyPreviousSetup(overrides: Partial<ReturnType<typeof previousSetups>[number]> = {}) {
+  return {
+    id: 'custom-setup-1',
+    teamId: 'team-1',
+    teamName: 'Test FC',
+    clubName: 'Test Club',
+    opposition: 'Custom Rival',
+    kickoffAt: '2026-02-01T10:30:00.000Z',
+    eventTrackingScope: 'TEAM' as const,
+    trackPlayerMinutes: false,
+    locationTrackingEnabled: false,
+    selectedEventDefinitionIds: [],
+    selectedClubTrackingDefinitionIds: ['custom-1'],
+    eventLabels: ['Lock the six'],
+    players: [],
+    ...overrides,
+  }
+}
+
+function mixedPreviousSetup() {
+  return {
+    ...customOnlyPreviousSetup(),
+    selectedEventDefinitionIds: ['event-pass-complete'],
+    selectedClubTrackingDefinitionIds: ['custom-1'],
+    eventLabels: ['Pass complete', 'Lock the six'],
+  }
+}
+
+async function openPreviousSetupPicker() {
+  await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+  await clickButton('Next')
+  await clickButton('Next')
+  await clickButton('Next')
+  await clickButton('Use my last setup')
 }
 
 function teamOptions() {
