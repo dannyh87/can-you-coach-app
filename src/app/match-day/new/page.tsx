@@ -79,6 +79,16 @@ async function checkCustomObservationConflictsAction(formData: FormData) {
   return findCustomObservationCreationConflicts({ teamId, name: getTextValue(formData, 'name') })
 }
 
+async function loadCustomObservationsForTeamAction(formData: FormData) {
+  'use server'
+
+  if (!isMatchDayCustomObservationsEnabled()) return { ok: false as const, reason: 'Custom observations are not enabled.' }
+  const user = await getCurrentUser()
+  const teamId = getTextValue(formData, 'teamId')
+  if (!teamId) return { ok: false as const, reason: 'Team is required.' }
+  return getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId })
+}
+
 async function createMatchFromWizard(formData: FormData) {
   'use server'
 
@@ -100,9 +110,13 @@ async function createMatchFromWizard(formData: FormData) {
     .getAll('eventDefinitionId')
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim())
-    .filter(Boolean)))
+      .filter(Boolean)))
+  const submittedClubTrackingDefinitionIds = getUniqueTextValues(formData, 'clubTrackingDefinitionId')
+  if (!isMatchDayCustomObservationsEnabled() && submittedClubTrackingDefinitionIds.length > 0) {
+    return { ok: false as const, reason: 'Custom observations are not available for this match.' }
+  }
   const selectedClubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled()
-    ? getUniqueTextValues(formData, 'clubTrackingDefinitionId')
+    ? submittedClubTrackingDefinitionIds
     : []
   const playerStatuses = formData
     .getAll('playerStatus')
@@ -281,12 +295,6 @@ export default async function NewMatchDayPage() {
     clubIds: Array.from(new Set(teams.map((team) => team.clubId))),
   })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
-  const customObservationsByTeamId = customObservationsEnabled
-    ? Object.fromEntries(await Promise.all(teams.map(async (team) => {
-        const result = await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: team.id })
-        return [team.id, result.ok ? result.value : []]
-      }))) as Record<string, CustomObservationSelectable[]>
-    : {}
   const previousMatches = await prisma.matchDay.findMany({
     where: { teamId: { in: teams.map((team) => team.id) } },
     include: {
@@ -356,7 +364,7 @@ export default async function NewMatchDayPage() {
           selectedEventDefinitionIds: match.matchDayEventTypes
             .map((eventType) => eventType.eventDefinitionId)
             .filter((eventDefinitionId): eventDefinitionId is string => Boolean(eventDefinitionId)),
-          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.eventType ?? 'Legacy event'),
+          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.clubTrackingDefinition?.name ?? eventType.eventType ?? 'Unavailable observation'),
           selectedClubTrackingDefinitionIds: customObservationsEnabled
             ? match.matchDayEventTypes
                 .map((eventType) => eventType.clubTrackingDefinitionId)
@@ -372,7 +380,7 @@ export default async function NewMatchDayPage() {
           })),
         }))}
         customObservationsEnabled={customObservationsEnabled}
-        customObservationsByTeamId={customObservationsByTeamId}
+        loadCustomObservationsForTeamAction={loadCustomObservationsForTeamAction}
         maxCustomObservations={MAX_CLASSIC_CUSTOM_OBSERVATIONS}
         createCustomObservationAction={createCustomObservationAction}
         checkCustomObservationConflictsAction={checkCustomObservationConflictsAction}
