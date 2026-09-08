@@ -36,7 +36,6 @@ const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
 const quickCustomCategories = ['PASSING', 'RECEIVING', 'DRIBBLING_1V1', 'SHOOTING', 'DEFENDING', 'GOALKEEPING', 'DISCIPLINE', 'INJURIES', 'OTHER'] as const
 const quickCustomPolarities = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] as const
-const customObservationLoadErrorMessage = 'Could not load custom observations for this team.'
 
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
@@ -101,13 +100,9 @@ async function createMatchFromWizard(formData: FormData) {
     .getAll('eventDefinitionId')
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim())
-      .filter(Boolean)))
-  const submittedClubTrackingDefinitionIds = getUniqueTextValues(formData, 'clubTrackingDefinitionId')
-  if (!isMatchDayCustomObservationsEnabled() && submittedClubTrackingDefinitionIds.length > 0) {
-    return { ok: false as const, reason: 'Custom observations are not available for this match.' }
-  }
+    .filter(Boolean)))
   const selectedClubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled()
-    ? submittedClubTrackingDefinitionIds
+    ? getUniqueTextValues(formData, 'clubTrackingDefinitionId')
     : []
   const playerStatuses = formData
     .getAll('playerStatus')
@@ -286,6 +281,12 @@ export default async function NewMatchDayPage() {
     clubIds: Array.from(new Set(teams.map((team) => team.clubId))),
   })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
+  const customObservationsByTeamId = customObservationsEnabled
+    ? Object.fromEntries(await Promise.all(teams.map(async (team) => {
+        const result = await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: team.id })
+        return [team.id, result.ok ? result.value : []]
+      }))) as Record<string, CustomObservationSelectable[]>
+    : {}
   const previousMatches = await prisma.matchDay.findMany({
     where: { teamId: { in: teams.map((team) => team.id) } },
     include: {
@@ -296,35 +297,6 @@ export default async function NewMatchDayPage() {
     orderBy: { kickoffAt: 'desc' },
     take: 24,
   })
-  const customObservationsByTeamId = customObservationsEnabled
-    ? Object.fromEntries(await Promise.all(teams.map(async (team) => {
-        try {
-          const result = await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: team.id })
-          if (!result.ok) return [team.id, { state: 'error' as const, observations: [], error: customObservationLoadErrorMessage }]
-          return [team.id, {
-            state: 'loaded' as const,
-            observations: result.value.map((observation) => ({
-              id: observation.id,
-              clubId: observation.clubId,
-              teamId: observation.teamId,
-              visibilityScope: observation.visibilityScope,
-              label: observation.label,
-              normalizedName: observation.normalizedName,
-              countingDefinition: observation.countingDefinition,
-              guidance: observation.guidance,
-              category: observation.category,
-              categoryLabel: observation.categoryLabel,
-              polarity: observation.polarity,
-              requiresLocation: observation.requiresLocation,
-              sourceLabel: observation.sourceLabel,
-            })),
-            error: null,
-          }]
-        } catch {
-          return [team.id, { state: 'error' as const, observations: [], error: customObservationLoadErrorMessage }]
-        }
-      })))
-    : {}
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
@@ -384,7 +356,7 @@ export default async function NewMatchDayPage() {
           selectedEventDefinitionIds: match.matchDayEventTypes
             .map((eventType) => eventType.eventDefinitionId)
             .filter((eventDefinitionId): eventDefinitionId is string => Boolean(eventDefinitionId)),
-          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.clubTrackingDefinition?.name ?? eventType.eventType ?? 'Unavailable observation'),
+          eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.eventType ?? 'Legacy event'),
           selectedClubTrackingDefinitionIds: customObservationsEnabled
             ? match.matchDayEventTypes
                 .map((eventType) => eventType.clubTrackingDefinitionId)

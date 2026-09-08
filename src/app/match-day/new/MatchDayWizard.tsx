@@ -88,8 +88,6 @@ type QuickCustomActionResult =
 
 type CustomConflictItem = CustomObservation | { source: 'CORE'; id: string; label: string; countingDefinition: string | null }
 type CustomConflictActionResult = { ok: true; value: { exact: CustomConflictItem | null; similar: CustomConflictItem[] } } | { ok: false; reason: string }
-type CustomObservationLoadState = 'loaded' | 'error'
-type CustomObservationsForTeam = { state: 'loaded'; observations: CustomObservation[]; error: null } | { state: 'error'; observations: CustomObservation[]; error: string }
 
 type MatchPhaseGroup = {
   value: MatchPhase
@@ -149,8 +147,8 @@ export default function MatchDayWizard({
   matchPhaseGroups,
   previousSetups,
   customObservationsEnabled = false,
-  maxCustomObservations = 2,
   customObservationsByTeamId = {},
+  maxCustomObservations = 2,
   createCustomObservationAction,
   checkCustomObservationConflictsAction,
   validateTemplateAction,
@@ -160,8 +158,8 @@ export default function MatchDayWizard({
   matchPhaseGroups: MatchPhaseGroup[]
   previousSetups: PreviousSetup[]
   customObservationsEnabled?: boolean
+  customObservationsByTeamId?: Record<string, CustomObservation[]>
   maxCustomObservations?: number
-  customObservationsByTeamId?: Record<string, CustomObservationsForTeam>
   createCustomObservationAction?: (formData: FormData) => Promise<QuickCustomActionResult>
   checkCustomObservationConflictsAction?: (formData: FormData) => Promise<CustomConflictActionResult>
   validateTemplateAction: (formData: FormData) => Promise<TemplateValidationResult>
@@ -201,9 +199,6 @@ export default function MatchDayWizard({
   const [error, setError] = useState<string | null>(null)
   const [isPending, setIsPending] = useState(false)
   const [isTemplatePending, setIsTemplatePending] = useState(false)
-  const [customObservationsByTeam, setCustomObservationsByTeam] = useState<Record<string, CustomObservationsForTeam>>(customObservationsByTeamId)
-  const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
-  const [selectedClubTrackingDefinitionIds, setSelectedClubTrackingDefinitionIds] = useState<string[]>([])
   const eventSelectionRef = useRef<HTMLDivElement>(null)
   const selectedTeam = teams.find((team) => team.id === teamId) ?? teams[0]
   const allEvents = useMemo(
@@ -214,15 +209,10 @@ export default function MatchDayWizard({
     () => allEvents.filter((event) => event.scope === 'GLOBAL' || event.clubId === selectedTeam?.clubId),
     [allEvents, selectedTeam?.clubId]
   )
-  const selectedTeamCustomObservationLoad = selectedTeam
-    ? customObservationsByTeam[selectedTeam.id] ?? { state: 'error' as const, observations: [], error: 'Custom observations could not be loaded for this team.' }
-    : { state: 'loaded' as const, observations: [], error: null }
-  const customObservationLoadState = customObservationsEnabled ? selectedTeamCustomObservationLoad.state : 'loaded'
-  const customObservationLoadError = customObservationsEnabled ? selectedTeamCustomObservationLoad.error : null
-
+  const [localCustomObservationsByTeamId, setLocalCustomObservationsByTeamId] = useState(customObservationsByTeamId)
   const selectedTeamCustomObservations = useMemo(
-    () => customObservationsEnabled && selectedTeam ? selectedTeamCustomObservationLoad.observations : [],
-    [customObservationsEnabled, selectedTeam, selectedTeamCustomObservationLoad.observations]
+    () => customObservationsEnabled && selectedTeam ? localCustomObservationsByTeamId[selectedTeam.id] ?? [] : [],
+    [customObservationsEnabled, localCustomObservationsByTeamId, selectedTeam]
   )
   const customEvents = useMemo(() => selectedTeamCustomObservations.map(mapCustomObservationToTaxonomyEvent), [selectedTeamCustomObservations])
   const selectableEvents = customObservationsEnabled ? [...scopedEvents, ...customEvents] : scopedEvents
@@ -248,6 +238,8 @@ export default function MatchDayWizard({
     () => getRecommendedEventDefinitionIds(scopedEvents, locationTrackingEnabled),
     [scopedEvents, locationTrackingEnabled]
   )
+  const [selectedEventDefinitionIds, setSelectedEventDefinitionIds] = useState<string[]>([])
+  const [selectedClubTrackingDefinitionIds, setSelectedClubTrackingDefinitionIds] = useState<string[]>([])
   const totalSteps = 5
   const selectedEventDefinitionIdSet = useMemo(() => new Set(selectedEventDefinitionIds), [selectedEventDefinitionIds])
   const selectedClubTrackingDefinitionIdSet = useMemo(() => new Set(selectedClubTrackingDefinitionIds), [selectedClubTrackingDefinitionIds])
@@ -280,6 +272,7 @@ export default function MatchDayWizard({
       eventSelectionRef.current?.focus()
       return
     }
+
     setError(null)
     setStep((currentStep) => Math.min(totalSteps, currentStep + 1))
   }
@@ -392,15 +385,8 @@ export default function MatchDayWizard({
     })
   }
 
-  const openTemplatePicker = () => setTemplateModalOpen(true)
-
   const applyTemplate = (template: PreviousSetup) => {
     if (!selectedTeam || isTemplatePending) return
-    const templateCustomIds = Array.from(new Set(template.selectedClubTrackingDefinitionIds ?? []))
-    if (customObservationsEnabled && templateCustomIds.length > 0 && customObservationLoadState !== 'loaded') {
-      setError('Custom observations could not be loaded for this team.')
-      return
-    }
 
     const validEventDefinitionIds = new Set(scopedEvents.map((event) => event.id))
     const validCustomIds = new Set(selectedTeamCustomObservations.map((observation) => observation.id))
@@ -425,9 +411,7 @@ export default function MatchDayWizard({
         setTrackPlayerMinutesState(sanitizedTemplate.trackPlayerMinutes)
         setLocationTrackingEnabled(sanitizedTemplate.locationTrackingEnabled)
         setSelectedEventDefinitionIds(sanitizedTemplate.selectedEventDefinitionIds)
-        const availableCustomIds = customObservationsEnabled ? templateCustomIds.filter((id) => validCustomIds.has(id)) : []
-        const customRoom = Math.max(0, Math.min(maxCustomObservations, MAX_CLASSIC_OBSERVATIONS - sanitizedTemplate.selectedEventDefinitionIds.length))
-        const copiedCustomIds = availableCustomIds.slice(0, customRoom)
+        const copiedCustomIds = customObservationsEnabled ? (template.selectedClubTrackingDefinitionIds ?? []).filter((id) => validCustomIds.has(id)) : []
         setSelectedClubTrackingDefinitionIds(copiedCustomIds)
         setTrackedPlayerIds(sanitizedTemplate.trackedPlayerIds)
         setPlayerStatuses(sanitizedTemplate.playerStatuses)
@@ -435,8 +419,7 @@ export default function MatchDayWizard({
         setTrackedStateById(Object.fromEntries(sanitizedTemplate.trackedPlayerIds.map((playerId) => [playerId, true])))
         setTemplateWarning(getTemplateWarning(sanitizedTemplate.omittedPlayers, sanitizedTemplate.omittedEventDefinitionCount + ((template.selectedClubTrackingDefinitionIds?.length ?? 0) - copiedCustomIds.length)))
         setEventStartMethod('PREVIOUS')
-        const nextSelectionCount = sanitizedTemplate.selectedEventDefinitionIds.length + copiedCustomIds.length
-        setEventSelectionNotice(!getClassicObservationLimitState(nextSelectionCount).canProceed ? getClassicObservationLimitState(nextSelectionCount).message : null)
+        setEventSelectionNotice(sanitizedTemplate.selectedEventDefinitionIds.length + copiedCustomIds.length > MAX_CLASSIC_OBSERVATIONS ? getClassicObservationLimitState(sanitizedTemplate.selectedEventDefinitionIds.length + copiedCustomIds.length).message : null)
         setError(null)
         setTemplateModalOpen(false)
       } catch {
@@ -562,7 +545,8 @@ export default function MatchDayWizard({
                   currentEventDefinitionIds.filter((eventDefinitionId) => validEventIds.has(eventDefinitionId))
                 )
                 if (customObservationsEnabled) {
-                  setSelectedClubTrackingDefinitionIds([])
+                  const validCustomIds = new Set((localCustomObservationsByTeamId[team.id] ?? []).map((observation) => observation.id))
+                  setSelectedClubTrackingDefinitionIds((currentIds) => currentIds.filter((clubTrackingDefinitionId) => validCustomIds.has(clubTrackingDefinitionId)))
                 } else {
                   setSelectedClubTrackingDefinitionIds([])
                 }
@@ -657,8 +641,6 @@ export default function MatchDayWizard({
           selectedEventDefinitionIdSet={selectedEventDefinitionIdSet}
           selectedClubTrackingDefinitionIdSet={selectedClubTrackingDefinitionIdSet}
           selectedCustomObservationCount={selectedClubTrackingDefinitionIds.length}
-          customObservationLoadState={customObservationLoadState}
-          customObservationLoadError={customObservationLoadError}
           selectedEventCount={selectedObservationCount}
           onToggleEvent={toggleEventDefinition}
           onToggleCustomObservation={toggleCustomObservation}
@@ -666,14 +648,7 @@ export default function MatchDayWizard({
           maxCustomObservations={maxCustomObservations}
           teamId={selectedTeam?.id ?? ''}
           onCustomObservationCreated={(observation) => {
-            setCustomObservationsByTeam((current) => ({
-              ...current,
-              [observation.teamId ?? selectedTeam?.id ?? '']: {
-                state: 'loaded',
-                observations: [...(selectedTeamCustomObservationLoad.state === 'loaded' ? selectedTeamCustomObservationLoad.observations : []), observation],
-                error: null,
-              },
-            }))
+            setLocalCustomObservationsByTeamId((current) => ({ ...current, [observation.teamId ?? selectedTeam?.id ?? '']: [...(current[observation.teamId ?? selectedTeam?.id ?? ''] ?? []), observation] }))
             setSelectedClubTrackingDefinitionIds((currentIds) => Array.from(new Set([...currentIds, observation.id])))
             setEventSelectionNotice(null)
           }}
@@ -685,7 +660,7 @@ export default function MatchDayWizard({
           onSelectRecommendedDefaults={selectRecommendedDefaults}
           onSelectVisibleEvents={selectVisibleEvents}
           onClearAll={clearSelectedEvents}
-          onOpenTemplatePicker={openTemplatePicker}
+          onOpenTemplatePicker={() => setTemplateModalOpen(true)}
           recommendationApplied={recommendationApplied}
           eventTrackingScope={eventTrackingScope}
           eventSelectionRef={eventSelectionRef}
@@ -737,9 +712,6 @@ export default function MatchDayWizard({
           onApplyTemplate={applyTemplate}
           onClose={() => setTemplateModalOpen(false)}
           isPending={isTemplatePending}
-          customObservationsEnabled={customObservationsEnabled}
-          customObservationLoadState={customObservationLoadState}
-          customObservationLoadError={customObservationLoadError}
         />
       )}
     </WizardShell>
@@ -781,8 +753,6 @@ function EventPicker({
   selectedEventDefinitionIdSet,
   selectedClubTrackingDefinitionIdSet,
   selectedCustomObservationCount,
-  customObservationLoadState,
-  customObservationLoadError,
   selectedEventCount,
   onToggleEvent,
   onToggleCustomObservation,
@@ -837,8 +807,6 @@ function EventPicker({
   selectedEventDefinitionIdSet: Set<string>
   selectedClubTrackingDefinitionIdSet: Set<string>
   selectedCustomObservationCount: number
-  customObservationLoadState: CustomObservationLoadState
-  customObservationLoadError: string | null
   selectedEventCount: number
   onToggleEvent: (eventType: string) => void
   onToggleCustomObservation: (clubTrackingDefinitionId: string) => void
@@ -964,8 +932,6 @@ function EventPicker({
           selectedCustomObservationCount={selectedCustomObservationCount}
           maxCustomObservations={maxCustomObservations}
           customObservationsEnabled={customObservationsEnabled}
-          customObservationLoadState={customObservationLoadState}
-          customObservationLoadError={customObservationLoadError}
           selectedEventCount={selectedEventCount}
           eventSearchTerm={eventSearchTerm}
           setEventSearchTerm={setEventSearchTerm}
@@ -1155,8 +1121,6 @@ function EventSelectorModal({
   selectedCustomObservationCount,
   maxCustomObservations,
   customObservationsEnabled,
-  customObservationLoadState,
-  customObservationLoadError,
   selectedEventCount,
   eventSearchTerm,
   setEventSearchTerm,
@@ -1196,8 +1160,6 @@ function EventSelectorModal({
   selectedCustomObservationCount: number
   maxCustomObservations: number
   customObservationsEnabled: boolean
-  customObservationLoadState: CustomObservationLoadState
-  customObservationLoadError: string | null
   selectedEventCount: number
   eventSearchTerm: string
   setEventSearchTerm: (value: string) => void
@@ -1303,7 +1265,6 @@ function EventSelectorModal({
           {customObservationsEnabled && (
             <div className="mt-4 rounded-xl border border-dashed border-blue-200 bg-blue-50 p-3">
               <p className="text-sm font-semibold text-blue-950">Can&apos;t find it?</p>
-              {customObservationLoadState === 'error' && <div className="mt-2 rounded-lg border border-red-200 bg-white p-3 text-sm text-red-700" role="alert"><p className="font-semibold">{customObservationLoadError ?? 'Could not load custom observations.'}</p></div>}
               <button type="button" onClick={onOpenCustomCreate} className={`${subtleBlueButtonClassName} mt-2`}>Create a team observation</button>
             </div>
           )}
@@ -1423,7 +1384,7 @@ function CustomObservationModal({ teamId, currentEventDefinitionIds, currentClub
   return (
     <ModalShell title="Create a team observation" description="Custom observations are available to your team but are not included in wider comparisons." onClose={onClose} isSubmitting={pending} maxWidthClassName="max-w-2xl">
       <div className="grid gap-4">
-        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert" aria-live="assertive">{error}</p>}
+        {error && <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
         <label className="text-sm font-semibold text-slate-700">Name<input value={name} onBlur={checkConflicts} onChange={(event) => { setName(event.target.value); setCreateAnyway(false) }} className={fieldClassName} maxLength={80} required /></label>
         <label className="text-sm font-semibold text-slate-700">What should be counted?<textarea value={countingDefinition} onChange={(event) => setCountingDefinition(event.target.value)} className={fieldClassName} rows={3} maxLength={240} required /></label>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1669,9 +1630,6 @@ function TemplatePickerModal({
   onApplyTemplate,
   onClose,
   isPending,
-  customObservationsEnabled,
-  customObservationLoadState,
-  customObservationLoadError,
 }: {
   templates: PreviousSetup[]
   selectedTemplate: PreviousSetup | undefined
@@ -1679,12 +1637,7 @@ function TemplatePickerModal({
   onApplyTemplate: (template: PreviousSetup) => void
   onClose: () => void
   isPending: boolean
-  customObservationsEnabled: boolean
-  customObservationLoadState: CustomObservationLoadState
-  customObservationLoadError: string | null
 }) {
-  const applyState = selectedTemplate ? getTemplateApplyState(selectedTemplate, customObservationsEnabled, customObservationLoadState, isPending) : { disabled: true, label: 'Use this setup' }
-
   return (
     <ModalShell title="Copy Previous Setup" description="Preview reusable setup, then apply it inside this wizard. Fixture details stay unchanged." onClose={onClose} isSubmitting={isPending} maxWidthClassName="max-w-4xl">
       {templates.length === 0 ? (
@@ -1714,7 +1667,7 @@ function TemplatePickerModal({
                 <PreviewItem label="Event tracking" value={selectedTemplate.eventTrackingScope === 'PLAYER' ? 'Selected players' : 'Whole team'} />
                 <PreviewItem label="Player minutes" value={selectedTemplate.trackPlayerMinutes ? 'On' : 'Off'} />
                 <PreviewItem label="Location tracking" value={selectedTemplate.locationTrackingEnabled ? 'On' : 'Off'} />
-                <PreviewItem label="Events" value={`${formatEventCount(getPreviousSetupObservationCount(selectedTemplate))} selected`} />
+                <PreviewItem label="Events" value={`${formatEventCount(selectedTemplate.selectedEventDefinitionIds.length)} selected`} />
                 <PreviewItem label="Tracked targets" value={`${selectedTemplate.players.filter((player) => player.isTracked).length} players`} />
                 <PreviewItem label="Squad setup" value={`${selectedTemplate.players.filter((player) => player.squadStatus === 'STARTER').length} starters, ${selectedTemplate.players.filter((player) => player.squadStatus === 'SUBSTITUTE').length} subs`} />
               </dl>
@@ -1726,14 +1679,9 @@ function TemplatePickerModal({
                 </div>
               </div>
               <p className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 font-semibold text-blue-950">This applies reusable setup only. It will not copy score, match clock, stints, recorded events, reports, fixture date, kick-off, opposition, match type or venue.</p>
-              {selectedTemplate.selectedClubTrackingDefinitionIds?.length && customObservationLoadState === 'error' ? (
-                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
-                  <p className="font-semibold">{customObservationLoadError ?? 'Could not load custom observations for this team.'}</p>
-                </div>
-              ) : null}
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
-                <Button type="button" onClick={() => onApplyTemplate(selectedTemplate)} disabled={applyState.disabled} isPending={isPending} pendingText="Applying setup…">{applyState.label}</Button>
+                <Button type="button" onClick={() => onApplyTemplate(selectedTemplate)} disabled={isPending} isPending={isPending} pendingText="Applying setup…">Use this setup</Button>
               </div>
             </section>
           )}
@@ -1741,21 +1689,6 @@ function TemplatePickerModal({
       )}
     </ModalShell>
   )
-}
-
-function getPreviousSetupObservationCount(template: PreviousSetup) {
-  return new Set([
-    ...template.selectedEventDefinitionIds.map((id) => `event:${id}`),
-    ...(template.selectedClubTrackingDefinitionIds ?? []).map((id) => `custom:${id}`),
-  ]).size
-}
-
-function getTemplateApplyState(template: PreviousSetup, customObservationsEnabled: boolean, customObservationLoadState: CustomObservationLoadState, isPending: boolean) {
-  const requiresCustomLoad = customObservationsEnabled && (template.selectedClubTrackingDefinitionIds?.length ?? 0) > 0
-  if (isPending) return { disabled: true, label: 'Use this setup' }
-  if (!requiresCustomLoad) return { disabled: false, label: 'Use this setup' }
-  if (customObservationLoadState === 'error') return { disabled: true, label: 'Custom observations unavailable' }
-  return { disabled: false, label: 'Use this setup' }
 }
 
 function PreviewItem({ label, value }: { label: string; value: string }) {
