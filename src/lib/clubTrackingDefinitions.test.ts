@@ -1,11 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   approveClubTrackingDefinition,
   approveClubTrackingStandardMapping,
   approveStandardMapping,
+  createTeamCustomObservationForMatchSetup,
   createClubTrackingDefinitionDraft,
   deleteUnusedClubTrackingDefinitionDraft,
+  findCustomObservationCreationConflicts,
   findClubTrackingDefinitionDuplicates,
   getActiveSelectableCustomObservationsForTeam,
   getClubTrackingReportingIdentity,
@@ -79,7 +81,7 @@ function createDb(overrides: Record<string, unknown> = {}) {
         return null
       }),
       findUnique: vi.fn(async ({ where }: { where: { id: string } }) => state.definitions.find((definition) => definition.id === where.id) ?? null),
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { const row = { id: `definition-${state.definitions.length + 1}`, mappingRevision: 1, active: true, mappedEventDefinition: data.mappedEventDefinitionId ? { benchmarkable: true } : null, mappedPatternDefinition: data.mappedPatternDefinitionId ? standardPattern : null, ...data }; state.definitions.push(row); return { id: row.id } }),
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { const row = { id: `definition-${state.definitions.length + 1}`, mappingRevision: 1, active: true, mappedEventDefinition: data.mappedEventDefinitionId ? { benchmarkable: true } : null, mappedPatternDefinition: data.mappedPatternDefinitionId ? standardPattern : null, ...data }; state.definitions.push(row); return row }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
         const row = state.definitions.find((definition) => definition.id === where.id)
         if (row) {
@@ -119,6 +121,10 @@ async function tokenFor(db: never, role = 'OWNER', query = 'Break the line') {
 describe('club tracking definitions governance', () => {
   beforeEach(() => {
     process.env.SUPER_ADMIN_EMAILS = 'admin@example.com'
+  })
+
+  afterEach(() => {
+    delete process.env.MATCH_DAY_CUSTOM_OBSERVATIONS
   })
 
   it('normalizes case, punctuation and deterministic plurals', () => {
@@ -374,5 +380,39 @@ describe('club tracking definitions governance', () => {
     expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_CUSTOM', mappedEventDefinitionId: 'event-1', mappedPatternDefinitionId: null, mappingStatus: 'NONE' })).toMatchObject({ ok: false })
     expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_CUSTOM', mappedEventDefinitionId: null, mappedPatternDefinitionId: null, mappingStatus: 'PROPOSED' })).toMatchObject({ ok: false })
     expect(validatePureCustomSelectionIdentity({ kind: 'EVENT_MAPPED', mappedEventDefinitionId: 'event-1', mappedPatternDefinitionId: null, mappingStatus: 'CLUB_APPROVED' })).toMatchObject({ ok: false })
+  })
+
+  it('blocks quick-create exact core and same-scope custom duplicates', async () => {
+    process.env.MATCH_DAY_CUSTOM_OBSERVATIONS = 'true'
+    const db = createDb()
+    const state = (db as { state: { definitions: Array<Record<string, unknown>> } }).state
+    state.definitions.push({ id: 'custom-1', clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Lock the six', normalizedName: normalizeClubTrackingDefinitionName('Lock the six'), countingDefinition: 'Protect central space', guidance: null, eventCategory: 'DEFENDING', polarity: 'POSITIVE', requiresLocation: false })
+
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Forward pass completed', countingDefinition: 'Count forward passes', eventCategory: 'PASSING', polarity: 'POSITIVE' } })).resolves.toMatchObject({ ok: false, code: 'exactDuplicate' })
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Lock the six', countingDefinition: 'Protect central space', eventCategory: 'DEFENDING', polarity: 'POSITIVE' } })).resolves.toMatchObject({ ok: false, code: 'exactDuplicate' })
+  })
+
+  it('returns similar matches unless create-anyway is explicit', async () => {
+    process.env.MATCH_DAY_CUSTOM_OBSERVATIONS = 'true'
+    const db = createDb()
+    ;(db as { state: { definitions: Array<Record<string, unknown>> } }).state.definitions.push({ id: 'custom-1', clubId: 'club-1', teamId: 'team-1', visibilityScope: 'TEAM', kind: 'EVENT_CUSTOM', status: 'APPROVED', active: true, retiredAt: null, name: 'Counter press won', normalizedName: normalizeClubTrackingDefinitionName('Counter press won'), countingDefinition: 'Win it back', guidance: null, eventCategory: 'DEFENDING', polarity: 'POSITIVE', requiresLocation: false })
+
+    await expect(findCustomObservationCreationConflicts({ db, teamId: 'team-1', name: 'Counter press regain' })).resolves.toMatchObject({ ok: true, value: { similar: [expect.objectContaining({ id: 'custom-1' })] } })
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Counter press regain', countingDefinition: 'Regain after pressure', eventCategory: 'DEFENDING', polarity: 'POSITIVE' } })).resolves.toMatchObject({ ok: false, code: 'similarMatches' })
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Counter press regain', countingDefinition: 'Regain after pressure', eventCategory: 'DEFENDING', polarity: 'POSITIVE', createAnyway: true } })).resolves.toMatchObject({ ok: true, value: { label: 'Counter press regain' } })
+  })
+
+  it('enforces quick-create total and custom limits', async () => {
+    process.env.MATCH_DAY_CUSTOM_OBSERVATIONS = 'true'
+    const db = createDb()
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Late box run', countingDefinition: 'Arrive in the box', eventCategory: 'SHOOTING', polarity: 'POSITIVE', currentEventDefinitionIds: ['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8'] } })).resolves.toMatchObject({ ok: false, code: 'selectionLimit' })
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Late box run', countingDefinition: 'Arrive in the box', eventCategory: 'SHOOTING', polarity: 'POSITIVE', currentClubTrackingDefinitionIds: ['c1', 'c2'] } })).resolves.toMatchObject({ ok: false, code: 'selectionLimit' })
+  })
+
+  it('handles concurrent unique-index conflicts during quick-create', async () => {
+    process.env.MATCH_DAY_CUSTOM_OBSERVATIONS = 'true'
+    const baseDb = createDb()
+    const db = createDb({ clubTrackingDefinition: { ...(baseDb as { clubTrackingDefinition: Record<string, unknown> }).clubTrackingDefinition, create: vi.fn(async () => { throw { code: 'P2002' } }) } })
+    await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Late box run', countingDefinition: 'Arrive in the box', eventCategory: 'SHOOTING', polarity: 'POSITIVE' } })).resolves.toMatchObject({ ok: false, code: 'duplicateConflict' })
   })
 })
