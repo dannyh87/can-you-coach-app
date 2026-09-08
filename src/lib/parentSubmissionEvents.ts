@@ -1,4 +1,4 @@
-import type { ClubTrackingDefinitionKind, ClubTrackingMappingStatus, MatchEventType, Prisma } from '@prisma/client'
+import type { ClubTrackingDefinitionKind, ClubTrackingMappingStatus, MatchEventType, MatchObservationSide, Prisma } from '@prisma/client'
 
 import { getEventDisplayName } from '@/lib/eventDefinitions'
 import { isMatchEventType } from '@/lib/matchEventTaxonomy'
@@ -51,6 +51,9 @@ export type AcceptedParentSubmissionSource = {
   standardEventDefinitionIdAtRecording?: string | null
   clubMappingRevisionAtRecording?: number | null
   clubMappingStatusAtRecording?: ClubTrackingMappingStatus | null
+  teamSide: MatchObservationSide
+  detailCode?: string | null
+  tacticalSequenceId?: string | null
   half: 'FIRST_HALF' | 'SECOND_HALF'
   matchSecond: number
   ownScoreAtTime: number
@@ -217,6 +220,9 @@ export function buildAcceptedSubmissionMatchEventData(submission: AcceptedParent
     standardEventDefinitionIdAtRecording: submission.standardEventDefinitionIdAtRecording ?? null,
     clubMappingRevisionAtRecording: submission.clubMappingRevisionAtRecording ?? null,
     clubMappingStatusAtRecording: submission.clubMappingStatusAtRecording ?? null,
+    teamSide: submission.teamSide,
+    detailCode: submission.detailCode ?? null,
+    tacticalSequenceId: submission.tacticalSequenceId ?? null,
     half: submission.half,
     matchSecond: submission.matchSecond,
     ownScoreAtTime: submission.ownScoreAtTime,

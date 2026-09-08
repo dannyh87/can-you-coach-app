@@ -20,6 +20,7 @@ type MatchEventType =
   | 'TOUCH'
 
 type RecordingMode = 'PLAYER_FIRST' | 'EVENT_FIRST'
+type TacticalObservationSide = 'OUR_TEAM' | 'OPPOSITION'
 
 type MatchActionResult =
   | { ok: true }
@@ -35,6 +36,8 @@ type EventPlayer = {
 type RecentEvent = {
   id: string
   label: string
+  teamSide?: TacticalObservationSide
+  detailLabel?: string | null
   half: MatchHalf
   matchSecond: number
   ownScoreAtTime: number
@@ -54,6 +57,7 @@ type EventOption = {
   description: string | null
   videoUrl: string | null
   requiresLocation: boolean
+  tacticalDetailOptions: Array<{ code: string; label: string }>
 }
 
 type EventCategoryOption = {
@@ -114,10 +118,14 @@ export default function MatchEventsClient({
   const [selectedEventKey, setSelectedEventKey] = useState(
     eventOptions[0] ? getEventOptionKey(eventOptions[0]) : ''
   )
+  const [selectedTeamSide, setSelectedTeamSide] = useState<TacticalObservationSide>('OUR_TEAM')
+  const [selectedDetailCodeByEventKey, setSelectedDetailCodeByEventKey] = useState<Record<string, string>>({})
   const [isPlayerPickerOpen, setIsPlayerPickerOpen] = useState(false)
   const [pendingLocationEvent, setPendingLocationEvent] = useState<{
     eventOption: EventOption
     player: EventPlayer | null
+    teamSide: TacticalObservationSide
+    detailCode: string
   } | null>(null)
   const [pendingAction, setPendingAction] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -153,6 +161,9 @@ export default function MatchEventsClient({
   const selectedEvent = eventOptions.find(
     (eventOption) => getEventOptionKey(eventOption) === effectiveSelectedEventKey
   )
+  const selectedDetailCode = selectedEvent
+    ? selectedDetailCodeByEventKey[getEventOptionKey(selectedEvent)] ?? ''
+    : ''
   const categoryEvents = eventOptions.filter(
     (eventOption) => eventOption.category === effectiveSelectedCategory
   )
@@ -175,28 +186,33 @@ export default function MatchEventsClient({
 
   const recordEvent = async (eventOption: EventOption | undefined, player: EventPlayer | undefined) => {
     if (!canRecord || pendingAction || pendingLocationEvent || (!player && !allowTeamEvents) || !eventOption) return
+    const eventOptionKey = getEventOptionKey(eventOption)
+    const detailCode = selectedDetailCodeByEventKey[eventOptionKey] ?? ''
+    const eventPlayer = selectedTeamSide === 'OPPOSITION' ? undefined : player
 
     if (eventOption.requiresLocation) {
       setMessage(null)
       setError(null)
-      setPendingLocationEvent({ eventOption, player: player ?? null })
+      setPendingLocationEvent({ eventOption, player: eventPlayer ?? null, teamSide: selectedTeamSide, detailCode })
       return
     }
 
-    setPendingAction(player ? getPendingEventKey(eventOption, player.matchDayPlayerId) : getEventOptionKey(eventOption))
+    setPendingAction(eventPlayer ? getPendingEventKey(eventOption, eventPlayer.matchDayPlayerId) : eventOptionKey)
     setMessage(null)
     setError(null)
 
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
-    if (player) formData.set('matchDayPlayerId', player.matchDayPlayerId)
+    if (eventPlayer) formData.set('matchDayPlayerId', eventPlayer.matchDayPlayerId)
+    formData.set('teamSide', selectedTeamSide)
+    if (detailCode) formData.set('detailCode', detailCode)
     appendEventFields(formData, eventOption)
 
     try {
       const result = await recordMatchEventAction(formData)
 
       if (result.ok) {
-        setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
+        setMessage(`${eventOption.label} recorded for ${selectedTeamSide === 'OPPOSITION' ? 'Opposition' : eventPlayer ? formatPlayerName(eventPlayer) : 'Whole team'}.`)
         router.refresh()
       } else {
         setError(result.reason)
@@ -211,7 +227,7 @@ export default function MatchEventsClient({
   const recordEventLocation = async (location: PitchLocation) => {
     if (!pendingLocationEvent || pendingAction) return
 
-    const { eventOption, player } = pendingLocationEvent
+    const { eventOption, player, teamSide, detailCode } = pendingLocationEvent
     const pendingKey = player ? getPendingEventKey(eventOption, player.matchDayPlayerId) : getEventOptionKey(eventOption)
 
     setPendingAction(pendingKey)
@@ -221,6 +237,8 @@ export default function MatchEventsClient({
     const formData = new FormData()
     formData.set('matchDayId', matchDayId)
     if (player) formData.set('matchDayPlayerId', player.matchDayPlayerId)
+    formData.set('teamSide', teamSide)
+    if (detailCode) formData.set('detailCode', detailCode)
     appendEventFields(formData, eventOption)
     formData.set('x', String(location.x))
     formData.set('y', String(location.y))
@@ -229,7 +247,7 @@ export default function MatchEventsClient({
       const result = await recordMatchEventAction(formData)
 
       if (result.ok) {
-        setMessage(`${eventOption.label} recorded for ${player ? formatPlayerName(player) : 'Whole team'}.`)
+        setMessage(`${eventOption.label} recorded for ${teamSide === 'OPPOSITION' ? 'Opposition' : player ? formatPlayerName(player) : 'Whole team'}.`)
         setPendingLocationEvent(null)
         router.refresh()
       } else {
@@ -309,6 +327,26 @@ export default function MatchEventsClient({
               className={`rounded-md px-2 py-1.5 ${recordingMode === 'EVENT_FIRST' ? 'bg-blue-700 text-white' : 'text-slate-700'}`}
             >
               Event
+            </button>
+          </div>
+          <div className="grid grid-cols-2 rounded-lg bg-purple-50 p-1 text-[11px] font-bold">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selectedTeamSide === 'OUR_TEAM'}
+              onClick={() => setSelectedTeamSide('OUR_TEAM')}
+              className={`rounded-md px-2 py-1.5 ${selectedTeamSide === 'OUR_TEAM' ? 'bg-purple-700 text-white' : 'text-purple-900'}`}
+            >
+              Our team
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={selectedTeamSide === 'OPPOSITION'}
+              onClick={() => setSelectedTeamSide('OPPOSITION')}
+              className={`rounded-md px-2 py-1.5 ${selectedTeamSide === 'OPPOSITION' ? 'bg-purple-700 text-white' : 'text-purple-900'}`}
+            >
+              Opposition
             </button>
           </div>
         </div>
@@ -406,6 +444,15 @@ export default function MatchEventsClient({
 
           {eventOptions.length > 0 && recordingMode === 'PLAYER_FIRST' ? (
             <>
+              {selectedEvent?.tacticalDetailOptions.length ? (
+                <DetailSelector
+                  eventKey={getEventOptionKey(selectedEvent)}
+                  detailOptions={selectedEvent.tacticalDetailOptions}
+                  selectedDetailCode={selectedDetailCode}
+                  onSelect={(eventKey, code) => setSelectedDetailCodeByEventKey((current) => ({ ...current, [eventKey]: current[eventKey] === code ? '' : code }))}
+                  disabled={Boolean(pendingAction)}
+                />
+              ) : null}
               <div>
                 <div className="grid grid-cols-2 gap-2 min-[430px]:grid-cols-3">
                   {categoryEvents.length === 0 ? (
@@ -429,6 +476,7 @@ export default function MatchEventsClient({
                       >
                         <span className="block break-words">{pendingAction === pendingKey ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className="mt-1 block text-[10px] font-bold uppercase text-emerald-700">Location</span>}
+                        {eventOption.tacticalDetailOptions.length > 0 && <span className="mt-1 block text-[10px] font-bold uppercase text-purple-700">Detail optional</span>}
                       </button>
                     )
                   })}
@@ -437,6 +485,15 @@ export default function MatchEventsClient({
             </>
           ) : eventOptions.length > 0 ? (
             <>
+              {selectedEvent?.tacticalDetailOptions.length ? (
+                <DetailSelector
+                  eventKey={getEventOptionKey(selectedEvent)}
+                  detailOptions={selectedEvent.tacticalDetailOptions}
+                  selectedDetailCode={selectedDetailCode}
+                  onSelect={(eventKey, code) => setSelectedDetailCodeByEventKey((current) => ({ ...current, [eventKey]: current[eventKey] === code ? '' : code }))}
+                  disabled={Boolean(pendingAction)}
+                />
+              ) : null}
               <div>
                 <div className="grid grid-cols-2 gap-2 min-[430px]:grid-cols-3">
                   {categoryEvents.length === 0 ? (
@@ -466,6 +523,7 @@ export default function MatchEventsClient({
                       >
                         <span className="block break-words">{pendingAction === (selectedPlayer ? getPendingEventKey(eventOption, selectedPlayer.matchDayPlayerId) : eventOptionKey) ? 'Saving...' : eventOption.label}</span>
                         {eventOption.requiresLocation && <span className={`mt-1 block text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}>Location</span>}
+                        {eventOption.tacticalDetailOptions.length > 0 && <span className={`mt-1 block text-[10px] font-bold uppercase ${isSelected ? 'text-blue-100' : 'text-purple-700'}`}>Detail optional</span>}
                       </button>
                     )
                   })}
@@ -475,6 +533,7 @@ export default function MatchEventsClient({
               {selectedEvent && (selectedPlayer || allowTeamEvents) && (
                 <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900">
                   {selectedEvent.label} selected for {selectedPlayer ? formatPlayerName(selectedPlayer) : 'Whole team'}.
+                  {selectedTeamSide === 'OPPOSITION' ? ' Opposition side will be recorded without a player.' : ''}
                 </p>
               )}
             </>
@@ -486,10 +545,10 @@ export default function MatchEventsClient({
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2">
           <div className="min-w-0 text-xs">
             <p className="break-words font-black leading-tight text-slate-950">
-              {latestEvent ? `${latestEvent.label} · ${latestEvent.playerName}` : 'No events yet'}
+              {latestEvent ? `${latestEvent.label} · ${latestEvent.teamSide === 'OPPOSITION' ? 'Opposition' : latestEvent.playerName}` : 'No events yet'}
             </p>
             <p className="text-slate-500">
-              {latestEvent ? `${formatHalf(latestEvent.half)} ${formatMatchTime(latestEvent.matchSecond)} · ${latestEvent.ownScoreAtTime}-${latestEvent.oppositionScoreAtTime}` : `${recordingMode === 'PLAYER_FIRST' ? 'Player first' : 'Event first'} mode`}
+              {latestEvent ? `${formatHalf(latestEvent.half)} ${formatMatchTime(latestEvent.matchSecond)} · ${latestEvent.ownScoreAtTime}-${latestEvent.oppositionScoreAtTime}${latestEvent.detailLabel ? ` · ${latestEvent.detailLabel}` : ''}` : `${recordingMode === 'PLAYER_FIRST' ? 'Player first' : 'Event first'} mode`}
             </p>
           </div>
           {latestEvent && !isReadOnly && (
@@ -523,7 +582,7 @@ export default function MatchEventsClient({
                       {formatHalf(event.half)} {formatMatchTime(event.matchSecond)} · {event.label}
                     </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      {event.playerName} · {event.ownScoreAtTime}-{event.oppositionScoreAtTime}
+                      {event.teamSide === 'OPPOSITION' ? 'Opposition' : event.playerName} · {event.ownScoreAtTime}-{event.oppositionScoreAtTime}{event.detailLabel ? ` · ${event.detailLabel}` : ''}
                     </p>
                   </div>
                   {!isReadOnly && (
@@ -589,5 +648,42 @@ export default function MatchEventsClient({
       )}
 
     </section>
+  )
+}
+
+function DetailSelector({
+  eventKey,
+  detailOptions,
+  selectedDetailCode,
+  onSelect,
+  disabled,
+}: {
+  eventKey: string
+  detailOptions: Array<{ code: string; label: string }>
+  selectedDetailCode: string
+  onSelect: (eventKey: string, code: string) => void
+  disabled: boolean
+}) {
+  return (
+    <div className="rounded-xl border border-purple-100 bg-purple-50 p-2">
+      <p className="text-xs font-black uppercase tracking-wide text-purple-800">Optional detail</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {detailOptions.map((option) => {
+          const selected = selectedDetailCode === option.code
+          return (
+            <button
+              key={option.code}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => onSelect(eventKey, option.code)}
+              disabled={disabled}
+              className={`rounded-lg border px-3 py-2 text-xs font-black ${selected ? 'border-purple-700 bg-purple-700 text-white' : 'border-purple-200 bg-white text-purple-900'}`}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }

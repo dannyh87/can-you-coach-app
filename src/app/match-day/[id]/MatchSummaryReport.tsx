@@ -8,6 +8,7 @@ import type {
   MatchSummaryCsvRow,
 } from '@/lib/reportCsv'
 import type { FootballMetricReport } from '@/lib/footballObservationMetrics'
+import type { TacticalObservationReport } from '@/lib/teamTacticalObservations'
 import { getObservationIdentityLabel, type ClubEventAggregate, type ClubPatternAggregate, type MappingCoverageRow } from '@/lib/observationReporting'
 
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
@@ -51,6 +52,7 @@ type MatchSummaryReportProps = {
   teamEventTotals: EventTotalRow[]
   playerEventCounts: PlayerEventCountRow[]
   footballMetricReport: FootballMetricReport
+  tacticalObservationReport: TacticalObservationReport
   mostInvolvedPlayers: PlayerEventCountRow[]
   timelineEvents: TimelineEvent[]
   csvMetadata: MatchCsvMetadata
@@ -84,6 +86,7 @@ export default function MatchSummaryReport({
   teamEventTotals,
   playerEventCounts,
   footballMetricReport,
+  tacticalObservationReport,
   mostInvolvedPlayers,
   timelineEvents,
   csvMetadata,
@@ -236,6 +239,46 @@ export default function MatchSummaryReport({
               </div>
             ))}
           </div>
+        </ReportPanel>
+
+        <ReportPanel title="Team tactical observations">
+          <p className="mb-3 rounded-lg bg-purple-50 p-3 text-xs font-semibold leading-5 text-purple-950">
+            These are simplified coaching observations for style-of-play review. Relationship measures only appear when events are explicitly linked; nearby timing is not treated as causation.
+          </p>
+          <div className="space-y-3">
+            {tacticalObservationReport.metrics.filter((metric) => metric.tracked || metric.total > 0).map((metric) => (
+              <div key={metric.key} className="rounded-lg bg-gray-50 p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold text-slate-950">{metric.label}</p>
+                  <p className="text-xs font-bold text-slate-500">{metric.coverageLabel}</p>
+                </div>
+                <p className="mt-1 text-xs font-semibold text-slate-500">{metric.question}</p>
+                <p className="mt-2 text-slate-700">
+                  {metric.attempts === null
+                    ? `Total: ${metric.total}`
+                    : `Attempts: ${metric.attempts} · Successes: ${metric.successes ?? 0} · Failures: ${metric.failures ?? 0} · Success rate: ${metric.successRate === null ? 'n/a' : `${Math.round(metric.successRate * 100)}%`}`}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Our team: {metric.ourTeamTotal} · Opposition: {metric.oppositionTotal}</p>
+                {metric.outcomeBreakdown.length > 0 && <p className="mt-1 text-xs text-slate-600">Outcomes: {metric.outcomeBreakdown.map((row) => `${row.label}: ${row.count}`).join(' · ')}</p>}
+                {metric.detailBreakdown.length > 0 && <p className="mt-1 text-xs text-slate-600">Details: {metric.detailBreakdown.map((row) => `${row.label}: ${row.count}`).join(' · ')}</p>}
+              </div>
+            ))}
+            {tacticalObservationReport.metrics.every((metric) => !metric.tracked && metric.total === 0) && (
+              <EmptyText>No tactical observation events were selected or recorded for this match.</EmptyText>
+            )}
+          </div>
+          {tacticalObservationReport.unavailableMeasures.length > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
+              <p className="text-sm font-bold text-amber-950">Unavailable linked measures</p>
+              <div className="mt-2 space-y-2">
+                {tacticalObservationReport.unavailableMeasures.map((measure) => (
+                  <p key={measure.label} className="text-xs font-semibold leading-5 text-amber-900">
+                    <span className="font-black">{measure.label}:</span> {measure.reason}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </ReportPanel>
 
         <ReportPanel title="Standard-reportable tactical-pattern totals">

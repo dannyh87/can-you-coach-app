@@ -107,6 +107,35 @@ describe('MatchDayWizard event selector', () => {
     expect(secondSetup.textContent).toContain('Selected ✓')
   })
 
+  it('applies an editable tactical preset within the classic observation limit', async () => {
+    const submittedFormData: FormData[] = []
+    const createAction = vi.fn(async (formData: FormData) => {
+      submittedFormData.push(formData)
+    })
+    renderWizard({ createAction })
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Playing out')
+
+    expect(document.body.textContent).toContain('4 events selected of 8')
+    expect(document.body.textContent).toContain('Build-up from goalkeeper controlled exit')
+
+    await clickButton('Build-up from goalkeeper possession lost')
+    expect(document.body.textContent).toContain('3 events selected of 8')
+
+    await clickButton('Next')
+    await clickButton('Create Match')
+
+    expect(submittedFormData[0]?.getAll('eventDefinitionId')).toEqual([
+      'event-build-up-controlled-exit',
+      'event-escape-press-retained',
+      'event-escape-press-unsuccessful',
+    ])
+  })
+
   it('prevents duplicate create submissions while pending and clears loading after failure', async () => {
     const pendingCreate = deferred<{ ok: false; reason: string } | void>()
     const createAction = vi.fn(() => pendingCreate.promise)
@@ -370,6 +399,10 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof MatchDayWiz
                 categoryLabel: 'Defending',
                 description: 'Regain the ball after pressure.',
               }),
+              eventDefinition({ id: 'event-build-up-controlled-exit', label: 'Build-up from goalkeeper controlled exit', slug: 'build-up-from-goalkeeper-controlled-exit', normalizedName: 'build up from goalkeeper controlled exit', category: 'PASSING', categoryLabel: 'Passing', description: 'Controlled exit from goalkeeper build-up.' }),
+              eventDefinition({ id: 'event-build-up-possession-lost', label: 'Build-up from goalkeeper possession lost', slug: 'build-up-from-goalkeeper-possession-lost', normalizedName: 'build up from goalkeeper possession lost', category: 'PASSING', categoryLabel: 'Passing', description: 'Lost possession during goalkeeper build-up.' }),
+              eventDefinition({ id: 'event-escape-press-retained', label: 'Escape opposition press retained', slug: 'escape-opposition-press-retained', normalizedName: 'escape opposition press retained', category: 'PASSING', categoryLabel: 'Passing', description: 'Retained beyond opposition pressure.' }),
+              eventDefinition({ id: 'event-escape-press-unsuccessful', label: 'Escape opposition press unsuccessful', slug: 'escape-opposition-press-unsuccessful', normalizedName: 'escape opposition press unsuccessful', category: 'PASSING', categoryLabel: 'Passing', description: 'Failed to escape opposition pressure.' }),
             ],
           },
         ],

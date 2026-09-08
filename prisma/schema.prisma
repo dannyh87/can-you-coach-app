@@ -246,6 +246,7 @@ model MatchDay {
   matchDayPlayers      MatchDayPlayer[]
   matchPlayerStints    MatchPlayerStint[]
   matchEvents          MatchEvent[]
+  tacticalSequences    TacticalSequence[]
   patternObservations  MatchTrackingPatternObservation[]
   matchDayEventTypes   MatchDayEventType[]
   submittedMatchEvents SubmittedMatchEvent[]
@@ -834,6 +835,9 @@ model MatchEvent {
   standardEventDefinitionIdAtRecording String?
   clubMappingRevisionAtRecording       Int?
   clubMappingStatusAtRecording         ClubTrackingMappingStatus?
+  teamSide                             MatchObservationSide        @default(OUR_TEAM)
+  detailCode                           String?
+  tacticalSequenceId                   String?
   createdAt                            DateTime                   @default(now())
   updatedAt                            DateTime                   @updatedAt
   submittedMatchEvent                  SubmittedMatchEvent?       @relation(fields: [submittedMatchEventId], references: [id], onDelete: SetNull)
@@ -842,10 +846,14 @@ model MatchEvent {
   eventDefinition                      EventDefinition?           @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
   clubTrackingDefinition               ClubTrackingDefinition?    @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
   standardEventDefinitionAtRecording   EventDefinition?           @relation("MatchEventStandardDefinitionSnapshot", fields: [standardEventDefinitionIdAtRecording], references: [id], onDelete: Restrict)
+  tacticalSequence                     TacticalSequence?          @relation(fields: [tacticalSequenceId], references: [id], onDelete: SetNull)
 
   @@index([eventDefinitionId])
   @@index([clubTrackingDefinitionId])
   @@index([standardEventDefinitionIdAtRecording])
+  @@index([teamSide])
+  @@index([detailCode])
+  @@index([tacticalSequenceId])
 }
 
 model SubmittedMatchEvent {
@@ -867,6 +875,9 @@ model SubmittedMatchEvent {
   x                                    Float?
   y                                    Float?
   note                                 String?
+  teamSide                             MatchObservationSide         @default(OUR_TEAM)
+  detailCode                           String?
+  tacticalSequenceId                   String?
   status                               SubmittedMatchEventStatus   @default(PENDING)
   acceptedAt                           DateTime?
   acceptedByUserId                     String?
@@ -877,6 +888,7 @@ model SubmittedMatchEvent {
   eventDefinition                      EventDefinition?            @relation(fields: [eventDefinitionId], references: [id], onDelete: SetNull)
   clubTrackingDefinition               ClubTrackingDefinition?     @relation(fields: [clubTrackingDefinitionId], references: [id], onDelete: Restrict)
   standardEventDefinitionAtRecording   EventDefinition?            @relation("SubmittedMatchEventStandardDefinitionSnapshot", fields: [standardEventDefinitionIdAtRecording], references: [id], onDelete: Restrict)
+  tacticalSequence                     TacticalSequence?           @relation(fields: [tacticalSequenceId], references: [id], onDelete: SetNull)
   assignment                           MatchContributorAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
   submittedBy                          User                        @relation("SubmittedMatchEvents", fields: [submittedByUserId], references: [id], onDelete: Cascade)
   acceptedBy                           User?                       @relation("AcceptedSubmittedMatchEvents", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
@@ -888,7 +900,33 @@ model SubmittedMatchEvent {
   @@index([standardEventDefinitionIdAtRecording])
   @@index([assignmentId])
   @@index([submittedByUserId])
+  @@index([teamSide])
+  @@index([detailCode])
+  @@index([tacticalSequenceId])
   @@index([status])
+}
+
+model TacticalSequence {
+  id                String               @id @default(cuid())
+  matchDayId        String
+  teamSide          MatchObservationSide  @default(OUR_TEAM)
+  sequenceType      String
+  startHalf         MatchHalf
+  startMatchSecond  Int
+  endHalf           MatchHalf?
+  endMatchSecond    Int?
+  timeWindowSeconds Int?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  matchDay             MatchDay              @relation(fields: [matchDayId], references: [id], onDelete: Cascade)
+  matchEvents          MatchEvent[]
+  submittedMatchEvents SubmittedMatchEvent[]
+
+  @@index([matchDayId])
+  @@index([teamSide])
+  @@index([sequenceType])
+  @@index([timeWindowSeconds])
 }
 
 model TrackingPatternDefinition {
@@ -1196,6 +1234,11 @@ enum MatchEventCategory {
   IN_POSSESSION
   OUT_OF_POSSESSION
   TRANSITION
+}
+
+enum MatchObservationSide {
+  OUR_TEAM
+  OPPOSITION
 }
 
 enum SubmittedMatchEventStatus {

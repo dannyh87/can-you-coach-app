@@ -21,6 +21,7 @@ import {
   sanitizeClassicTemplateSetup,
 } from '@/lib/matchDayClassicSetup'
 import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
+import { getTacticalPresetEventIds, tacticalPresets } from '@/lib/teamTacticalObservations'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 
@@ -311,6 +312,16 @@ export default function MatchDayWizard({
     setRecommendationApplied(true)
     setEventStartMethod('RECOMMENDED')
     setEventSelectionNotice(null)
+  }
+  const selectTacticalPreset = (presetKey: string) => {
+    const presetEventIds = limitClassicRecommendedEventIds(getTacticalPresetEventIds(scopedEvents, presetKey))
+    const presetEvents = scopedEvents.filter((event) => presetEventIds.includes(event.id))
+    setSelectedEventDefinitionIds(presetEventIds)
+    setSelectedClubTrackingDefinitionIds([])
+    setLocationTrackingEnabled(presetEvents.some((event) => event.requiresLocation))
+    setRecommendationApplied(false)
+    setEventStartMethod('RECOMMENDED')
+    setEventSelectionNotice(presetEventIds.length === 0 ? 'That tactical preset is not available in this event library yet.' : null)
   }
   const setLocationTracking = (enabled: boolean) => {
     setLocationTrackingEnabled(enabled)
@@ -682,6 +693,7 @@ export default function MatchDayWizard({
           currentEventDefinitionIds={selectedEventDefinitionIds}
           currentClubTrackingDefinitionIds={selectedClubTrackingDefinitionIds}
           onUseCurriculumRecommendation={selectCurriculumRecommendation}
+          onUseTacticalPreset={selectTacticalPreset}
           onSelectRecommendedDefaults={selectRecommendedDefaults}
           onSelectVisibleEvents={selectVisibleEvents}
           onClearAll={clearSelectedEvents}
@@ -795,6 +807,7 @@ function EventPicker({
   currentEventDefinitionIds,
   currentClubTrackingDefinitionIds,
   onUseCurriculumRecommendation,
+  onUseTacticalPreset,
   onSelectRecommendedDefaults,
   onSelectVisibleEvents,
   onClearAll,
@@ -851,6 +864,7 @@ function EventPicker({
   currentEventDefinitionIds: string[]
   currentClubTrackingDefinitionIds: string[]
   onUseCurriculumRecommendation: () => void
+  onUseTacticalPreset: (presetKey: string) => void
   onSelectRecommendedDefaults: () => void
   onSelectVisibleEvents: (visibleObservations: TaxonomyEvent[]) => void
   onClearAll: () => void
@@ -920,12 +934,13 @@ function EventPicker({
   return (
     <div className="space-y-4">
       {shouldShowStart ? (
-        <EventStartMethodSelection
-          onUseRecommendation={onUseCurriculumRecommendation}
-          onUsePrevious={onOpenTemplatePicker}
-          onChooseManual={chooseManual}
-          recommendationAvailable={recommendation.matchedEventDefinitionIds.length > 0}
-        />
+          <EventStartMethodSelection
+            onUseRecommendation={onUseCurriculumRecommendation}
+            onUseTacticalPreset={onUseTacticalPreset}
+            onUsePrevious={onOpenTemplatePicker}
+            onChooseManual={chooseManual}
+            recommendationAvailable={recommendation.matchedEventDefinitionIds.length > 0}
+          />
       ) : (
         <SelectedEventSummary
           eventSelectionRef={eventSelectionRef}
@@ -1023,11 +1038,13 @@ function EventPicker({
 
 function EventStartMethodSelection({
   onUseRecommendation,
+  onUseTacticalPreset,
   onUsePrevious,
   onChooseManual,
   recommendationAvailable,
 }: {
   onUseRecommendation: () => void
+  onUseTacticalPreset: (presetKey: string) => void
   onUsePrevious: () => void
   onChooseManual: () => void
   recommendationAvailable: boolean
@@ -1040,6 +1057,17 @@ function EventStartMethodSelection({
         <button type="button" onClick={onUseRecommendation} className={`${controlInteractionClassName} rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 shadow-sm hover:bg-emerald-50 active:border-emerald-400 active:bg-emerald-100`} disabled={!recommendationAvailable}>Recommended for this team<span className="mt-1 block font-normal text-slate-600">Start with a focused set based on this team&apos;s age group.</span></button>
         <button type="button" onClick={onUsePrevious} className={`${controlInteractionClassName} rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 shadow-sm hover:bg-blue-50 active:border-blue-400 active:bg-blue-100`}>Use my last setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>
         <button type="button" onClick={onChooseManual} className={`${controlInteractionClassName} rounded-xl border border-slate-200 bg-white p-4 text-left text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50 active:border-slate-400 active:bg-slate-100`}>Choose events myself<span className="mt-1 block font-normal text-slate-600">Open a focused event selector.</span></button>
+      </div>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+        <p className="text-sm font-extrabold text-slate-950">Team tactical presets</p>
+        <p className="mt-1 text-xs font-semibold text-slate-600">Editable starting points for style-of-play review. Presets respect the existing observation limit.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {tacticalPresets.map((preset) => (
+            <button key={preset.key} type="button" onClick={() => onUseTacticalPreset(preset.key)} className={`${controlInteractionClassName} rounded-xl border border-slate-200 bg-slate-50 p-3 text-left text-sm font-bold text-slate-900 hover:border-purple-200 hover:bg-purple-50 active:bg-purple-100`}>
+              {preset.label}<span className="mt-1 block font-normal leading-5 text-slate-600">{preset.description}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </section>
   )

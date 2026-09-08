@@ -46,6 +46,10 @@ import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 import { isMatchDayCustomObservationsEnabled, isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { buildFootballMetricReport } from '@/lib/footballObservationMetrics'
 import {
+  buildTacticalObservationReport,
+  getTacticalDetailOptions,
+} from '@/lib/teamTacticalObservations'
+import {
   filterCopyableClassicCustomObservationIds,
   getClassicClubReportVisibility,
   getClassicDuplicateWarning,
@@ -202,6 +206,11 @@ const getMatchEventIdentity = (event: {
 
 const getMatchEventLabel = getMatchReportEventLabel
 
+const getTacticalDetailLabel = (eventName: string | null, detailCode: string | null) => {
+  if (!eventName || !detailCode) return null
+  return getTacticalDetailOptions(eventName).find((option) => option.code === detailCode)?.label ?? detailCode
+}
+
 function getCustomMatchEventCategory(category: string | null | undefined) {
   if (category === 'DEFENDING') return 'OUT_OF_POSSESSION' as const
   if (category === 'PASSING' || category === 'RECEIVING' || category === 'DRIBBLING_1V1') return 'IN_POSSESSION' as const
@@ -220,8 +229,11 @@ type SelectedEventOption = {
   description: string | null
   videoUrl: string | null
   requiresLocation: boolean
+  tacticalDetailOptions: Array<{ code: string; label: string }>
   isActive: boolean
 }
+
+const tacticalObservationSides = ['OUR_TEAM', 'OPPOSITION'] as const
 
 const getSubmissionTargetLabel = (submission: {
   assignment?: { trackingTask: { scopeType: string; unitLabel: string | null; player: { firstName: string; surname: string } | null } } | null
@@ -1093,6 +1105,8 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   if (!customFlagBypass.ok) return { ok: false, reason: customFlagBypass.reason }
   const clubTrackingDefinitionId = isMatchDayCustomObservationsEnabled() ? submittedClubTrackingDefinitionId : ''
   const eventType = getTextValue(formData, 'eventType')
+  const submittedTeamSide = getTextValue(formData, 'teamSide')
+  const detailCode = getTextValue(formData, 'detailCode')
   const x = getOptionalPitchCoordinate(formData, 'x')
   const y = getOptionalPitchCoordinate(formData, 'y')
 
@@ -1109,6 +1123,9 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
     return { ok: false, reason: 'Event type is invalid.' }
   }
   const legacyEventType = eventType && isMatchEventType(eventType) ? eventType : null
+  const teamSide = tacticalObservationSides.includes(submittedTeamSide as never)
+    ? submittedTeamSide as (typeof tacticalObservationSides)[number]
+    : 'OUR_TEAM'
 
   const match = await getActionableMatch(matchDayId, 'run')
   if (!match) return { ok: false, reason: 'Match was not found.' }
@@ -1148,6 +1165,10 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const requiresLocation = selectedEvent.clubTrackingDefinition?.requiresLocation ?? selectedEvent.eventDefinition?.requiresLocation ?? false
   if (requiresLocation && (x.value === undefined || y.value === undefined)) {
     return { ok: false, reason: 'Event location is required.' }
+  }
+  const tacticalDetailOptions = getTacticalDetailOptions(selectedEvent.clubTrackingDefinition?.name ?? selectedEvent.eventDefinition?.name ?? null)
+  if (detailCode && !tacticalDetailOptions.some((option) => option.code === detailCode)) {
+    return { ok: false, reason: 'Event detail is not valid for this observation.' }
   }
 
   const activeHalf = getActiveHalf(match)
@@ -1201,6 +1222,8 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
       standardEventDefinitionIdAtRecording: null,
       clubMappingRevisionAtRecording: selectedEvent.clubTrackingDefinition?.mappingRevision ?? null,
       clubMappingStatusAtRecording: selectedEvent.clubTrackingDefinition?.mappingStatus ?? null,
+      teamSide,
+      detailCode: detailCode || null,
       half: activeHalf.half,
       matchSecond,
       ownScoreAtTime: match.ownScore,
@@ -1559,6 +1582,8 @@ export default async function MatchDayDetailPage({
   const recentEvents = match.matchEvents.map((event) => ({
       id: event.id,
       label: getMatchEventLabel(event),
+      teamSide: event.teamSide,
+      detailLabel: getTacticalDetailLabel(getMatchEventLabel(event), event.detailCode),
       half: event.half,
       matchSecond: event.matchSecond,
       ownScoreAtTime: event.ownScoreAtTime,
@@ -1587,6 +1612,7 @@ export default async function MatchDayDetailPage({
             description: selectedEventType.clubTrackingDefinition.countingDefinition ?? selectedEventType.clubTrackingDefinition.description,
             videoUrl: null,
             requiresLocation: selectedEventType.clubTrackingDefinition.requiresLocation,
+            tacticalDetailOptions: [],
             isActive: true,
           }]
         }
@@ -1607,6 +1633,7 @@ export default async function MatchDayDetailPage({
           description: eventDefinition?.description ?? null,
           videoUrl: eventDefinition?.videoUrl ?? null,
           requiresLocation: eventDefinition?.requiresLocation ?? false,
+          tacticalDetailOptions: getTacticalDetailOptions(getEventDisplayName(selectedEventType)),
           isActive: eventDefinition?.isActive ?? true,
         }]
       })
@@ -1759,6 +1786,10 @@ export default async function MatchDayDetailPage({
       playerName: `${player.firstName} ${player.surname}`,
       minutesPlayed: Math.round(player.totalMilliseconds / 60000),
     })),
+  })
+  const tacticalObservationReport = buildTacticalObservationReport({
+    events: resolvedMatchEvents,
+    selections: match.matchDayEventTypes,
   })
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = resolvedMatchEvents.map((event) => ({
@@ -2107,6 +2138,7 @@ export default async function MatchDayDetailPage({
               teamEventTotals={teamEventTotals}
               playerEventCounts={playerEventCounts}
               footballMetricReport={footballMetricReport}
+              tacticalObservationReport={tacticalObservationReport}
               mostInvolvedPlayers={mostInvolvedPlayers}
               timelineEvents={timelineEvents}
               csvMetadata={csvMetadata}
