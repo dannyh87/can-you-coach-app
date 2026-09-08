@@ -7,6 +7,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { accessibleMatchWhere, accessibleTeamWhere } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { buildFootballMetricReport } from '@/lib/footballObservationMetrics'
 import { prisma } from '@/lib/prisma'
 import {
   buildTeamTrendOptions,
@@ -55,6 +56,7 @@ const getChartLabel = (date: Date, opposition: string) =>
   `${formatDate(date)} ${opposition}`
 
 const formatPercent = (value: number | null | undefined) => value === null || value === undefined ? 'n/a' : `${Math.round(value * 100)}%`
+const getStintMinutes = (stints: Array<{ startedAt: Date; endedAt: Date | null }>) => Math.round(stints.reduce((total, stint) => total + (stint.endedAt ? Math.max(0, stint.endedAt.getTime() - stint.startedAt.getTime()) : 0), 0) / 60000)
 
 export default async function TeamEventTrendsPage({
   searchParams,
@@ -109,6 +111,13 @@ export default async function TeamEventTrendsPage({
               clubTrackingDefinition: { select: { id: true, name: true, kind: true, status: true, active: true, retiredAt: true } },
             },
           },
+          matchDayEventTypes: { include: { eventDefinition: { select: { id: true, name: true } } } },
+          matchDayPlayers: {
+            include: {
+              player: { select: { id: true, firstName: true, surname: true } },
+              stints: { select: { startedAt: true, endedAt: true } },
+            },
+          },
           patternObservations: {
             include: {
               pattern: { select: { id: true, name: true, outcomes: { select: { positive: true } } } },
@@ -130,6 +139,19 @@ export default async function TeamEventTrendsPage({
   )
 
   const allTrendOptions = buildTeamTrendOptions(matches, clubTrendsEnabled)
+  const periodPlayersById = new Map<string, { playerId: string; playerName: string; minutesPlayed: number }>()
+  for (const match of matches) {
+    for (const matchPlayer of match.matchDayPlayers) {
+      const existing = periodPlayersById.get(matchPlayer.playerId) ?? { playerId: matchPlayer.playerId, playerName: `${matchPlayer.player.firstName} ${matchPlayer.player.surname}`, minutesPlayed: 0 }
+      existing.minutesPlayed += getStintMinutes(matchPlayer.stints)
+      periodPlayersById.set(matchPlayer.playerId, existing)
+    }
+  }
+  const periodFootballMetricReport = buildFootballMetricReport({
+    events: matches.flatMap((match) => match.matchEvents),
+    selections: matches.flatMap((match) => match.matchDayEventTypes),
+    players: Array.from(periodPlayersById.values()),
+  })
   const trendOptions = allTrendOptions.filter((option) => option.dimension === selectedDimension)
   const requestedIdentity = decodeTeamTrendIdentity(params.trendKey) ?? getLegacyTeamTrendIdentity(params.eventKey, allTrendOptions)
   const selectedIdentity = requestedIdentity && requestedIdentity.dimension === selectedDimension
@@ -256,6 +278,37 @@ export default async function TeamEventTrendsPage({
             <EmptyState title="No tracking observations found for this selection." description={selectedDimension === 'CLUB' ? 'Club tracking trends appear when official observations have club tracking provenance.' : 'Standard trends include native standard observations, aliases and approved mappings recorded as standard-reportable.'} />
           ) : (
             <>
+              <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Professional-stat summary</p>
+                    <h2 className="mt-1 text-xl font-extrabold text-slate-950">Player leaderboards for selected period</h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">Uses only recorded standard observation identities. Success percentages appear only when both outcomes were tracked.</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{matches.length} match{matches.length === 1 ? '' : 'es'}</span>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {periodFootballMetricReport.leaderboards.map((leaderboard) => (
+                    <div key={leaderboard.key} className="rounded-2xl bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-slate-950">{leaderboard.label}</p>
+                        <p className="text-xs font-bold text-slate-500">{leaderboard.coverageLabel}</p>
+                      </div>
+                      {leaderboard.rows.length === 0 ? <p className="mt-3 text-sm text-slate-500">No player events recorded.</p> : (
+                        <div className="mt-3 space-y-2">
+                          {leaderboard.rows.slice(0, 3).map((row, index) => (
+                            <div key={row.playerId} className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
+                              <p className="font-semibold text-slate-800">{index + 1}. {row.playerName}</p>
+                              <p className="font-black tabular-nums text-slate-950">{row.value}{row.per90 !== null ? <span className="ml-1 text-xs font-bold text-slate-500">({row.per90.toFixed(1)}/90)</span> : null}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <SummaryCard label="Total observations" value={String(totalCount)} detail={selectedTrend?.secondaryLabel ?? undefined} />
                 <SummaryCard label="Average per match" value={averageCount.toFixed(1)} />

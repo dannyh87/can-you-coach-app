@@ -7,9 +7,9 @@ import {
   createTeamCustomObservationForMatchSetup,
   createClubTrackingDefinitionDraft,
   deleteUnusedClubTrackingDefinitionDraft,
+  findCustomObservationCreationConflicts,
   findClubTrackingDefinitionDuplicates,
   getActiveSelectableCustomObservationsForTeam,
-  findCustomObservationCreationConflicts,
   getClubTrackingReportingIdentity,
   getClubDefinitionLocalSelectionEligibility,
   getSelectedClubTrackingDefinitionForMatchDay,
@@ -411,7 +411,8 @@ describe('club tracking definitions governance', () => {
 
   it('handles concurrent unique-index conflicts during quick-create', async () => {
     process.env.MATCH_DAY_CUSTOM_OBSERVATIONS = 'true'
-    const db = createDb({ clubTrackingDefinition: { ...((createDb() as { clubTrackingDefinition: unknown }).clubTrackingDefinition as Record<string, unknown>), create: vi.fn(async () => { throw { code: 'P2002' } }) } })
+    const baseDb = createDb()
+    const db = createDb({ clubTrackingDefinition: { ...(baseDb as { clubTrackingDefinition: Record<string, unknown> }).clubTrackingDefinition, create: vi.fn(async () => { throw { code: 'P2002' } }) } })
     await expect(createTeamCustomObservationForMatchSetup({ db, userId: 'coach-1', input: { teamId: 'team-1', name: 'Late box run', countingDefinition: 'Arrive in the box', eventCategory: 'SHOOTING', polarity: 'POSITIVE' } })).resolves.toMatchObject({ ok: false, code: 'duplicateConflict' })
   })
 })

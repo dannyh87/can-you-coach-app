@@ -7,6 +7,7 @@ import type {
   MatchPatternObservationCsvRow,
   MatchSummaryCsvRow,
 } from '@/lib/reportCsv'
+import type { FootballMetricReport } from '@/lib/footballObservationMetrics'
 import { getObservationIdentityLabel, type ClubEventAggregate, type ClubPatternAggregate, type MappingCoverageRow } from '@/lib/observationReporting'
 
 type MatchHalf = 'FIRST_HALF' | 'SECOND_HALF'
@@ -49,6 +50,7 @@ type MatchSummaryReportProps = {
   minutesRows: SummaryMinuteRow[]
   teamEventTotals: EventTotalRow[]
   playerEventCounts: PlayerEventCountRow[]
+  footballMetricReport: FootballMetricReport
   mostInvolvedPlayers: PlayerEventCountRow[]
   timelineEvents: TimelineEvent[]
   csvMetadata: MatchCsvMetadata
@@ -81,6 +83,7 @@ export default function MatchSummaryReport({
   minutesRows,
   teamEventTotals,
   playerEventCounts,
+  footballMetricReport,
   mostInvolvedPlayers,
   timelineEvents,
   csvMetadata,
@@ -189,6 +192,52 @@ export default function MatchSummaryReport({
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <ReportPanel title="Professional-stat leaderboards">
+          <p className="mb-3 rounded-lg bg-slate-50 p-3 text-xs font-semibold leading-5 text-slate-600">
+            Leaderboards show selected evidence for coaching review. A high count is not automatically a better performance.
+          </p>
+          <div className="space-y-3">
+            {footballMetricReport.leaderboards.map((leaderboard) => (
+              <div key={leaderboard.key} className="rounded-lg bg-gray-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold text-slate-950">{leaderboard.label}</p>
+                  <p className="text-xs font-bold text-slate-500">{leaderboard.coverageLabel}</p>
+                </div>
+                {leaderboard.rows.length === 0 ? (
+                  <p className="mt-2 text-sm text-gray-500">No player events recorded for this metric.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {leaderboard.rows.map((row, index) => (
+                      <div key={row.playerId} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-sm">
+                        <p className="font-semibold">{index + 1}. {row.playerName}</p>
+                        <p className="font-black tabular-nums">{row.value}{row.per90 !== null ? <span className="ml-2 text-xs font-bold text-slate-500">{row.per90.toFixed(1)} per 90</span> : null}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </ReportPanel>
+
+        <ReportPanel title="Professional-stat coverage">
+          <div className="space-y-2">
+            {footballMetricReport.metrics.filter((metric) => metric.tracked || metric.total > 0).map((metric) => (
+              <div key={metric.key} className="rounded-lg bg-gray-50 p-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-bold text-slate-950">{metric.label}</p>
+                  <p className="text-xs font-bold text-slate-500">{metric.coverageLabel}</p>
+                </div>
+                <p className="mt-1 text-slate-600">
+                  {metric.attempts === null
+                    ? `Total: ${metric.total}`
+                    : `Attempts: ${metric.attempts} · Successes: ${metric.successes ?? 0} · Success rate: ${metric.successRate === null ? 'n/a' : `${Math.round(metric.successRate * 100)}%`}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        </ReportPanel>
+
         <ReportPanel title="Standard-reportable tactical-pattern totals">
           {standardPatternRows.length === 0 ? (
             <EmptyText>No standard-reportable tactical-pattern observations were accepted for this match.</EmptyText>

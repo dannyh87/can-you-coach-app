@@ -44,7 +44,9 @@ import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay }
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 import { isMatchDayCustomObservationsEnabled, isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { buildFootballMetricReport } from '@/lib/footballObservationMetrics'
 import {
+  filterCopyableClassicCustomObservationIds,
   getClassicClubReportVisibility,
   getClassicDuplicateWarning,
   validateClassicDuplicateTotalWithinLimit,
@@ -338,7 +340,6 @@ async function duplicateMatchDaySetup(formData: FormData) {
         },
       },
       matchDayEventTypes: {
-        include: { clubTrackingDefinition: true },
         orderBy: { createdAt: 'asc' },
       },
       matchDayPlayers: {
@@ -360,25 +361,27 @@ async function duplicateMatchDaySetup(formData: FormData) {
       eventType: eventType.eventType,
       category: eventType.category,
     }))
-  const sourceCustomEventTypes = sourceMatch.matchDayEventTypes.filter((eventType) => eventType.clubTrackingDefinitionId)
-  const copyableCustomIds = new Set<string>()
-  if (customObservationsEnabled) {
-    for (const eventType of sourceCustomEventTypes) {
-      if (!eventType.clubTrackingDefinitionId) continue
-      const validation = await validateCustomObservationForNewMatchSelection({ userId: user.id, teamId: sourceMatch.teamId, clubTrackingDefinitionId: eventType.clubTrackingDefinitionId })
-      if (validation.ok) copyableCustomIds.add(eventType.clubTrackingDefinitionId)
-    }
-  }
-  const copiedCustomEventTypes = customObservationsEnabled
-    ? sourceCustomEventTypes.flatMap((eventType) => {
-        if (!eventType.clubTrackingDefinitionId || !copyableCustomIds.has(eventType.clubTrackingDefinitionId)) return []
-        return [{ eventDefinitionId: null, clubTrackingDefinitionId: eventType.clubTrackingDefinitionId, eventType: null, category: eventType.category }]
-      })
-    : []
+  const sourceCustomIds = Array.from(new Set(sourceMatch.matchDayEventTypes.flatMap((eventType) => eventType.clubTrackingDefinitionId ? [eventType.clubTrackingDefinitionId] : [])))
+  const copyableCustomResult = await filterCopyableClassicCustomObservationIds({
+    enabled: customObservationsEnabled,
+    userId: user.id,
+    teamId: sourceMatch.teamId,
+    clubTrackingDefinitionIds: sourceCustomIds,
+  })
+  if (!copyableCustomResult.ok) redirect(`/match-day/${sourceMatch.id}?setupCopyError=limits`)
+  const copyableCustomIds = new Set(copyableCustomResult.value.copyableIds)
+  const copiedCustomEventTypes = sourceMatch.matchDayEventTypes.flatMap((eventType) => {
+    if (!eventType.clubTrackingDefinitionId || !copyableCustomIds.has(eventType.clubTrackingDefinitionId)) return []
+    return [{ eventDefinitionId: null, clubTrackingDefinitionId: eventType.clubTrackingDefinitionId, eventType: null, category: eventType.category }]
+  })
   const copiedEventTypes = [...standardAndLegacyEventTypes, ...copiedCustomEventTypes]
-  const countValidation = validateClassicDuplicateTotalWithinLimit({ standardCount: standardAndLegacyEventTypes.filter((eventType) => eventType.eventDefinitionId).length, legacyCount: standardAndLegacyEventTypes.filter((eventType) => !eventType.eventDefinitionId && eventType.eventType).length, customCount: copiedCustomEventTypes.length })
+  const countValidation = validateClassicDuplicateTotalWithinLimit({
+    standardCount: standardAndLegacyEventTypes.filter((eventType) => eventType.eventDefinitionId).length,
+    legacyCount: standardAndLegacyEventTypes.filter((eventType) => !eventType.eventDefinitionId && eventType.eventType).length,
+    customCount: copiedCustomEventTypes.length,
+  })
   if (!countValidation.ok) redirect(`/match-day/${sourceMatch.id}?setupCopyError=limits`)
-  const omittedCustomCount = sourceCustomEventTypes.length - copiedCustomEventTypes.length
+  const omittedCustomCount = copyableCustomResult.value.omittedCount
   const activePlayers = await prisma.player.findMany({
     where: { teamId: sourceMatch.teamId, isActive: true },
     select: { id: true },
@@ -423,7 +426,7 @@ async function duplicateMatchDaySetup(formData: FormData) {
   })
 
   revalidatePath('/match-day')
-  const warning = getClassicDuplicateWarning(omittedCustomCount)
+  const warning = getClassicDuplicateWarning(omittedCustomCount, customObservationsEnabled)
   redirect(`/match-day/${newMatch.id}?setupCopied=1${warning ? '&setupCopyWarning=custom-omitted' : ''}`)
 }
 
@@ -650,11 +653,9 @@ async function updateMatchEventSetup(formData: FormData): Promise<MatchActionRes
       .map((value) => value.trim())
       .filter(Boolean)
   ))
-  const bypassValidation = validateNoCustomFlagBypass(isMatchDayCustomObservationsEnabled(), submittedClubTrackingDefinitionIds[0])
+  const bypassValidation = validateNoCustomFlagBypass(isMatchDayCustomObservationsEnabled(), submittedClubTrackingDefinitionIds)
   if (!bypassValidation.ok) return { ok: false, reason: bypassValidation.reason }
-  const clubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled() ? Array.from(new Set(
-    submittedClubTrackingDefinitionIds
-  )) : []
+  const clubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled() ? submittedClubTrackingDefinitionIds : []
 
   if (!matchDayId) return { ok: false, reason: 'Missing match.' }
   const countValidation = isMatchDayCustomObservationsEnabled()
@@ -1088,7 +1089,7 @@ async function recordMatchEvent(formData: FormData): Promise<MatchActionResult> 
   const matchDayPlayerId = getTextValue(formData, 'matchDayPlayerId')
   const eventDefinitionId = getTextValue(formData, 'eventDefinitionId')
   const submittedClubTrackingDefinitionId = getTextValue(formData, 'clubTrackingDefinitionId')
-  const customFlagBypass = validateNoCustomFlagBypass(isMatchDayCustomObservationsEnabled(), submittedClubTrackingDefinitionId)
+  const customFlagBypass = validateNoCustomFlagBypass(isMatchDayCustomObservationsEnabled(), submittedClubTrackingDefinitionId ? [submittedClubTrackingDefinitionId] : [])
   if (!customFlagBypass.ok) return { ok: false, reason: customFlagBypass.reason }
   const clubTrackingDefinitionId = isMatchDayCustomObservationsEnabled() ? submittedClubTrackingDefinitionId : ''
   const eventType = getTextValue(formData, 'eventType')
@@ -1750,6 +1751,15 @@ export default async function MatchDayDetailPage({
       oneVOneUnsuccessful: getPlayerEventCount(player.playerId, 'ONE_V_ONE_UNSUCCESSFUL'),
     }
   })
+  const footballMetricReport = buildFootballMetricReport({
+    events: resolvedMatchEvents,
+    selections: match.matchDayEventTypes,
+    players: pitchPlayers.map((player) => ({
+      playerId: player.playerId,
+      playerName: `${player.firstName} ${player.surname}`,
+      minutesPlayed: Math.round(player.totalMilliseconds / 60000),
+    })),
+  })
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = resolvedMatchEvents.map((event) => ({
     id: event.id,
@@ -1924,7 +1934,7 @@ export default async function MatchDayDetailPage({
       )}
       {copiedSetupCustomWarning && (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
-          Some custom observations were not copied because they are no longer available for new Match Days. Review the event setup before starting.
+          Some custom observations were not copied because they are not available for new Match Days right now. Review the event setup before starting.
         </p>
       )}
       {copySetupLimitError && (
@@ -2096,6 +2106,7 @@ export default async function MatchDayDetailPage({
               minutesRows={minutesRows}
               teamEventTotals={teamEventTotals}
               playerEventCounts={playerEventCounts}
+              footballMetricReport={footballMetricReport}
               mostInvolvedPlayers={mostInvolvedPlayers}
               timelineEvents={timelineEvents}
               csvMetadata={csvMetadata}

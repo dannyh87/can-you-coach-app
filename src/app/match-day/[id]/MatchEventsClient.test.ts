@@ -44,7 +44,10 @@ describe('MatchEventsClient custom recording', () => {
   })
 })
 
-function renderClient(recordMatchEventAction: (formData: FormData) => Promise<{ ok: true } | { ok: false; reason: string }>, deleteMatchEventAction: (formData: FormData) => Promise<{ ok: true } | { ok: false; reason: string }> = async () => ({ ok: true })) {
+function renderClient(
+  recordMatchEventAction: (formData: FormData) => Promise<{ ok: true } | { ok: false; reason: string }>,
+  deleteMatchEventAction: (formData: FormData) => Promise<{ ok: true } | { ok: false; reason: string }> = async () => ({ ok: true })
+) {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)

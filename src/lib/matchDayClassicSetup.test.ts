@@ -112,7 +112,7 @@ describe('classic match day setup rules', () => {
     const pageSource = readFileSync(join(process.cwd(), 'src/app/match-day/[id]/page.tsx'), 'utf8')
 
     expect(pageSource).toContain('opposition: `Copy of ${sourceMatch.opposition}`')
-    expect(pageSource).toContain('redirect(`/match-day/${newMatch.id}?setupCopied=1')
+    expect(pageSource).toContain('redirect(`/match-day/${newMatch.id}?setupCopied=1${warning ?')
     expect(pageSource).toContain('ownScore: 0')
     expect(pageSource).toContain('oppositionScore: 0')
     expect(pageSource).toContain('firstHalfStartedAt: null')
