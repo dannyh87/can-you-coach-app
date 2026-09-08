@@ -5,18 +5,6 @@ import MatchDayWizard from '@/app/match-day/new/MatchDayWizard'
 import PageHeader from '@/components/ui/PageHeader'
 import { accessibleTeamWhere, getManageableTeamIds } from '@/lib/accessWhere'
 import { getCurrentUser } from '@/lib/auth'
-import {
-  createTeamCustomObservationForMatchSetup,
-  findCustomObservationCreationConflicts,
-  getActiveSelectableCustomObservationsForTeam,
-  MAX_CLASSIC_CUSTOM_OBSERVATIONS,
-  type CustomObservationSelectable,
-  type QuickCustomObservationInput,
-  validateClassicObservationSelectionCounts,
-  validateCustomObservationForNewMatchSelection,
-  validateMatchDayEventTypeIdentityShape,
-} from '@/lib/clubTrackingDefinitions'
-import { isMatchDayCustomObservationsEnabled } from '@/lib/features'
 import { buildClassicMatchDayPlayerCreates, MAX_CLASSIC_OBSERVATIONS } from '@/lib/matchDayClassicSetup'
 import {
   getActiveRecordableEventDefinitions,
@@ -34,49 +22,10 @@ export const dynamic = 'force-dynamic'
 const matchTypes = ['LEAGUE', 'CUP', 'FRIENDLY'] as const
 const matchVenues = ['HOME', 'AWAY', 'NEUTRAL'] as const
 const squadStatuses = ['STARTER', 'SUBSTITUTE', 'NOT_INVOLVED'] as const
-const quickCustomCategories = ['PASSING', 'RECEIVING', 'DRIBBLING_1V1', 'SHOOTING', 'DEFENDING', 'GOALKEEPING', 'DISCIPLINE', 'INJURIES', 'OTHER'] as const
-const quickCustomPolarities = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'] as const
 
 const getTextValue = (formData: FormData, key: string) => {
   const value = formData.get(key)
   return typeof value === 'string' ? value.trim() : ''
-}
-
-const getUniqueTextValues = (formData: FormData, key: string) => Array.from(new Set(formData
-  .getAll(key)
-  .filter((value): value is string => typeof value === 'string')
-  .map((value) => value.trim())
-  .filter(Boolean)))
-
-async function createCustomObservationAction(formData: FormData) {
-  'use server'
-
-  const user = await getCurrentUser()
-  const category = getTextValue(formData, 'eventCategory')
-  const polarity = getTextValue(formData, 'polarity')
-  const input: QuickCustomObservationInput = {
-    teamId: getTextValue(formData, 'teamId'),
-    name: getTextValue(formData, 'name'),
-    countingDefinition: getTextValue(formData, 'countingDefinition'),
-    eventCategory: (quickCustomCategories.includes(category as (typeof quickCustomCategories)[number]) ? category : 'OTHER') as QuickCustomObservationInput['eventCategory'],
-    polarity: (quickCustomPolarities.includes(polarity as (typeof quickCustomPolarities)[number]) ? polarity : 'NEUTRAL') as QuickCustomObservationInput['polarity'],
-    guidance: getTextValue(formData, 'guidance'),
-    requiresLocation: formData.get('requiresLocation') === 'on',
-    createAnyway: formData.get('createAnyway') === 'true',
-    currentEventDefinitionIds: getUniqueTextValues(formData, 'currentEventDefinitionId'),
-    currentClubTrackingDefinitionIds: getUniqueTextValues(formData, 'currentClubTrackingDefinitionId'),
-  }
-  return createTeamCustomObservationForMatchSetup({ userId: user.id, input })
-}
-
-async function checkCustomObservationConflictsAction(formData: FormData) {
-  'use server'
-
-  if (!isMatchDayCustomObservationsEnabled()) return { ok: false as const, reason: 'Custom observations are not enabled.' }
-  const user = await getCurrentUser()
-  const teamId = getTextValue(formData, 'teamId')
-  if (!(await canManageTeamData(user.id, teamId))) return { ok: false as const, reason: 'You cannot manage tracking setup for this team.' }
-  return findCustomObservationCreationConflicts({ teamId, name: getTextValue(formData, 'name') })
 }
 
 async function createMatchFromWizard(formData: FormData) {
@@ -101,9 +50,6 @@ async function createMatchFromWizard(formData: FormData) {
     .filter((value): value is string => typeof value === 'string')
     .map((value) => value.trim())
     .filter(Boolean)))
-  const selectedClubTrackingDefinitionIds = isMatchDayCustomObservationsEnabled()
-    ? getUniqueTextValues(formData, 'clubTrackingDefinitionId')
-    : []
   const playerStatuses = formData
     .getAll('playerStatus')
     .filter((value): value is string => typeof value === 'string')
@@ -146,14 +92,12 @@ async function createMatchFromWizard(formData: FormData) {
       .filter(({ playerId, squadStatus }) => activePlayerIds.has(playerId) && squadStatuses.includes(squadStatus as (typeof squadStatuses)[number]))
       .map(({ playerId, squadStatus }) => [playerId, squadStatus as (typeof squadStatuses)[number]])
   )
-  const countValidation = isMatchDayCustomObservationsEnabled()
-    ? validateClassicObservationSelectionCounts({ eventDefinitionIds: selectedEventDefinitionIds, clubTrackingDefinitionIds: selectedClubTrackingDefinitionIds })
-    : selectedEventDefinitionIds.length === 0
-      ? { ok: false as const, reason: 'Select at least one event to track for this match.' }
-      : selectedEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS
-        ? { ok: false as const, reason: `Select no more than ${MAX_CLASSIC_OBSERVATIONS} events for this match.` }
-        : { ok: true as const, value: true }
-  if (!countValidation.ok) return { ok: false as const, reason: countValidation.reason }
+  if (selectedEventDefinitionIds.length === 0) {
+    return { ok: false as const, reason: 'Select at least one event to track for this match.' }
+  }
+  if (selectedEventDefinitionIds.length > MAX_CLASSIC_OBSERVATIONS) {
+    return { ok: false as const, reason: `Select no more than ${MAX_CLASSIC_OBSERVATIONS} events for this match.` }
+  }
 
   const selectedEvents = await prisma.eventDefinition.findMany({
     where: {
@@ -164,13 +108,6 @@ async function createMatchFromWizard(formData: FormData) {
   if (selectedEvents.length !== selectedEventDefinitionIds.length) {
     return { ok: false as const, reason: 'One or more selected events are no longer available.' }
   }
-  const customSelectionValidations = await Promise.all(selectedClubTrackingDefinitionIds.map((clubTrackingDefinitionId) =>
-    validateCustomObservationForNewMatchSelection({ userId: user.id, teamId, clubTrackingDefinitionId })
-  ))
-  const invalidCustomSelection = customSelectionValidations.find((result) => !result.ok)
-  if (invalidCustomSelection && !invalidCustomSelection.ok) return { ok: false as const, reason: invalidCustomSelection.reason }
-  const selectedCustomDefinitions = selectedClubTrackingDefinitionIds.length > 0 ? await prisma.clubTrackingDefinition.findMany({ where: { id: { in: selectedClubTrackingDefinitionIds } } }) : []
-  if (selectedCustomDefinitions.length !== selectedClubTrackingDefinitionIds.length) return { ok: false as const, reason: 'One or more custom observations are no longer available.' }
 
   const matchDayPlayerCreates = buildClassicMatchDayPlayerCreates({
     activePlayers,
@@ -198,41 +135,16 @@ async function createMatchFromWizard(formData: FormData) {
         create: matchDayPlayerCreates,
       },
       matchDayEventTypes: {
-        create: [
-          ...selectedEvents.map((eventDefinition) => {
-            const row = {
-              eventDefinitionId: eventDefinition.id,
-              clubTrackingDefinitionId: null,
-              eventType: eventDefinition.legacyEventType ?? null,
-              category: getMatchDayEventCategoryFallback(eventDefinition),
-            }
-            const shape = validateMatchDayEventTypeIdentityShape(row)
-            if (!shape.ok) throw new Error(shape.reason)
-            return row
-          }),
-          ...selectedCustomDefinitions.map((definition) => {
-            const row = {
-              eventDefinitionId: null,
-              clubTrackingDefinitionId: definition.id,
-              eventType: null,
-              category: getCustomMatchEventCategory(definition.eventCategory),
-            }
-            const shape = validateMatchDayEventTypeIdentityShape(row)
-            if (!shape.ok) throw new Error(shape.reason)
-            return row
-          }),
-        ],
+        create: selectedEvents.map((eventDefinition) => ({
+          eventDefinitionId: eventDefinition.id,
+          eventType: eventDefinition.legacyEventType ?? null,
+          category: getMatchDayEventCategoryFallback(eventDefinition),
+        })),
       },
     },
   })
 
   redirect(`/match-day/${match.id}`)
-}
-
-function getCustomMatchEventCategory(category: CustomObservationSelectable['category']) {
-  if (category === 'DEFENDING') return 'OUT_OF_POSSESSION' as const
-  if (category === 'PASSING' || category === 'RECEIVING' || category === 'DRIBBLING_1V1') return 'IN_POSSESSION' as const
-  return 'ATTACKING' as const
 }
 
 async function validateTemplateForTeam(formData: FormData) {
@@ -263,7 +175,6 @@ async function canManageMatchDayForTemplate(userId: string, matchDayId: string) 
 
 export default async function NewMatchDayPage() {
   const user = await getCurrentUser()
-  const customObservationsEnabled = isMatchDayCustomObservationsEnabled()
   const manageableTeamIds = await getManageableTeamIds(user.id)
   const teams = await prisma.team.findMany({
     where: { AND: [await accessibleTeamWhere(user.id), { id: { in: manageableTeamIds } }] },
@@ -281,17 +192,11 @@ export default async function NewMatchDayPage() {
     clubIds: Array.from(new Set(teams.map((team) => team.clubId))),
   })
   const matchPhaseGroups = getRecordableEventPhaseGroups(recordableEventOptions)
-  const customObservationsByTeamId = customObservationsEnabled
-    ? Object.fromEntries(await Promise.all(teams.map(async (team) => {
-        const result = await getActiveSelectableCustomObservationsForTeam({ userId: user.id, teamId: team.id })
-        return [team.id, result.ok ? result.value : []]
-      }))) as Record<string, CustomObservationSelectable[]>
-    : {}
   const previousMatches = await prisma.matchDay.findMany({
     where: { teamId: { in: teams.map((team) => team.id) } },
     include: {
       team: { include: { club: true } },
-      matchDayEventTypes: { include: { eventDefinition: true, clubTrackingDefinition: customObservationsEnabled }, orderBy: { createdAt: 'asc' } },
+      matchDayEventTypes: { include: { eventDefinition: true }, orderBy: { createdAt: 'asc' } },
       matchDayPlayers: { include: { player: true }, orderBy: { createdAt: 'asc' } },
     },
     orderBy: { kickoffAt: 'desc' },
@@ -352,16 +257,11 @@ export default async function NewMatchDayPage() {
           kickoffAt: match.kickoffAt.toISOString(),
           eventTrackingScope: match.eventTrackingScope,
           trackPlayerMinutes: match.trackPlayerMinutes,
-          locationTrackingEnabled: match.matchDayEventTypes.some((eventType) => eventType.eventDefinition?.requiresLocation || (customObservationsEnabled && eventType.clubTrackingDefinition?.requiresLocation)),
+          locationTrackingEnabled: match.matchDayEventTypes.some((eventType) => eventType.eventDefinition?.requiresLocation),
           selectedEventDefinitionIds: match.matchDayEventTypes
             .map((eventType) => eventType.eventDefinitionId)
             .filter((eventDefinitionId): eventDefinitionId is string => Boolean(eventDefinitionId)),
           eventLabels: match.matchDayEventTypes.map((eventType) => eventType.eventDefinition?.name ?? eventType.eventType ?? 'Legacy event'),
-          selectedClubTrackingDefinitionIds: customObservationsEnabled
-            ? match.matchDayEventTypes
-                .map((eventType) => eventType.clubTrackingDefinitionId)
-                .filter((clubTrackingDefinitionId): clubTrackingDefinitionId is string => Boolean(clubTrackingDefinitionId))
-            : [],
           players: match.matchDayPlayers.map((matchPlayer) => ({
             playerId: matchPlayer.playerId,
             playerName: `${matchPlayer.player.firstName} ${matchPlayer.player.surname}`,
@@ -371,11 +271,6 @@ export default async function NewMatchDayPage() {
             isTracked: matchPlayer.isTracked,
           })),
         }))}
-        customObservationsEnabled={customObservationsEnabled}
-        customObservationsByTeamId={customObservationsByTeamId}
-        maxCustomObservations={MAX_CLASSIC_CUSTOM_OBSERVATIONS}
-        createCustomObservationAction={createCustomObservationAction}
-        checkCustomObservationConflictsAction={checkCustomObservationConflictsAction}
         validateTemplateAction={validateTemplateForTeam}
         createAction={createMatchFromWizard}
       />
