@@ -44,6 +44,7 @@ import { canManageMatchDay, canManageTeamData, canRunMatchDay, canViewMatchDay }
 import { prisma } from '@/lib/prisma'
 import { sendCompletedMatchReportEmail } from '@/lib/reportEmails'
 import { isMatchDayCustomObservationsEnabled, isMatchDayTrackingV2Enabled } from '@/lib/features'
+import { buildFootballMetricReport } from '@/lib/footballObservationMetrics'
 import {
   filterCopyableClassicCustomObservationIds,
   getClassicClubReportVisibility,
@@ -1750,6 +1751,15 @@ export default async function MatchDayDetailPage({
       oneVOneUnsuccessful: getPlayerEventCount(player.playerId, 'ONE_V_ONE_UNSUCCESSFUL'),
     }
   })
+  const footballMetricReport = buildFootballMetricReport({
+    events: resolvedMatchEvents,
+    selections: match.matchDayEventTypes,
+    players: pitchPlayers.map((player) => ({
+      playerId: player.playerId,
+      playerName: `${player.firstName} ${player.surname}`,
+      minutesPlayed: Math.round(player.totalMilliseconds / 60000),
+    })),
+  })
   const mostInvolvedPlayers = playerEventCounts.slice(0, 3)
   const timelineEvents = resolvedMatchEvents.map((event) => ({
     id: event.id,
@@ -2096,6 +2106,7 @@ export default async function MatchDayDetailPage({
               minutesRows={minutesRows}
               teamEventTotals={teamEventTotals}
               playerEventCounts={playerEventCounts}
+              footballMetricReport={footballMetricReport}
               mostInvolvedPlayers={mostInvolvedPlayers}
               timelineEvents={timelineEvents}
               csvMetadata={csvMetadata}
