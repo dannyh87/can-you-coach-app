@@ -4,6 +4,7 @@ import {
   tacticalPresets,
   teamTacticalEventDefinitions,
 } from '../src/lib/teamTacticalCatalogue.mjs'
+import { printTacticalPresetDependencyReport, verifyTacticalPresetDependencies } from './verify-tactical-presets.mjs'
 
 const prisma = new PrismaClient()
 const args = new Set(process.argv.slice(2))
@@ -190,8 +191,10 @@ async function main() {
     console.log(`CONFLICT ${conflict}`)
   }
 
-  if (conflicts.length > 0) {
-    console.log('No changes applied because conflicts were found.')
+  const presetDependencyFailures = printTacticalPresetDependencyReport(await verifyTacticalPresetDependencies(prisma))
+
+  if (conflicts.length > 0 || presetDependencyFailures > 0) {
+    console.log('No changes applied because conflicts or unresolved preset dependencies were found.')
     process.exitCode = 1
     return
   }

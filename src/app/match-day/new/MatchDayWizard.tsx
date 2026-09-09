@@ -946,6 +946,7 @@ function EventPicker({
             onUsePrevious={onOpenTemplatePicker}
             onChooseManual={chooseManual}
             recommendationAvailable={recommendation.matchedEventDefinitionIds.length > 0}
+            notice={eventSelectionNotice}
           />
       ) : (
         <SelectedEventSummary
@@ -1048,17 +1049,20 @@ function EventStartMethodSelection({
   onUsePrevious,
   onChooseManual,
   recommendationAvailable,
+  notice,
 }: {
   onUseRecommendation: () => void
   onUseTacticalPreset: (presetKey: string) => void
   onUsePrevious: () => void
   onChooseManual: () => void
   recommendationAvailable: boolean
+  notice: string | null
 }) {
   return (
     <section className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
       <h2 className="text-2xl font-extrabold text-slate-950">How would you like to start?</h2>
       <p className="mt-2 text-sm text-slate-700">Choose one starting point. You can adjust the events before creating the match.</p>
+      {notice && <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{notice}</p>}
       <div className="mt-4 grid gap-2 sm:grid-cols-3">
         <button type="button" onClick={onUseRecommendation} className={`${controlInteractionClassName} rounded-xl border border-emerald-200 bg-white p-4 text-left text-sm font-bold text-emerald-900 shadow-sm hover:bg-emerald-50 active:border-emerald-400 active:bg-emerald-100`} disabled={!recommendationAvailable}>Recommended for this team<span className="mt-1 block font-normal text-slate-600">Start with a focused set based on this team&apos;s age group.</span></button>
         <button type="button" onClick={onUsePrevious} className={`${controlInteractionClassName} rounded-xl border border-blue-200 bg-white p-4 text-left text-sm font-bold text-blue-900 shadow-sm hover:bg-blue-50 active:border-blue-400 active:bg-blue-100`}>Use my last setup<span className="mt-1 block font-normal text-slate-600">Preview and apply setup inside this wizard.</span></button>

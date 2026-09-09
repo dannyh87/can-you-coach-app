@@ -6,6 +6,7 @@ import {
   getTacticalDetailOptions,
   normalizeTacticalObservationName,
   resolveTacticalPresetEventIds,
+  tacticalPresetStandardPrerequisiteDefinitions,
   tacticalPresets,
   teamTacticalEventDefinitions,
 } from '@/lib/teamTacticalObservations'
@@ -52,7 +53,7 @@ describe('team tactical observation classification', () => {
   })
 
   it('resolves every tactical preset fully within the recommended observation limit', () => {
-    const allEvents = [{ id: 'definition-ball-recovery', label: 'Ball recovery' }, ...selectableEvents]
+    const allEvents = [...tacticalPresetStandardPrerequisiteDefinitions.map((definition) => ({ id: `definition-${normalizeTacticalObservationName(definition.name)}`, label: definition.name })), ...selectableEvents]
 
     for (const preset of tacticalPresets) {
       const result = resolveTacticalPresetEventIds(allEvents, preset.key, MAX_CLASSIC_RECOMMENDED_OBSERVATIONS)

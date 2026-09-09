@@ -1,6 +1,6 @@
 import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
 import type { ObservationReportingIdentity } from '@/lib/observationReporting'
-import { tacticalPresets as rawTacticalPresets, teamTacticalEventDefinitions as rawTeamTacticalEventDefinitions } from '@/lib/teamTacticalCatalogue.mjs'
+import { tacticalPresetStandardPrerequisiteDefinitions as rawTacticalPresetStandardPrerequisiteDefinitions, tacticalPresets as rawTacticalPresets, teamTacticalEventDefinitions as rawTeamTacticalEventDefinitions } from '@/lib/teamTacticalCatalogue.mjs'
 
 export type TacticalObservationSide = 'OUR_TEAM' | 'OPPOSITION'
 type TacticalOutcome = 'success' | 'failure' | 'count'
@@ -185,6 +185,7 @@ const detailOptionsByName = {
 
 export const tacticalPresets = rawTacticalPresets as TacticalPreset[]
 export const teamTacticalEventDefinitions = rawTeamTacticalEventDefinitions as Array<{ name: string }>
+export const tacticalPresetStandardPrerequisiteDefinitions = rawTacticalPresetStandardPrerequisiteDefinitions as Array<{ name: string }>
 
 export const tacticalMetricDefinitions: TacticalMetricDefinition[] = [
   { key: 'BUILD_UP_FROM_GOALKEEPER', label: 'Build-up from goalkeeper', question: 'Are we getting controlled exits from goalkeeper build-up?', guidance: 'Controlled exit means the team moves from goalkeeper restart/build-up into the middle third while retaining controlled possession.', paired: true },

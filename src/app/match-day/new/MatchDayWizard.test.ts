@@ -136,6 +136,20 @@ describe('MatchDayWizard event selector', () => {
     ])
   })
 
+  it('keeps the current selection unchanged when a preset standard prerequisite is missing', async () => {
+    renderWizard({ matchPhaseGroups: tacticalPresetTestGroups({ includeBallRecovery: false }) })
+
+    await typeIntoInput(getInputByLabel('Opposition'), 'Rivals')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Next')
+    await clickButton('Counter-attacking')
+
+    expect(document.body.textContent).toContain('That tactical preset is unavailable because these definitions are missing: Ball recovery.')
+    expect(document.body.textContent).toContain('How would you like to start?')
+    expect(document.body.textContent).not.toContain('Attack following regain shot')
+  })
+
   it('prevents duplicate create submissions while pending and clears loading after failure', async () => {
     const pendingCreate = deferred<{ ok: false; reason: string } | void>()
     const createAction = vi.fn(() => pendingCreate.promise)
@@ -413,6 +427,21 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof MatchDayWiz
       })
     )
   })
+}
+
+function tacticalPresetTestGroups({ includeBallRecovery }: { includeBallRecovery: boolean }): React.ComponentProps<typeof MatchDayWizard>['matchPhaseGroups'] {
+  const events = [
+    eventDefinition({ id: 'event-build-up-controlled-exit', label: 'Build-up from goalkeeper controlled exit', slug: 'build-up-from-goalkeeper-controlled-exit', normalizedName: 'build up from goalkeeper controlled exit', category: 'PASSING', categoryLabel: 'Passing', description: 'Controlled exit from goalkeeper build-up.' }),
+    eventDefinition({ id: 'event-build-up-possession-lost', label: 'Build-up from goalkeeper possession lost', slug: 'build-up-from-goalkeeper-possession-lost', normalizedName: 'build up from goalkeeper possession lost', category: 'PASSING', categoryLabel: 'Passing', description: 'Lost possession during goalkeeper build-up.' }),
+    eventDefinition({ id: 'event-escape-press-retained', label: 'Escape opposition press retained', slug: 'escape-opposition-press-retained', normalizedName: 'escape opposition press retained', category: 'PASSING', categoryLabel: 'Passing', description: 'Retained beyond opposition pressure.' }),
+    eventDefinition({ id: 'event-escape-press-unsuccessful', label: 'Escape opposition press unsuccessful', slug: 'escape-opposition-press-unsuccessful', normalizedName: 'escape opposition press unsuccessful', category: 'PASSING', categoryLabel: 'Passing', description: 'Failed to escape opposition pressure.' }),
+    eventDefinition({ id: 'event-attack-following-regain-box-entry', label: 'Attack following regain box entry', slug: 'attack-following-regain-box-entry', normalizedName: 'attack following regain box entry', category: 'SHOOTING', categoryLabel: 'Shooting', description: 'Regain attack reaches box.' }),
+    eventDefinition({ id: 'event-attack-following-regain-shot', label: 'Attack following regain shot', slug: 'attack-following-regain-shot', normalizedName: 'attack following regain shot', category: 'SHOOTING', categoryLabel: 'Shooting', description: 'Regain attack produces shot.' }),
+    eventDefinition({ id: 'event-attack-following-regain-possession-lost', label: 'Attack following regain possession lost', slug: 'attack-following-regain-possession-lost', normalizedName: 'attack following regain possession lost', category: 'PASSING', categoryLabel: 'Passing', description: 'Regain attack breaks down.' }),
+  ]
+  if (includeBallRecovery) events.push(eventDefinition({ id: 'event-ball-recovery', label: 'Ball recovery', slug: 'ball-recovery', normalizedName: 'ball recovery', category: 'DEFENDING', categoryLabel: 'Defending', description: 'Controlled possession after a turnover.' }))
+
+  return [{ value: 'IN_POSSESSION' as const, label: 'In possession', events }]
 }
 
 function customOnlyPreviousSetup(overrides: Partial<PreviousSetupTest> = {}): PreviousSetupTest {

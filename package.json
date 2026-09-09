@@ -14,7 +14,9 @@
     "prestart": "prisma generate",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:sync:tactical-events": "node prisma/sync-tactical-event-definitions.mjs"
+    "db:sync:tactical-events": "node prisma/sync-tactical-event-definitions.mjs",
+    "db:sync:tactical-prerequisites": "node prisma/sync-tactical-standard-prerequisites.mjs",
+    "db:verify:tactical-presets": "node prisma/verify-tactical-presets.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.7",

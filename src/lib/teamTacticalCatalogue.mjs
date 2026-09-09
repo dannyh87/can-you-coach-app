@@ -54,6 +54,24 @@ export const teamTacticalEventDefinitions = [
   { stableId: 'global-tactical-our-throw-in-possession-lost', name: 'Our throw-in possession lost', description: 'What counts? From our throw-in, the opposition controls the ball or the ball goes out before we complete the receiving action or next deliberate team action within 5 seconds.', matchPhase: 'SET_PIECES', category: 'PASSING', subcategory: 'Team tactical - Throw-ins', matchDayGroup: 'PASSING', agePhases: ['YOUTH', 'ADULT'], fourCorner: 'TACTICAL', positionRelevance: ['ALL'], enabledByDefault: false, benchmarkable: false },
 ]
 
+export const tacticalPresetStandardPrerequisiteDefinitions = [
+  {
+    stableId: 'global-standard-ball-recovery',
+    name: 'Ball recovery',
+    description: 'What counts? A player establishes controlled possession after a turnover or loose ball. Do not count this as an interception unless they moved into an opponent pass.',
+    matchPhase: 'TRANSITION',
+    category: 'DEFENDING',
+    subcategory: 'Regains',
+    matchDayGroup: 'DEFENDING',
+    agePhases: ['FOUNDATION', 'YOUTH', 'ADULT'],
+    fourCorner: 'TACTICAL',
+    positionRelevance: ['ALL'],
+    requiresLocation: false,
+    enabledByDefault: false,
+    benchmarkable: true,
+  },
+]
+
 export const tacticalPresets = [
   { key: 'playing-out', label: 'Playing out', description: 'Track controlled exits, escaping pressure and breaking the midfield line.', eventNames: ['Build-up from goalkeeper controlled exit', 'Build-up from goalkeeper possession lost', 'Escape opposition press retained', 'Escape opposition press unsuccessful'] },
   { key: 'pressing', label: 'Pressing', description: 'Track what the press causes without labelling every regain as a pressing success.', eventNames: ['Press triggered regain', 'Press triggered force long ball', 'Press triggered opponent escapes', 'Counter-press regain'] },
@@ -115,6 +133,30 @@ export function getCanonicalTacticalEventDefinition(definition) {
     positionRelevance: definition.positionRelevance,
     enabledByDefault: definition.enabledByDefault ?? false,
     benchmarkable: definition.benchmarkable ?? false,
+    requiresLocation: definition.requiresLocation ?? false,
+    isActive: definition.isActive ?? true,
+    archivedAt: definition.archivedAt ?? null,
+  }
+}
+
+export function getCanonicalStandardPrerequisiteEventDefinition(definition) {
+  return {
+    name: definition.name,
+    description: definition.description,
+    scope: 'GLOBAL',
+    clubId: null,
+    legacyEventType: null,
+    slug: createEventDefinitionSlug(definition.name),
+    normalizedName: normalizeEventDefinitionName(definition.name),
+    matchPhase: definition.matchPhase,
+    category: definition.category,
+    subcategory: definition.subcategory,
+    matchDayGroup: definition.matchDayGroup,
+    agePhases: definition.agePhases,
+    fourCorner: definition.fourCorner,
+    positionRelevance: definition.positionRelevance,
+    enabledByDefault: definition.enabledByDefault ?? false,
+    benchmarkable: definition.benchmarkable ?? true,
     requiresLocation: definition.requiresLocation ?? false,
     isActive: definition.isActive ?? true,
     archivedAt: definition.archivedAt ?? null,
