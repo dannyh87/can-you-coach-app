@@ -9,6 +9,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
 import { buildFootballMetricReport } from '@/lib/footballObservationMetrics'
 import { prisma } from '@/lib/prisma'
+import { buildTacticalObservationReport, type TacticalObservationSide } from '@/lib/teamTacticalObservations'
 import {
   buildTeamTrendOptions,
   buildTeamTrendSeries,
@@ -31,6 +32,7 @@ type SearchParams = {
   from?: string
   to?: string
   matchType?: string
+  tacticalSide?: string
 }
 
 const matchTypes = ['LEAGUE', 'CUP', 'FRIENDLY'] as const satisfies MatchType[]
@@ -57,6 +59,9 @@ const getChartLabel = (date: Date, opposition: string) =>
 
 const formatPercent = (value: number | null | undefined) => value === null || value === undefined ? 'n/a' : `${Math.round(value * 100)}%`
 const getStintMinutes = (stints: Array<{ startedAt: Date; endedAt: Date | null }>) => Math.round(stints.reduce((total, stint) => total + (stint.endedAt ? Math.max(0, stint.endedAt.getTime() - stint.startedAt.getTime()) : 0), 0) / 60000)
+const tacticalSideOptions = ['ALL', 'OUR_TEAM', 'OPPOSITION'] as const
+type TacticalSideFilter = typeof tacticalSideOptions[number]
+const formatTacticalSide = (side: TacticalSideFilter) => side === 'ALL' ? 'All sides' : side === 'OUR_TEAM' ? 'Our team' : 'Opposition'
 
 export default async function TeamEventTrendsPage({
   searchParams,
@@ -74,6 +79,9 @@ export default async function TeamEventTrendsPage({
   const selectedMatchType = matchTypes.includes(params.matchType as MatchType)
     ? params.matchType as MatchType
     : ''
+  const selectedTacticalSide: TacticalSideFilter = tacticalSideOptions.includes(params.tacticalSide as TacticalSideFilter)
+    ? params.tacticalSide as TacticalSideFilter
+    : 'ALL'
 
   const teams = await prisma.team.findMany({
     where: teamWhere,
@@ -109,6 +117,7 @@ export default async function TeamEventTrendsPage({
               eventDefinition: { select: { id: true, name: true, benchmarkable: true } },
               standardEventDefinitionAtRecording: { select: { id: true, name: true, benchmarkable: true } },
               clubTrackingDefinition: { select: { id: true, name: true, kind: true, status: true, active: true, retiredAt: true } },
+              tacticalSequence: true,
             },
           },
           matchDayEventTypes: { include: { eventDefinition: { select: { id: true, name: true } } } },
@@ -151,6 +160,17 @@ export default async function TeamEventTrendsPage({
     events: matches.flatMap((match) => match.matchEvents),
     selections: matches.flatMap((match) => match.matchDayEventTypes),
     players: Array.from(periodPlayersById.values()),
+  })
+  const tacticalReportSide: TacticalObservationSide | 'ALL' = selectedTacticalSide === 'ALL' ? 'ALL' : selectedTacticalSide
+  const periodTacticalReport = buildTacticalObservationReport({
+    events: matches.flatMap((match) => match.matchEvents),
+    selections: matches.flatMap((match) => match.matchDayEventTypes),
+    side: tacticalReportSide,
+  })
+  const tacticalMatchRows = matches.map((match) => {
+    const report = buildTacticalObservationReport({ events: match.matchEvents, selections: match.matchDayEventTypes, side: tacticalReportSide })
+    const total = report.metrics.reduce((sum, metric) => sum + metric.total, 0)
+    return { match, report, total }
   })
   const trendOptions = allTrendOptions.filter((option) => option.dimension === selectedDimension)
   const requestedIdentity = decodeTeamTrendIdentity(params.trendKey) ?? getLegacyTeamTrendIdentity(params.eventKey, allTrendOptions)
@@ -252,6 +272,17 @@ export default async function TeamEventTrendsPage({
                   ))}
                 </select>
               </label>
+
+              <label className="grid gap-2 text-sm font-bold text-slate-700">
+                Tactical side
+                <select
+                  name="tacticalSide"
+                  defaultValue={selectedTacticalSide}
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-700"
+                >
+                  {tacticalSideOptions.map((side) => <option key={side} value={side}>{formatTacticalSide(side)}</option>)}
+                </select>
+              </label>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -306,6 +337,63 @@ export default async function TeamEventTrendsPage({
                       )}
                     </div>
                   ))}
+                </div>
+              </section>
+
+              <section className="mb-6 rounded-3xl border border-purple-100 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-purple-700">Team tactical observations</p>
+                    <h2 className="mt-1 text-xl font-extrabold text-slate-950">Period totals and match trends</h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">Filtered by {formatTacticalSide(selectedTacticalSide).toLowerCase()}. Causal measures require valid sequence links and are not inferred from nearby events.</p>
+                  </div>
+                  <span className="rounded-full bg-purple-50 px-3 py-1 text-xs font-bold text-purple-800">{matches.length} match{matches.length === 1 ? '' : 'es'}</span>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {periodTacticalReport.metrics.filter((metric) => metric.tracked || metric.total > 0).slice(0, 8).map((metric) => (
+                    <div key={metric.key} className="rounded-2xl bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-bold text-slate-950">{metric.label}</p>
+                        <p className="text-xs font-bold text-slate-500">{metric.coverageLabel}</p>
+                      </div>
+                      <p className="mt-2 text-2xl font-black tabular-nums text-purple-900">{metric.total}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-500">Our team {metric.ourTeamTotal} · Opposition {metric.oppositionTotal}</p>
+                      {metric.attempts !== null && <p className="mt-1 text-xs font-semibold text-slate-600">Attempts {metric.attempts} · Success {metric.successRate === null ? 'n/a' : `${Math.round(metric.successRate * 100)}%`}</p>}
+                    </div>
+                  ))}
+                  {periodTacticalReport.metrics.every((metric) => !metric.tracked && metric.total === 0) && <p className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">No tactical observation events were selected or recorded in this period.</p>}
+                </div>
+                {periodTacticalReport.causalMeasures.length > 0 && (
+                  <div className="mt-4 rounded-2xl bg-emerald-50 p-3">
+                    <p className="text-sm font-bold text-emerald-950">Validated linked measures: {periodTacticalReport.causalMeasures.map((measure) => `${measure.label} ${measure.numerator}/${measure.denominator}`).join(' · ')}</p>
+                  </div>
+                )}
+                {periodTacticalReport.unavailableMeasures.length > 0 && (
+                  <p className="mt-4 rounded-2xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900">
+                    Unavailable linked measures: {periodTacticalReport.unavailableMeasures.map((measure) => measure.label).join(' · ')}.
+                  </p>
+                )}
+                <div className="mt-5 overflow-x-auto rounded-2xl border border-slate-100">
+                  <table className="min-w-full divide-y divide-slate-100 text-sm">
+                    <thead className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th scope="col" className="px-4 py-3">Date</th>
+                        <th scope="col" className="px-4 py-3">Opposition</th>
+                        <th scope="col" className="px-4 py-3 text-right">Tactical total</th>
+                        <th scope="col" className="px-4 py-3">Top observations</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {tacticalMatchRows.map(({ match, report, total }) => (
+                        <tr key={match.id} className="hover:bg-purple-50/40">
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">{formatDate(match.kickoffAt)}</td>
+                          <td className="px-4 py-3 text-slate-700">{match.opposition}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right font-extrabold tabular-nums text-slate-950">{total}</td>
+                          <td className="px-4 py-3 text-xs font-semibold text-slate-600">{report.metrics.filter((metric) => metric.total > 0).sort((first, second) => second.total - first.total).slice(0, 3).map((metric) => `${metric.label}: ${metric.total}`).join(' · ') || 'None'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
 

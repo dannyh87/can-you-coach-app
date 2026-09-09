@@ -2,6 +2,7 @@ import type { MatchEventType } from '@prisma/client'
 
 import { getEventDisplayName } from '@/lib/eventDefinitions'
 import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
+import { getTacticalDetailOptions } from '@/lib/teamTacticalObservations'
 import {
   getObservationIdentityLabel,
   resolveObservationReportingIdentity,
@@ -29,6 +30,9 @@ export type MatchReportEventCsvSource = {
   clubMappingRevisionAtRecording: number | null
   ownScoreAtTime: number
   oppositionScoreAtTime: number
+  teamSide?: string | null
+  detailCode?: string | null
+  tacticalSequenceId?: string | null
 }
 
 export type MatchReportPatternCsvSource = {
@@ -134,6 +138,9 @@ export function buildMatchEventCsvRows(events: Array<MatchReportResolvedEvent | 
       matchTime: formatReportMatchTime(event.matchSecond),
       playerName: event.player ? `${event.player.firstName} ${event.player.surname}` : 'Whole team',
       event: getMatchReportEventLabel(event),
+      teamSide: event.teamSide === 'OPPOSITION' ? 'Opposition' : 'Our team',
+      tacticalDetail: getMatchReportTacticalDetail(event),
+      tacticalSequenceId: event.tacticalSequenceId ?? '',
       scoreAtTime: `${event.ownScoreAtTime}-${event.oppositionScoreAtTime}`,
       reportingDimension: getReportingDimensionLabel(reportingIdentity),
       clubTrackingDefinition: reportingIdentity.clubIdentity?.label ?? '',
@@ -150,6 +157,12 @@ export function buildMatchEventCsvRows(events: Array<MatchReportResolvedEvent | 
       benchmarkEligible: reportingIdentity.benchmarkEligible ? 'Yes' : 'No',
     }
   })
+}
+
+function getMatchReportTacticalDetail(event: Pick<MatchReportEventCsvSource, 'clubTrackingDefinition' | 'eventDefinition' | 'eventType' | 'detailCode'>) {
+  if (!event.detailCode) return ''
+  const eventName = getMatchReportEventLabel(event)
+  return getTacticalDetailOptions(eventName).find((option) => option.code === event.detailCode)?.label ?? event.detailCode
 }
 
 export function buildMatchPatternCsvRows(observations: Array<MatchReportResolvedPattern | MatchReportPatternCsvSource>): MatchPatternObservationCsvRow[] {

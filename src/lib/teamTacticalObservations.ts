@@ -1,5 +1,6 @@
 import { formatMatchEventType } from '@/lib/matchEventTaxonomy'
 import type { ObservationReportingIdentity } from '@/lib/observationReporting'
+import { tacticalPresets as rawTacticalPresets, teamTacticalEventDefinitions as rawTeamTacticalEventDefinitions } from '@/lib/teamTacticalCatalogue.mjs'
 
 export type TacticalObservationSide = 'OUR_TEAM' | 'OPPOSITION'
 type TacticalOutcome = 'success' | 'failure' | 'count'
@@ -40,8 +41,15 @@ export type TacticalPreset = {
   eventNames: string[]
 }
 
+export type TacticalPresetResolution =
+  | { ok: true; eventIds: string[] }
+  | { ok: false; reason: string }
+
 export type TacticalEventSource = {
   id: string
+  matchDayId?: string | null
+  half?: string | null
+  matchSecond?: number | null
   eventType?: string | null
   eventDefinition?: { name?: string | null } | null
   standardEventDefinitionAtRecording?: { name?: string | null } | null
@@ -49,6 +57,19 @@ export type TacticalEventSource = {
   teamSide?: TacticalObservationSide | null
   detailCode?: string | null
   tacticalSequenceId?: string | null
+  tacticalSequence?: TacticalSequenceSource | null
+}
+
+export type TacticalSequenceSource = {
+  id: string
+  matchDayId?: string | null
+  teamSide?: TacticalObservationSide | null
+  sequenceType: string
+  startHalf: string
+  startMatchSecond: number
+  endHalf?: string | null
+  endMatchSecond?: number | null
+  timeWindowSeconds?: number | null
 }
 
 export type TacticalSelectionSource = {
@@ -78,8 +99,18 @@ export type TacticalUnavailableMeasure = {
   reason: string
 }
 
+export type TacticalCausalMeasure = {
+  key: string
+  label: string
+  numerator: number
+  denominator: number
+  rate: number | null
+  coverageLabel: string
+}
+
 export type TacticalObservationReport = {
   metrics: TacticalMetricCount[]
+  causalMeasures: TacticalCausalMeasure[]
   unavailableMeasures: TacticalUnavailableMeasure[]
 }
 
@@ -152,14 +183,8 @@ const detailOptionsByName = {
   ],
 } satisfies Record<string, TacticalDetailOption[]>
 
-export const tacticalPresets: TacticalPreset[] = [
-  { key: 'playing-out', label: 'Playing out', description: 'Track controlled exits, escaping pressure and breaking the midfield line.', eventNames: ['Build-up from goalkeeper controlled exit', 'Build-up from goalkeeper possession lost', 'Escape opposition press retained', 'Escape opposition press unsuccessful'] },
-  { key: 'pressing', label: 'Pressing', description: 'Track what the press causes without labelling every regain as a pressing success.', eventNames: ['Press triggered regain', 'Press triggered force long ball', 'Press triggered opponent escapes', 'Counter-press regain'] },
-  { key: 'counter-attacking', label: 'Counter-attacking', description: 'Track whether regains become dangerous attacks.', eventNames: ['Ball recovery', 'Attack following regain box entry', 'Attack following regain shot', 'Attack following regain possession lost'] },
-  { key: 'wide-attacks', label: 'Wide attacks', description: 'Track wide entries, switches and cutbacks.', eventNames: ['Final-third entry by pass', 'Final-third entry by carry', 'Switch of play completed', 'Cutback reaches teammate'] },
-  { key: 'defending-box', label: 'Defending the box', description: 'Track box protection, second balls and central penetration.', eventNames: ['Second ball won', 'Second ball lost', 'Opposition central penetration prevented', 'Opposition central penetration completed'] },
-  { key: 'set-pieces', label: 'Set pieces', description: 'Track repeatable attacking and defending set-piece outcomes.', eventNames: ['Attacking corner routine', 'Attacking set-piece first contact won', 'Defending corner or free kick first contact won', 'Our throw-in possession retained'] },
-]
+export const tacticalPresets = rawTacticalPresets as TacticalPreset[]
+export const teamTacticalEventDefinitions = rawTeamTacticalEventDefinitions as Array<{ name: string }>
 
 export const tacticalMetricDefinitions: TacticalMetricDefinition[] = [
   { key: 'BUILD_UP_FROM_GOALKEEPER', label: 'Build-up from goalkeeper', question: 'Are we getting controlled exits from goalkeeper build-up?', guidance: 'Controlled exit means the team moves from goalkeeper restart/build-up into the middle third while retaining controlled possession.', paired: true },
@@ -256,9 +281,10 @@ export function classifyTacticalObservation(input: { name?: string | null }): Ar
   }
 }
 
-export function buildTacticalObservationReport({ events, selections }: { events: TacticalEventSource[]; selections: TacticalSelectionSource[] }): TacticalObservationReport {
+export function buildTacticalObservationReport({ events, selections, side = 'ALL' }: { events: TacticalEventSource[]; selections: TacticalSelectionSource[]; side?: TacticalObservationSide | 'ALL' }): TacticalObservationReport {
   const selectedOutcomes = new Map<TacticalMetricKey, Set<TacticalOutcome>>()
   const totals = new Map<TacticalMetricKey, TacticalMetricTotalRow>()
+  const filteredEvents = side === 'ALL' ? events : events.filter((event) => (event.teamSide ?? 'OUR_TEAM') === side)
 
   for (const selection of selections) {
     for (const item of classifyTacticalObservation({ name: getTacticalObservationName(selection) })) {
@@ -268,7 +294,7 @@ export function buildTacticalObservationReport({ events, selections }: { events:
     }
   }
 
-  for (const event of events) {
+  for (const event of filteredEvents) {
     const name = getTacticalObservationName(event)
     for (const item of classifyTacticalObservation({ name })) {
       const row = totals.get(item.key) ?? { successes: 0, failures: 0, count: 0, ourTeam: 0, opposition: 0, outcomes: new Map<string, number>(), details: new Map<string, number>() }
@@ -284,10 +310,11 @@ export function buildTacticalObservationReport({ events, selections }: { events:
     }
   }
 
-  const hasSequenceLinks = events.some((event) => Boolean(event.tacticalSequenceId))
+  const causalMeasures = buildCausalMeasures(filteredEvents)
   return {
     metrics: tacticalMetricDefinitions.map((definition) => buildMetricCount(definition, totals.get(definition.key), selectedOutcomes.get(definition.key))),
-    unavailableMeasures: getUnavailableMeasures(hasSequenceLinks),
+    causalMeasures,
+    unavailableMeasures: getUnavailableMeasures(causalMeasures),
   }
 }
 
@@ -336,21 +363,127 @@ function getDetailLabel(name: string | null, detailCode?: string | null) {
   return getTacticalDetailOptions(name).find((option) => option.code === detailCode)?.label ?? detailCode
 }
 
-function getUnavailableMeasures(hasSequenceLinks: boolean): TacticalUnavailableMeasure[] {
-  if (hasSequenceLinks) return []
-  return [
-    { label: 'Regains producing a shot / tracked regains', reason: 'Unavailable until regain and shot events are explicitly linked in a tactical sequence.' },
-    { label: 'Final-third entries followed by box entry or shot / tracked entries', reason: 'Unavailable until entry and outcome events are explicitly linked in a tactical sequence.' },
-    { label: 'Losses followed by an opposition shot / tracked losses', reason: 'Unavailable until possession-loss and opposition-shot events are explicitly linked in a tactical sequence.' },
-    { label: 'Corners producing a shot / tracked corners', reason: 'Unavailable until corner routine and shot events are explicitly linked in a tactical sequence.' },
+function buildCausalMeasures(events: TacticalEventSource[]): TacticalCausalMeasure[] {
+  const rules = [
+    { key: 'REGAINS_TO_SHOTS', label: 'Regains producing a shot / tracked regains', sequenceType: 'ATTACK_AFTER_REGAIN', startNames: ['Ball recovery', 'Press triggered regain', 'Counter-press regain'], outcomeNames: ['Attack following regain shot', 'Attack following regain goal'], maxSeconds: 15, sideRule: 'SAME_SIDE' as const },
+    { key: 'FINAL_THIRD_TO_BOX_OR_SHOT', label: 'Final-third entries followed by box entry or shot / tracked entries', sequenceType: 'FINAL_THIRD_ATTACK', startNames: ['Final-third entry by pass', 'Final-third entry by carry'], outcomeNames: ['Penalty-area entry pass controlled', 'Penalty-area entry carry controlled', 'Penalty-area entry cross controlled', 'Attack following regain shot', 'Attack following regain goal'], maxSeconds: 20, sideRule: 'SAME_SIDE' as const },
+    { key: 'LOSSES_TO_OPPOSITION_SHOTS', label: 'Losses followed by an opposition shot / tracked losses', sequenceType: 'OPPOSITION_ATTACK_AFTER_OUR_LOSS', startNames: ['Build-up from goalkeeper possession lost', 'Escape opposition press unsuccessful', 'Attack following regain possession lost', 'Our throw-in possession lost'], outcomeNames: ['Opposition attack following our loss shot conceded'], maxSeconds: 15, sideRule: 'OUR_LOSS_OPPOSITION_OUTCOME' as const },
+    { key: 'CORNERS_TO_SHOTS', label: 'Corners producing a shot / tracked corners', sequenceType: 'ATTACKING_SET_PIECE', startNames: ['Attacking corner routine'], outcomeNames: ['Attacking set-piece shot'], maxSeconds: 15, sideRule: 'SAME_SIDE' as const },
   ]
+
+  return rules.flatMap((rule) => {
+    const counts = countCausalStarts(events, rule)
+    const denominator = counts.denominator
+    const numerator = counts.numerator
+    if (denominator === 0) return []
+    return [{ key: rule.key, label: rule.label, numerator, denominator, rate: numerator / denominator, coverageLabel: 'Valid linked sequences recorded' }]
+  })
+}
+
+function countCausalStarts(events: TacticalEventSource[], rule: { sequenceType: string; startNames: string[]; outcomeNames: string[]; maxSeconds: number; sideRule: 'SAME_SIDE' | 'OUR_LOSS_OPPOSITION_OUTCOME' }) {
+  const eventsBySequenceId = new Map<string, TacticalEventSource[]>()
+  for (const event of events) {
+    if (!event.tacticalSequenceId || !event.tacticalSequence) continue
+    const sequenceEvents = eventsBySequenceId.get(event.tacticalSequenceId) ?? []
+    sequenceEvents.push(event)
+    eventsBySequenceId.set(event.tacticalSequenceId, sequenceEvents)
+  }
+
+  let denominator = 0
+  let numerator = 0
+  for (const sequenceEvents of eventsBySequenceId.values()) {
+    const sequence = sequenceEvents[0]?.tacticalSequence
+    if (!sequence || sequence.sequenceType !== rule.sequenceType) continue
+    const startEvents = sequenceEvents.filter((event) => rule.startNames.includes(getTacticalObservationName(event) ?? '') && isEligibleCausalStart(event, sequence, rule))
+    const outcomeEvents = sequenceEvents.filter((event) => rule.outcomeNames.includes(getTacticalObservationName(event) ?? ''))
+
+    for (const startEvent of startEvents) {
+      denominator += 1
+      if (outcomeEvents.some((outcomeEvent) => isValidSequencePair(startEvent, outcomeEvent, sequence, rule))) numerator += 1
+    }
+  }
+
+  return { numerator, denominator }
+}
+
+function isEligibleCausalStart(startEvent: TacticalEventSource, sequence: TacticalSequenceSource, rule: { sideRule: 'SAME_SIDE' | 'OUR_LOSS_OPPOSITION_OUTCOME' }) {
+  if (sequence.matchDayId && startEvent.matchDayId && sequence.matchDayId !== startEvent.matchDayId) return false
+  if (!eventFitsSequenceWindow(startEvent, sequence)) return false
+
+  const startSide = startEvent.teamSide ?? 'OUR_TEAM'
+  if (rule.sideRule === 'SAME_SIDE') return (sequence.teamSide ?? startSide) === startSide
+  return startSide === 'OUR_TEAM' && (sequence.teamSide ?? 'OPPOSITION') === 'OPPOSITION'
+}
+
+function isValidSequencePair(startEvent: TacticalEventSource, outcomeEvent: TacticalEventSource, sequence: TacticalSequenceSource, rule: { maxSeconds: number; sideRule: 'SAME_SIDE' | 'OUR_LOSS_OPPOSITION_OUTCOME' }) {
+  if (startEvent.matchDayId && outcomeEvent.matchDayId && startEvent.matchDayId !== outcomeEvent.matchDayId) return false
+  if (sequence.matchDayId && startEvent.matchDayId && sequence.matchDayId !== startEvent.matchDayId) return false
+  if (sequence.matchDayId && outcomeEvent.matchDayId && sequence.matchDayId !== outcomeEvent.matchDayId) return false
+  if (!isOrderedWithinWindow(startEvent, outcomeEvent, rule.maxSeconds)) return false
+  if (!eventFitsSequenceWindow(startEvent, sequence) || !eventFitsSequenceWindow(outcomeEvent, sequence)) return false
+
+  const startSide = startEvent.teamSide ?? 'OUR_TEAM'
+  const outcomeSide = outcomeEvent.teamSide ?? 'OUR_TEAM'
+  if (rule.sideRule === 'SAME_SIDE') return startSide === outcomeSide && (sequence.teamSide ?? startSide) === startSide
+  return startSide === 'OUR_TEAM' && outcomeSide === 'OPPOSITION' && (sequence.teamSide ?? 'OPPOSITION') === 'OPPOSITION'
+}
+
+function isOrderedWithinWindow(startEvent: TacticalEventSource, outcomeEvent: TacticalEventSource, maxSeconds: number) {
+  if (typeof startEvent.matchSecond !== 'number' || typeof outcomeEvent.matchSecond !== 'number') return false
+  if (startEvent.half && outcomeEvent.half && startEvent.half !== outcomeEvent.half) return false
+  const elapsed = outcomeEvent.matchSecond - startEvent.matchSecond
+  return elapsed >= 0 && elapsed <= maxSeconds
+}
+
+function eventFitsSequenceWindow(event: TacticalEventSource, sequence: TacticalSequenceSource) {
+  if (typeof event.matchSecond !== 'number') return false
+  if (event.half && event.half !== sequence.startHalf) return false
+  const endMatchSecond = sequence.endMatchSecond ?? sequence.startMatchSecond + (sequence.timeWindowSeconds ?? 0)
+  const lowerBound = sequence.startMatchSecond
+  const upperBound = Math.max(lowerBound, endMatchSecond)
+  return event.matchSecond >= lowerBound && event.matchSecond <= upperBound
+}
+
+function getUnavailableMeasures(causalMeasures: TacticalCausalMeasure[]): TacticalUnavailableMeasure[] {
+  const availableKeys = new Set(causalMeasures.map((measure) => measure.key))
+  const definitions = [
+    { key: 'REGAINS_TO_SHOTS', label: 'Regains producing a shot / tracked regains', reason: 'Unavailable until regain and shot events are explicitly linked in an ATTACK_AFTER_REGAIN sequence within 15 seconds.' },
+    { key: 'FINAL_THIRD_TO_BOX_OR_SHOT', label: 'Final-third entries followed by box entry or shot / tracked entries', reason: 'Unavailable until entry and outcome events are explicitly linked in a FINAL_THIRD_ATTACK sequence within 20 seconds.' },
+    { key: 'LOSSES_TO_OPPOSITION_SHOTS', label: 'Losses followed by an opposition shot / tracked losses', reason: 'Unavailable until our loss and opposition-shot events are explicitly linked in an OPPOSITION_ATTACK_AFTER_OUR_LOSS sequence within 15 seconds.' },
+    { key: 'CORNERS_TO_SHOTS', label: 'Corners producing a shot / tracked corners', reason: 'Unavailable until corner routine and shot events are explicitly linked in an ATTACKING_SET_PIECE sequence within 15 seconds.' },
+  ]
+  return definitions.filter((definition) => !availableKeys.has(definition.key)).map(({ label, reason }) => ({ label, reason }))
+}
+
+export function resolveTacticalPresetEventIds(events: Array<{ id: string; label: string }>, presetKey: string, maxSelections = Infinity): TacticalPresetResolution {
+  const preset = tacticalPresets.find((candidate) => candidate.key === presetKey)
+  if (!preset) return { ok: false, reason: 'That tactical preset is not recognised.' }
+
+  const duplicatePresetNames = preset.eventNames.filter((name, index) => preset.eventNames.indexOf(name) !== index)
+  if (duplicatePresetNames.length > 0) return { ok: false, reason: `That tactical preset contains duplicate events: ${Array.from(new Set(duplicatePresetNames)).join(', ')}.` }
+  if (preset.eventNames.length > maxSelections) return { ok: false, reason: `That tactical preset contains ${preset.eventNames.length} events, above the ${maxSelections} event recommended limit.` }
+
+  const eventsByName = new Map<string, string>()
+  const duplicateSelectableNames = new Set<string>()
+  for (const event of events) {
+    if (eventsByName.has(event.label)) duplicateSelectableNames.add(event.label)
+    eventsByName.set(event.label, event.id)
+  }
+
+  const duplicatedNamesInPreset = preset.eventNames.filter((name) => duplicateSelectableNames.has(name))
+  if (duplicatedNamesInPreset.length > 0) return { ok: false, reason: `That tactical preset cannot be applied because multiple selectable definitions share: ${duplicatedNamesInPreset.join(', ')}.` }
+
+  const missingNames = preset.eventNames.filter((name) => !eventsByName.has(name))
+  if (missingNames.length > 0) return { ok: false, reason: `That tactical preset is unavailable because these definitions are missing: ${missingNames.join(', ')}.` }
+
+  const eventIds = preset.eventNames.map((name) => eventsByName.get(name)!)
+  if (eventIds.length === 0) return { ok: false, reason: 'That tactical preset is not available in this event library yet.' }
+  return { ok: true, eventIds }
 }
 
 export function getTacticalPresetEventIds(events: Array<{ id: string; label: string }>, presetKey: string) {
-  const preset = tacticalPresets.find((candidate) => candidate.key === presetKey)
-  if (!preset) return []
-  const eventsByName = new Map(events.map((event) => [event.label, event.id]))
-  return preset.eventNames.flatMap((name) => eventsByName.get(name) ? [eventsByName.get(name)!] : [])
+  const result = resolveTacticalPresetEventIds(events, presetKey)
+  return result.ok ? result.eventIds : []
 }
 
 export { detailOptionsByName }

@@ -1407,6 +1407,7 @@ export default async function MatchDayDetailPage({
           eventDefinition: true,
           clubTrackingDefinition: true,
           standardEventDefinitionAtRecording: true,
+          tacticalSequence: true,
         },
         orderBy: { createdAt: 'asc' },
       },

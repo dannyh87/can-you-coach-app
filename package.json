@@ -13,7 +13,8 @@
     "lint": "eslint",
     "prestart": "prisma generate",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:sync:tactical-events": "node prisma/sync-tactical-event-definitions.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.7",

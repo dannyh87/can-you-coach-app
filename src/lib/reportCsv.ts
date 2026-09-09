@@ -33,6 +33,9 @@ export type MatchEventCsvRow = {
   matchTime: string
   playerName: string
   event: string
+  teamSide?: string
+  tacticalDetail?: string
+  tacticalSequenceId?: string
   scoreAtTime: string
   reportingDimension?: string
   clubTrackingDefinition?: string
@@ -134,6 +137,9 @@ const matchEventHeaders = [
   'Match Time',
   'Player',
   'Event',
+  'Team Side',
+  'Tactical Detail',
+  'Tactical Sequence ID',
   'Score At Time',
   'Reporting Dimension',
   'Club Tracking Definition',
@@ -259,6 +265,9 @@ export const buildMatchEventsCsv = (
     row.matchTime,
     row.playerName,
     row.event,
+    row.teamSide ?? '',
+    row.tacticalDetail ?? '',
+    row.tacticalSequenceId ?? '',
     row.scoreAtTime,
     row.reportingDimension ?? 'Standard',
     row.clubTrackingDefinition ?? '',

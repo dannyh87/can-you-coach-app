@@ -85,6 +85,7 @@ describe('completed match report email attachments', () => {
     const eventCsv = attachments.find((attachment) => attachment.filename.startsWith('match-events-'))?.content ?? ''
 
     expect(attachments.map((attachment) => attachment.filename)).toHaveLength(2)
+    expect(eventCsv.split('\n')[0].split(',').slice(11, 14)).toEqual(['Team Side', 'Tactical Detail', 'Tactical Sequence ID'])
     expect(eventCsv.split('\n')[0].split(',').slice(-13)).toEqual(['Reporting Dimension', 'Club Tracking Definition', 'Club Tracking Definition ID', 'Club Tracking Definition Kind', 'Observation Identity Type', 'Recorded Standard Event', 'Recorded Standard Event ID', 'Proposed Standard Event', 'Proposed Standard Event ID', 'Mapping Status At Recording', 'Mapping Revision At Recording', 'Standard Reporting Eligible', 'Benchmark Eligible'])
     expect(eventCsv).toContain('Standard; Club')
     expect(eventCsv).toContain('Club mapped - standard approved')

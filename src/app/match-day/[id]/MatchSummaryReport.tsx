@@ -267,6 +267,20 @@ export default function MatchSummaryReport({
               <EmptyText>No tactical observation events were selected or recorded for this match.</EmptyText>
             )}
           </div>
+          {tacticalObservationReport.causalMeasures.length > 0 && (
+            <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
+              <p className="text-sm font-bold text-emerald-950">Validated linked measures</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {tacticalObservationReport.causalMeasures.map((measure) => (
+                  <div key={measure.key} className="rounded-lg bg-white p-3 text-sm">
+                    <p className="font-bold text-slate-950">{measure.label}</p>
+                    <p className="mt-1 font-black tabular-nums text-emerald-800">{measure.numerator}/{measure.denominator}{measure.rate === null ? '' : ` · ${Math.round(measure.rate * 100)}%`}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{measure.coverageLabel}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {tacticalObservationReport.unavailableMeasures.length > 0 && (
             <div className="mt-4 rounded-lg border border-amber-100 bg-amber-50 p-3">
               <p className="text-sm font-bold text-amber-950">Unavailable linked measures</p>

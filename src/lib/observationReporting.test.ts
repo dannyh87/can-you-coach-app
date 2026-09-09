@@ -248,7 +248,7 @@ describe('match reporting CSV provenance', () => {
       benchmarkEligible: 'No',
     }])
     const headers = csv.split('\n')[0].split(',')
-    expect(headers.slice(0, 12)).toEqual(['Match', 'Date', 'Team', 'Opposition', 'Venue', 'Match Type', 'Final Score', 'Half', 'Match Time', 'Player', 'Event', 'Score At Time'])
+    expect(headers.slice(0, 15)).toEqual(['Match', 'Date', 'Team', 'Opposition', 'Venue', 'Match Type', 'Final Score', 'Half', 'Match Time', 'Player', 'Event', 'Team Side', 'Tactical Detail', 'Tactical Sequence ID', 'Score At Time'])
     expect(headers.slice(-13)).toEqual(['Reporting Dimension', 'Club Tracking Definition', 'Club Tracking Definition ID', 'Club Tracking Definition Kind', 'Observation Identity Type', 'Recorded Standard Event', 'Recorded Standard Event ID', 'Proposed Standard Event', 'Proposed Standard Event ID', 'Mapping Status At Recording', 'Mapping Revision At Recording', 'Standard Reporting Eligible', 'Benchmark Eligible'])
     expect(csv).toContain('Club mapped - club only')
     expect(csv).toContain('Forward pass completed')

@@ -18,10 +18,11 @@ import {
   getClassicObservationLimitState,
   limitClassicRecommendedEventIds,
   MAX_CLASSIC_OBSERVATIONS,
+  MAX_CLASSIC_RECOMMENDED_OBSERVATIONS,
   sanitizeClassicTemplateSetup,
 } from '@/lib/matchDayClassicSetup'
 import { agePhaseLabels, type AgePhase, type MatchPhase } from '@/lib/matchEventTaxonomy'
-import { getTacticalPresetEventIds, tacticalPresets } from '@/lib/teamTacticalObservations'
+import { resolveTacticalPresetEventIds, tacticalPresets } from '@/lib/teamTacticalObservations'
 
 type SquadStatus = 'STARTER' | 'SUBSTITUTE' | 'NOT_INVOLVED'
 
@@ -314,7 +315,12 @@ export default function MatchDayWizard({
     setEventSelectionNotice(null)
   }
   const selectTacticalPreset = (presetKey: string) => {
-    const presetEventIds = limitClassicRecommendedEventIds(getTacticalPresetEventIds(scopedEvents, presetKey))
+    const presetResolution = resolveTacticalPresetEventIds(scopedEvents, presetKey, MAX_CLASSIC_RECOMMENDED_OBSERVATIONS)
+    if (!presetResolution.ok) {
+      setEventSelectionNotice(presetResolution.reason)
+      return
+    }
+    const presetEventIds = presetResolution.eventIds
     const presetEvents = scopedEvents.filter((event) => presetEventIds.includes(event.id))
     setSelectedEventDefinitionIds(presetEventIds)
     setSelectedClubTrackingDefinitionIds([])
