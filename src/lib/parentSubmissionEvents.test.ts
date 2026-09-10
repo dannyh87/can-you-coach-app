@@ -198,6 +198,7 @@ describe('parent submission display and acceptance mapping', () => {
       eventDefinitionId: 'definition-press',
       eventDefinition: { legacyEventType: null },
       eventType: null,
+      teamSide: 'OUR_TEAM',
       half: 'FIRST_HALF',
       matchSecond: 123,
       ownScoreAtTime: 1,
@@ -223,6 +224,7 @@ describe('parent submission display and acceptance mapping', () => {
       eventDefinitionId: 'definition-goal',
       eventDefinition: { legacyEventType: legacyType('GOAL') },
       eventType: legacyType('GOAL'),
+      teamSide: 'OUR_TEAM',
       half: 'SECOND_HALF',
       matchSecond: 55,
       ownScoreAtTime: 2,
@@ -237,11 +239,52 @@ describe('parent submission display and acceptance mapping', () => {
       eventDefinitionId: 'definition-press',
       eventDefinition: { legacyEventType: null },
       eventType: null,
+      teamSide: 'OUR_TEAM',
       half: 'FIRST_HALF',
       matchSecond: 42,
       ownScoreAtTime: 0,
       oppositionScoreAtTime: 0,
-    })).toMatchObject({ playerId: null })
+    })).toMatchObject({ playerId: null, teamSide: 'OUR_TEAM' })
+  })
+
+  it('preserves opposition side and player attribution when accepting supported submissions', () => {
+    expect(buildAcceptedSubmissionMatchEventData({
+      matchDayId: 'match-1',
+      playerId: 'player-2',
+      eventDefinitionId: 'definition-opposition-shot',
+      eventDefinition: { legacyEventType: legacyType('SHOT_ON_TARGET') },
+      eventType: legacyType('SHOT_ON_TARGET'),
+      teamSide: 'OPPOSITION',
+      half: 'SECOND_HALF',
+      matchSecond: 88,
+      ownScoreAtTime: 1,
+      oppositionScoreAtTime: 2,
+    })).toMatchObject({
+      playerId: 'player-2',
+      teamSide: 'OPPOSITION',
+      eventType: 'SHOT_ON_TARGET',
+    })
+  })
+
+  it('preserves tactical metadata when accepting submitted tactical observations', () => {
+    expect(buildAcceptedSubmissionMatchEventData({
+      matchDayId: 'match-1',
+      playerId: null,
+      eventDefinitionId: 'definition-counter-press',
+      eventDefinition: { legacyEventType: null },
+      eventType: null,
+      teamSide: 'OUR_TEAM',
+      detailCode: 'regain-within-five-seconds',
+      tacticalSequenceId: 'sequence-1',
+      half: 'FIRST_HALF',
+      matchSecond: 301,
+      ownScoreAtTime: 0,
+      oppositionScoreAtTime: 0,
+    })).toMatchObject({
+      teamSide: 'OUR_TEAM',
+      detailCode: 'regain-within-five-seconds',
+      tacticalSequenceId: 'sequence-1',
+    })
   })
 
   it('copies club provenance for accepted club-only event submissions', () => {
@@ -256,11 +299,12 @@ describe('parent submission display and acceptance mapping', () => {
       standardEventDefinitionIdAtRecording: 'proposed-standard-1',
       clubMappingRevisionAtRecording: 3,
       clubMappingStatusAtRecording: 'CLUB_APPROVED',
+      teamSide: 'OUR_TEAM',
       half: 'FIRST_HALF',
       matchSecond: 42,
       ownScoreAtTime: 0,
       oppositionScoreAtTime: 0,
-    })).toMatchObject({ submittedMatchEventId: 'submitted-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1', standardEventDefinitionIdAtRecording: 'proposed-standard-1', clubMappingRevisionAtRecording: 3, clubMappingStatusAtRecording: 'CLUB_APPROVED' })
+    })).toMatchObject({ submittedMatchEventId: 'submitted-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1', standardEventDefinitionIdAtRecording: 'proposed-standard-1', clubMappingRevisionAtRecording: 3, clubMappingStatusAtRecording: 'CLUB_APPROVED', teamSide: 'OUR_TEAM' })
   })
 
   it('labels review identity and warns on mapping changes without rename warnings', () => {
@@ -275,14 +319,14 @@ describe('parent submission display and acceptance mapping', () => {
     let createdData = {} as Record<string, unknown>
     const db = {
       matchEvent: { findUnique: vi.fn(async () => null), create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { createdData = data; return { id: 'official-1' } }) },
-      submittedMatchEvent: { findFirst: vi.fn(async () => ({ id: 'submitted-1', matchDayId: 'match-1', playerId: null, submittedByUserId: 'contributor-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1', standardEventDefinitionIdAtRecording: null, clubMappingRevisionAtRecording: 1, clubMappingStatusAtRecording: 'NONE', assignmentId: 'assignment-1', half: 'FIRST_HALF', matchSecond: 1, ownScoreAtTime: 0, oppositionScoreAtTime: 0, x: null, y: null, status: 'PENDING', eventDefinition: null, clubTrackingDefinition: { id: 'club-definition-1' }, assignment: { trackingTask: { scopeType: 'TEAM' } }, matchDay: { status: 'IN_PROGRESS' } })), updateMany: vi.fn(async () => ({ count: 1 })) },
+      submittedMatchEvent: { findFirst: vi.fn(async () => ({ id: 'submitted-1', matchDayId: 'match-1', playerId: null, submittedByUserId: 'contributor-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1', standardEventDefinitionIdAtRecording: null, clubMappingRevisionAtRecording: 1, clubMappingStatusAtRecording: 'NONE', assignmentId: 'assignment-1', teamSide: 'OUR_TEAM', detailCode: null, tacticalSequenceId: null, half: 'FIRST_HALF', matchSecond: 1, ownScoreAtTime: 0, oppositionScoreAtTime: 0, x: null, y: null, status: 'PENDING', eventDefinition: null, clubTrackingDefinition: { id: 'club-definition-1' }, assignment: { trackingTask: { scopeType: 'TEAM' } }, matchDay: { status: 'IN_PROGRESS' } })), updateMany: vi.fn(async () => ({ count: 1 })) },
       matchDayPlayer: { findFirst: vi.fn() },
       matchDayEventType: { findFirst: vi.fn(async () => { throw new Error('should not validate selected standard event') }) },
       $transaction: async (fn: (tx: unknown) => unknown) => fn(db),
     }
     const result = await acceptSubmittedMatchEvent({ db: db as never, actorUserId: 'coach-1', matchDayId: 'match-1', submittedMatchEventId: 'submitted-1' })
     expect(result).toMatchObject({ ok: true, officialObservationId: 'official-1', alreadyAccepted: false })
-    expect(createdData).toMatchObject({ submittedMatchEventId: 'submitted-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1' })
+    expect(createdData).toMatchObject({ submittedMatchEventId: 'submitted-1', eventDefinitionId: null, eventType: null, clubTrackingDefinitionId: 'club-definition-1', teamSide: 'OUR_TEAM', detailCode: null, tacticalSequenceId: null })
   })
 
   it('returns existing official event on repeated acceptance', async () => {
