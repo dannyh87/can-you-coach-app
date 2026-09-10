@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
 import ActionLink from '@/components/ui/ActionLink'
+import BrandLogo from '@/components/BrandLogo'
 import DashboardSnapshot from '@/components/DashboardSnapshot'
 import EmptyState from '@/components/ui/EmptyState'
 import GettingStartedChecklist from '@/components/GettingStartedChecklist'
@@ -121,6 +122,9 @@ function LandingPage() {
 
         <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
           <div>
+            <div className="mb-8 inline-flex rounded-[1.75rem] border border-white/15 bg-white/95 p-3 shadow-2xl shadow-emerald-950/25">
+              <BrandLogo size="lg" priority />
+            </div>
             <p className="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-100">
               Better information for better grassroots coaching
             </p>
@@ -223,7 +227,7 @@ function LandingPage() {
       <footer className="border-t border-white/10 bg-slate-950 px-4 py-8 text-white sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-lg font-black">Can You Coach</p>
+            <BrandLogo theme="dark" size="sm" />
             <p className="mt-1 text-sm text-slate-400">Simple football data for better grassroots coaching.</p>
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-semibold text-slate-300">

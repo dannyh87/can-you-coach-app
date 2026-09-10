@@ -8,12 +8,14 @@ import { prisma } from '@/lib/prisma'
 import { isRoleTesterEnabled } from '@/lib/roleTester'
 import { canManageGlobalEventLibrary } from '@/lib/superAdmin'
 import { isMatchDayTrackingV2Enabled } from '@/lib/features'
+import BrandLogo from '@/components/BrandLogo'
 import MobileNav from '@/components/MobileNav'
 import NotificationBell from '@/components/NotificationBell'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+const metadataBase = new URL(process.env.APP_URL || 'http://localhost:3000')
 
 type NavigationLink = {
   href: string
@@ -99,6 +101,7 @@ async function getNavigationProfile(user: Awaited<ReturnType<typeof getOptionalC
 }
 
 export const metadata: Metadata = {
+  metadataBase,
   title: 'Can You Coach',
   description: 'Track. Learn. Improve.',
   applicationName: 'Can You Coach',
@@ -111,16 +114,21 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/icons/icon.svg',
-        type: 'image/svg+xml',
+        url: '/brand/logo_noWordsOrBackground.png',
+        type: 'image/png',
       },
     ],
     apple: [
       {
-        url: '/icons/icon.svg',
-        type: 'image/svg+xml',
+        url: '/brand/logo_noWordsOrBackground.png',
+        type: 'image/png',
       },
     ],
+  },
+  openGraph: {
+    title: 'Can You Coach',
+    description: 'Track. Learn. Improve.',
+    images: [{ url: '/brand/cyc_logo.png', width: 2172, height: 724, alt: 'Can You Coach' }],
   },
 }
 
@@ -156,11 +164,8 @@ export default async function RootLayout({
       <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
         <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
           <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <Link href="/" className="inline-flex shrink-0 items-center gap-2 text-lg font-extrabold tracking-tight text-slate-950 sm:text-xl">
-              <span className="grid h-9 w-9 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white shadow-sm">
-                CYC
-              </span>
-              <span className="whitespace-nowrap">Can You Coach</span>
+            <Link href="/" className="inline-flex shrink-0 items-center gap-2 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label="Can You Coach home">
+              <BrandLogo size="sm" priority />
             </Link>
 
             <div className="flex shrink-0 items-center gap-2">

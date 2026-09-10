@@ -4,6 +4,7 @@ import { useClerk } from '@clerk/nextjs'
 import Link from 'next/link'
 import { useEffect, useId, useState } from 'react'
 
+import BrandLogo from '@/components/BrandLogo'
 import type { AccessSummary } from '@/lib/accessSummary'
 
 type MobileNavLink = {
@@ -139,9 +140,12 @@ export default function MobileNav({
             className="absolute right-3 top-3 max-h-[calc(100vh-1.5rem)] w-[min(24rem,calc(100vw-1.5rem))] overflow-y-auto rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl"
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-              <div>
-                <p className="text-sm font-extrabold text-slate-950">Can You Coach</p>
-                <p className="text-xs font-medium text-slate-500">Navigation</p>
+              <div className="flex items-center gap-3">
+                <BrandLogo variant="mark" size="sm" />
+                <div>
+                  <p className="text-sm font-extrabold text-slate-950">Can You Coach</p>
+                  <p className="text-xs font-medium text-slate-500">Navigation</p>
+                </div>
               </div>
               <button
                 type="button"
