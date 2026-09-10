@@ -20,20 +20,20 @@ Help grassroots coaches answer whether players and teams are genuinely improving
 
 - Public landing page and authenticated dashboard.
 - Clerk authentication, local dev fallback, onboarding, and invitations.
-- Club, team, access, and custom club-event setup.
+- Club, team, access, and club tracking-library setup.
 - Player management, profiles, archive/restore, and CSV import.
 - Fitness testing, guidance, live recording modes, rankings, progress, and CSV export.
-- Match Day setup, curriculum event recommendations, live mobile recording, substitutions, reports, and CSV export.
-- Parent/spectator linked-player views and live match observations.
-- Reports for team event trends and fitness progress.
-- Super Admin global event library management.
+- Match Day setup, curriculum event recommendations, tactical presets, live mobile recording, substitutions, reports, and CSV export.
+- Parent/contributor linked-player views, assignments, submitted observations, and coach review.
+- Reports for team event trends, tactical observations, professional metrics, and fitness progress.
+- Super Admin global event library and tracking-mapping management.
 
 ## Current Users
 
 - Club owners and head coaches.
 - Coaches and assistant coaches.
 - Volunteers helping collect match or fitness data.
-- Parents/spectators linked to players for read-only views and live match observations.
+- Parents/spectators and other contributors linked to players or assignments for scoped views and submitted observations.
 
 ## Long-Term Direction
 
@@ -54,4 +54,4 @@ The app now has first-stage Match Day curriculum recommendations, but not a pers
 - Multi-coach live sync.
 - Persisted season planning or training blocks.
 - XLSX/PDF exports.
-- Parent support for custom/non-legacy event submissions.
+- Tactical sequence-linking UX and operational causal tactical analytics.

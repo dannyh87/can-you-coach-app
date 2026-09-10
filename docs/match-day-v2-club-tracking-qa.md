@@ -19,9 +19,10 @@ No Playwright, Cypress, or repository browser automation is configured. These sc
 - Flag on: Club Tracking Library displays aliases, mapped definitions, rejected/local definitions where supported, and retired definitions with status text.
 - Mapping Review: proposed, club-approved, standard-approved, rejected, stale, and retired states show recorded/proposed identity labels.
 - Setup: guided and advanced Match Day setup can select standard events, native patterns, event aliases, event mappings, event custom definitions, pattern aliases, and pattern mappings. Do not test or document custom tactical-pattern definitions or custom outcomes.
+- Tactical setup: six tactical presets are visible where supported, apply atomically, and Counter-attacking includes `Ball recovery`; missing prerequisites must not create partial selections.
 - Templates: create, apply, duplicate, and copy templates with selected club definitions; verify same-club links persist and cross-club remapping is not offered.
 - Assignments: direct, self, and group-offer assignments work for player, unit, and team tasks; ineligible users cannot claim or record.
-- Contributor event recording: native standard, alias, standard-approved mapped, club-only mapped, rejected locally usable mapped, and custom event submissions preserve snapshot provenance.
+- Contributor event recording: native standard, alias, standard-approved mapped, club-only mapped, rejected locally usable mapped, tactical, and custom event submissions preserve snapshot provenance, team side, tactical detail metadata, location, score context, and supported player attribution.
 - Contributor pattern recording: native pattern, alias, standard-approved mapped pattern, club-only mapped pattern, locally usable rejected mapped pattern, and retired/stale warning cases preserve outcomes, scope, target, and location.
 - Undo: contributors can undo latest pending submitted observations only; submitted/closed assignments and accepted observations cannot be undone; official rows remain untouched.
 - Submission: finishing an assignment prevents further recording or undo.
@@ -30,11 +31,16 @@ No Playwright, Cypress, or repository browser automation is configured. These sc
 - Match reports: standard totals include native standards, aliases, and standard-approved mappings only; club-only/custom observations are excluded from standard totals.
 - Club reports: club section includes one row per official club observation within its club definition and does not create a combined standard-plus-club grand total.
 - Touch map: typed standard/club filters remain stable; club-only points do not appear under standard filters; aliases may appear in both intended dimensions; missing coordinates never plot.
-- Event CSV: browser download preserves legacy columns and appends provenance fields in order for native, alias, standard-approved mapped, club-only mapped, rejected mapped, and custom events.
+- Event CSV: browser download preserves legacy columns and appends provenance/team-side/tactical metadata fields in order for native, alias, standard-approved mapped, club-only mapped, rejected mapped, tactical, and custom events.
 - Pattern CSV: browser download preserves outcomes, scope, target, player, unit, location, review status, and provenance for native, alias, standard-approved mapped, club-only mapped, and rejected mapped patterns.
 - Completed-match email attachments: event CSV uses the same provenance semantics as browser download; pattern CSV is attached only when official pattern observations exist; summary attachment remains present.
 - Team Tracking Trends: standard aliases and standard-approved mappings collapse under recorded standard identity; club-only mapped patterns stay out of standard trends despite non-null `patternId`; club dimension is flag-gated; positive rate shows `0%` when positive outcomes exist but no positives occurred.
+- Tactical reporting: tactical side filters work for our-team/opposition where data exists; causal tactical metrics remain unavailable unless valid sequence links already exist.
 - Mobile widths: review cards, contributor controls, CSV buttons, club report cards, mapping details, trends filters, trends chart, and tables wrap or scroll without clipping.
 - Keyboard navigation: forms, selects, buttons, details disclosures, modals, and CSV downloads are reachable with visible focus and no pointer-only action.
 - Accessibility: labels, headings, status text, table headers, empty states, disclosure text, and chart-adjacent tabular data are present.
 - Cleanup: count prefixed QA records, delete only prefixed data, then confirm prefixed counts are zero.
+
+## Current Known Limitation
+
+Tactical sequence linking is not exposed through the app UI. Do not mark causal tactical analytics as manually verified unless valid `TacticalSequence` links were created by a supported path.

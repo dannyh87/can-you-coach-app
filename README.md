@@ -13,10 +13,11 @@ The app uses Next.js App Router, TypeScript, Tailwind CSS, Prisma, PostgreSQL, a
 - Club Setup for clubs, teams, access management, invitations, and club custom match events.
 - Player management, player profiles, archive/restore, and CSV import.
 - Fitness test type management, guidance content, target-score guidance, sessions, live recording modes, rankings, progress reporting, and CSV exports.
-- Match Day wizard with squad setup, tracking focus, curriculum event recommendations, club/global event selection, live controls, mobile-first event recording, substitutions, reports, and CSV exports.
-- Parent/spectator `My Player` access with linked-player views and live match observations.
-- Reports landing page with Team Event Trends and Fitness Progress.
-- Super Admin global event library management.
+- Match Day wizard with squad setup, tracking focus, curriculum event recommendations, tactical presets, club/global event selection, copy-previous setup, live controls, mobile-first event recording, substitutions, reports, and CSV exports.
+- Standard, professional-stat, custom club, and tactical match observations, including our-team/opposition attribution and tactical detail metadata.
+- Parent/contributor `My Player` and assignment workflows with linked-player views, live match observations, coach review, and accepted-submission provenance.
+- Reports landing page with Team Event Trends, tactical side filtering, tactical/professional reporting, and Fitness Progress.
+- Super Admin global event library and tracking-mapping management.
 
 ## Main Routes
 
@@ -25,6 +26,7 @@ The app uses Next.js App Router, TypeScript, Tailwind CSS, Prisma, PostgreSQL, a
 - `/onboarding` - first-time onboarding.
 - `/club-setup` - club, team, report email, and club event setup.
 - `/club-setup/access` - staff and parent/spectator invitation/access management.
+- `/club-setup/tracking-library` - club tracking library definitions, mappings, review states, and custom observations.
 - `/players` - player list and management.
 - `/players/[id]` - player profile/details.
 - `/players/import` - CSV player import.
@@ -38,12 +40,16 @@ The app uses Next.js App Router, TypeScript, Tailwind CSS, Prisma, PostgreSQL, a
 - `/fitness/progress` - fitness progress reporting.
 - `/match-day` - match list.
 - `/match-day/new` - Match Day wizard with curriculum recommendations.
+- `/match-day/templates` - tracking setup templates.
 - `/match-day/[id]` - draft setup, live match, event recording, completed report.
+- `/my-assignments` - contributor assignment list.
+- `/my-assignments/[assignmentId]/track` - contributor assignment recording.
 - `/my-player` - linked-player parent/spectator view.
 - `/my-player/matches` - parent/spectator match observations.
 - `/reports` - reports index.
 - `/reports/team-trends` - team event trend reporting.
 - `/super-admin/events` - global event library management.
+- `/super-admin/tracking-mappings` - global review of club tracking mappings.
 - `/track` - legacy localStorage prototype; not part of the Prisma Match Day workflow.
 
 ## Local Development
@@ -67,7 +73,7 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
 CLERK_SECRET_KEY=""
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-in"
 ```
 
 `APP_URL` is optional locally. Invitation links fall back to `http://localhost:3000` in development and tests.
@@ -92,9 +98,14 @@ Open `http://localhost:3000`.
 
 ```bash
 npm run lint
+npx tsc --noEmit --pretty false
+npm test
 npm run build
 npm run db:migrate:deploy
 npm run db:seed
+npm run db:sync:tactical-events -- --dry-run
+npm run db:sync:tactical-prerequisites -- --dry-run
+npm run db:verify:tactical-presets
 npx prisma migrate dev
 npx prisma studio
 ```
@@ -112,9 +123,11 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_..."
 CLERK_SECRET_KEY="sk_..."
 NEXT_PUBLIC_CLERK_SIGN_IN_URL="/sign-in"
 NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL="/"
-NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-up"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/sign-in"
 SUPER_ADMIN_EMAILS="admin@example.com"
 ENABLE_ROLE_TESTER="false"
+RESEND_API_KEY="re_..."
+REPORT_EMAIL_FROM="Can You Coach <reports@example.com>"
 ```
 
 `APP_URL` must be the canonical production origin. It is used for generated invitation links and must not include paths, query strings, fragments, or credentials.
@@ -135,7 +148,8 @@ Do not use `prisma migrate dev` against production. Seed production only deliber
 - Auth: Clerk in production, local fallback in development.
 - Roles: Owner, Coach, Assistant Coach, Viewer, and linked-player spectator access.
 - Invitations: staff and parent/spectator invite links are implemented.
-- Custom match events: global Super Admin library plus club-specific event definitions.
+- Custom and tactical match events: global Super Admin library, club-specific tracking definitions, 53 tactical definitions, six tactical presets, and the standard `Ball recovery` prerequisite.
+- Tactical sequence linking: schema/reporting support exists, but no UI/action currently creates `TacticalSequence` links; causal tactical metrics must remain treated as unfinished unless valid links exist.
 - Payments: not implemented.
 - Video upload/analysis: not implemented.
 - Multi-coach live sync: not implemented.

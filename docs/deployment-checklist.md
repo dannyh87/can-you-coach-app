@@ -5,10 +5,21 @@ Use this checklist before deploying Can You Coach to Preview or Production.
 ## Required Production Environment Variables
 
 - `DATABASE_URL`: must point to the intended production PostgreSQL database.
+- `APP_URL`: must be the canonical production origin, for example `https://canyoucoach.app`, with no path, query string, fragment, or credentials.
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: required for production authentication.
 - `CLERK_SECRET_KEY`: required for production authentication.
+- `NEXT_PUBLIC_CLERK_SIGN_IN_URL`: normally `/sign-in`.
+- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL`: normally `/`.
+- `NEXT_PUBLIC_CLERK_SIGN_UP_URL`: current `.env.example` uses `/sign-in`.
 - `SUPER_ADMIN_EMAILS`: comma-separated allowlist for Super Admin access.
 - `ENABLE_ROLE_TESTER`: must be `false` or absent in production.
+
+Optional production email variables:
+
+- `RESEND_API_KEY`: enables report email delivery when configured.
+- `REPORT_EMAIL_FROM`: sender address used for report emails.
+
+If the email variables are absent, report email sending is skipped safely, but email delivery is not verified.
 
 ## Authentication Safety
 
@@ -36,8 +47,24 @@ Run these checks before deploy:
 
 ```bash
 npm run lint
+npx tsc --noEmit --pretty false
+npm test
 npm run build
 ```
+
+Before promoting tactical library changes, run dry-run sync verification first:
+
+```bash
+npm run db:sync:tactical-events -- --dry-run
+npm run db:sync:tactical-prerequisites -- --dry-run
+npm run db:verify:tactical-presets
+```
+
+Expected current tactical state:
+
+- 53 tactical definitions resolve without conflicts.
+- `Ball recovery` resolves as the standard prerequisite for Counter-attacking.
+- Six presets verify: Playing out, Pressing, Counter-attacking, Wide attacks, Defending the box, Set pieces.
 
 ## Access Checks
 
@@ -48,5 +75,7 @@ npm run build
 
 ## Final Checks
 
-- Confirm `npx prisma generate`, `npx prisma migrate status`, `npm run lint`, and `npm run build` complete successfully before deployment.
+- Confirm `npx prisma generate`, `npx prisma migrate status`, `npm run lint`, `npx tsc --noEmit --pretty false`, `npm test`, and `npm run build` complete successfully before deployment.
 - Run `npm run db:seed` only when deliberately updating default/staging data.
+- Complete authenticated smoke tests with synthetic owner, coach, assistant, viewer, and parent/contributor accounts before broad external testing.
+- Keep tactical sequence linking documented as unfinished unless a UI/action exists to create valid `TacticalSequence` links.

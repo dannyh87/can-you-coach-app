@@ -50,7 +50,7 @@ The authenticated home acts as a dashboard:
 
 ## Club Setup
 
-- Owners manage clubs, teams, report email preferences, staff/parent access, and club custom events.
+- Owners manage clubs, teams, report email preferences, staff/parent access, and club tracking-library definitions/mappings.
 - Non-owner/parent direct-route states show guidance instead of admin UI.
 
 ## Players
@@ -74,10 +74,12 @@ The new match wizard includes:
 - Team selection.
 - Squad setup.
 - Match settings.
-- Event setup with curriculum recommendation panel.
+- Event setup with curriculum recommendation panel, tactical preset buttons, standard/custom search, and copy-previous setup options.
 - Review and create.
 
 The recommendation panel shows age group, inferred format, theme, week focus, matched events, missing events, and a `Use recommended events` CTA. It does not auto-select events.
+
+Tactical presets apply only when all prerequisite definitions resolve. Missing prerequisites keep the user on the setup step and avoid partial selection.
 
 ## Live Match Recording
 
@@ -87,6 +89,8 @@ The live event-recording UI is compact on mobile:
 - Horizontal player chips.
 - Horizontal category chips.
 - Dense two/three-column event button grid.
+- Our-team/opposition controls where the selected observation supports side attribution.
+- Tactical detail controls where the selected tactical event exposes detail options.
 - Persistent bottom row with latest event and Undo.
 - Full event history is collapsed by default.
 - Location picker opens only for location-required events.
@@ -100,11 +104,20 @@ Completed matches show read-only reports:
 - Final score.
 - Minutes played.
 - Team event totals.
+- Tactical observation sections and side-aware totals where tactical data exists.
+- Professional metric sections where the recorded event set supports them.
 - Player event counts.
 - Most involved players.
 - Timeline.
 - Location maps where location data exists.
 - CSV export buttons.
+
+## Contributor And Parent Interfaces
+
+- Parent/spectator users see scoped My Player panels and match-observation routes only.
+- Contributors see assignment lists and focused recording screens under `/my-assignments`.
+- Coach review cards keep submitted observations separate from official observations until acceptance.
+- Review UI surfaces club identity, recorded standard identity, mapping status/revision, submitter, target, time, note, location status, team side, and stale/retired warnings where relevant.
 
 ## Design Constraints
 

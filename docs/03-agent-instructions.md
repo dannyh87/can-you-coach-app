@@ -25,6 +25,8 @@ Do not replace these without explicit approval.
 - Fitness helpers live in `src/lib/fitnessSessionActions.ts`, `src/lib/fitnessRecordingModes.ts`, and `src/lib/fitnessSessionStatus.ts`.
 - Event-definition helpers live in `src/lib/eventDefinitions.ts` and `src/lib/eventDefinitionSimilarity.ts`.
 - Match Day curriculum recommendations live in `src/lib/curriculumRecommendations.ts`.
+- Tactical catalogue, sync, preset verification, and reporting live in `src/lib/teamTacticalCatalogue.mjs`, `prisma/sync-tactical-event-definitions.mjs`, `prisma/sync-tactical-standard-prerequisites.mjs`, `prisma/verify-tactical-presets.mjs`, and `src/lib/teamTacticalObservations.ts`.
+- Parent/contributor submission acceptance helpers live in `src/lib/parentSubmissionEvents.ts`, `src/lib/matchTrackingAssignments.ts`, and `src/lib/matchTrackingSubmissions.ts`.
 - Shared UI primitives live in `src/components/ui/`.
 - Fitness routes live under `src/app/fitness/`.
 - Match Day routes live under `src/app/match-day/`.
@@ -39,8 +41,8 @@ Do not replace these without explicit approval.
 - Preserve invite acceptance behavior unless explicitly asked to change it.
 - Preserve completed/read-only states for completed matches and completed fitness sessions.
 - Do not add Prisma schema changes or migrations unless persisted data is required.
-- Run `npm run lint` and `npm run build` after meaningful changes.
-- Check `package.json` before running a typecheck script; there is currently no `typecheck` script.
+- Run `npm run lint`, `npx tsc --noEmit --pretty false`, `npm test`, and `npm run build` after meaningful changes when feasible.
+- Check `package.json` before running a typecheck script; there is currently no `typecheck` script, so use `npx tsc --noEmit --pretty false` directly when a standalone TypeScript check is needed.
 
 ## Product Rules To Preserve
 
@@ -53,9 +55,11 @@ Do not replace these without explicit approval.
 - Match events do not automatically update the score.
 - Score controls are separate from event recording.
 - Goals can be added/undone during live play only; goal recording is paused at half-time.
-- Parent submissions currently use legacy enum-backed events only.
+- Parent/contributor submissions can preserve accepted standard/custom identity, club provenance, team side, tactical detail metadata, location, score context, and supported player attribution.
 - Club custom events must remain scoped to the selected club/team.
 - Curriculum recommendations must not auto-create event definitions or force selections.
+- Tactical presets must remain atomic: missing prerequisites should block partial application.
+- Tactical sequence linking is unfinished; do not present causal tactical metrics as operational unless valid `TacticalSequence` links exist.
 
 ## Do Not Add Without Approval
 
@@ -65,6 +69,7 @@ Do not replace these without explicit approval.
 - Persisted Season Plan or Training Block models.
 - XLSX/PDF exports.
 - Auto-generated event libraries or AI-driven recommendations.
+- Tactical sequence-linking UX or causal tactical analytics rollout without explicit product approval.
 - Changes that weaken roles, permissions, invite checks, or parent/spectator restrictions.
 
 ## Verification Expectations
@@ -73,6 +78,8 @@ For normal code changes:
 
 ```bash
 npm run lint
+npx tsc --noEmit --pretty false
+npm test
 npm run build
 ```
 

@@ -18,7 +18,7 @@ This document reflects what is currently built.
 - Teams store name, age group, season, league, and football pyramid step.
 - Team delete is guarded when related records exist.
 - Owners can manage staff access, team assignments, parent/spectator links, and pending invites.
-- Owners can create club-specific match event definitions.
+- Owners can create and review club tracking-library definitions, aliases, mappings, and club-specific observations.
 - Report email preferences exist for match and fitness reports.
 
 ## Players
@@ -41,12 +41,12 @@ This document reflects what is currently built.
 ## Match Day
 
 - Match creation supports team, opposition, kickoff, match type, and venue.
-- Match Day Wizard includes squad setup, tracking focus, event setup, and curriculum recommendations.
+- Match Day Wizard includes squad setup, tracking focus, event setup, curriculum recommendations, tactical presets, and copy-previous setup.
 - Curriculum recommendations infer match format from team age group and match against available global/club events.
-- Event setup supports global event definitions and club-specific event definitions scoped to the selected team club.
+- Event setup supports global event definitions, club-specific tracking definitions scoped to the selected team club, tactical definitions, and six tactical preset bundles.
 - Live match controls include score, halves, timer state, and completion.
 - Substitution/minutes tracking uses player stints.
-- Mobile event recording has compact player chips, category chips, dense event buttons, sticky context, and immediate undo.
+- Mobile event recording has compact player chips, category chips, dense event buttons, our-team/opposition attribution where supported, tactical detail fields, sticky context, and immediate undo.
 - Location events open the pitch picker only when required.
 - Completed matches show read-only reports and CSV exports.
 
@@ -54,19 +54,21 @@ This document reflects what is currently built.
 
 - Linked-player users can view player details, recent fitness results, and recent match reports in `/my-player`.
 - Linked-player users can submit observations for linked players during live matches through `/my-player/matches`.
-- Parent submissions currently use legacy enum-backed event types only.
+- Contributor assignments can collect player, unit, or team observations through `/my-assignments`.
+- Accepted submissions preserve standard/custom identity, club provenance, team side, tactical detail metadata, optional tactical sequence ID, location, score context, and supported player attribution.
 
 ## Reporting
 
 - `/reports` lists Team Event Trends and Fitness Progress.
-- Team Event Trends charts selected match events across completed matches.
+- Team Event Trends charts selected match events across completed matches and supports tactical side filtering.
 - Fitness Progress charts historical fitness results.
 - Completed match and fitness sessions support CSV exports.
 
 ## Global Event Library
 
 - Super Admin users can manage global event definitions.
-- Seeded global event definitions include legacy-backed events and selected DB-only events such as `Carry`, `Forward pass`, `Interception`, `Tackle won`, `Key pass`, `Cross`, `Cutback`, and `Shot blocked`.
+- Seeded/synced global event definitions include legacy-backed events, professional DB-only events such as `Carry`, `Forward pass`, `Interception`, `Tackle won`, `Key pass`, `Cross`, `Cutback`, and `Shot blocked`, plus 53 tactical definitions and the standard `Ball recovery` prerequisite.
+- Six tactical presets are verified by `npm run db:verify:tactical-presets`.
 
 ## Out Of Scope
 
@@ -76,3 +78,4 @@ This document reflects what is currently built.
 - Persisted season plans/training blocks.
 - XLSX/PDF exports.
 - Auto-created missing curriculum events.
+- Tactical sequence-linking UI and fully operational causal tactical metrics.

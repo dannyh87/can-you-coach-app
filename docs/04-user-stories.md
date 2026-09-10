@@ -24,6 +24,7 @@ Built acceptance criteria:
 - Create and update team records with age group, season, league, and football pyramid step.
 - Prevent deleting teams that still have related records.
 - Manage match and fitness report email preferences.
+- Manage club tracking-library definitions, aliases, mappings, and club-only custom observations.
 
 ## Access And Invitations
 
@@ -78,8 +79,10 @@ Built acceptance criteria:
 - Matches start in draft state.
 - Set up squad statuses: starter, substitute, not involved.
 - Choose tracking focus for event recording.
-- Choose global and club-specific event definitions.
+- Choose global, club-specific, and tactical event definitions.
 - Use curriculum recommendations based on age group, inferred match format, theme, week, and available events.
+- Apply tactical preset bundles atomically, including prerequisites such as `Ball recovery`.
+- Copy selected setup from previous matches while preserving current fixture details and warning about omitted definitions.
 - Keep manual event selection available.
 
 ## Match Live Recording
@@ -94,6 +97,9 @@ Built acceptance criteria:
 - Sub players on and off during active halves.
 - Track player stints and minutes played.
 - Record selected events for tracked on-pitch players.
+- Record standard, professional-stat, club custom, and tactical observations where selected.
+- Attribute supported observations to our team or the opposition.
+- Capture tactical detail metadata where configured.
 - Open pitch location picker only for events that require location.
 - Undo events before completion.
 - Keep goal controls separate from event recording.
@@ -107,8 +113,19 @@ Built acceptance criteria:
 
 - View linked-player profile, fitness results, and recent match reports in `/my-player`.
 - Submit live match observations for linked players from `/my-player/matches`.
-- Keep parent observations separate from coach/admin workflows.
-- Parent submissions currently use legacy enum-backed event types.
+- Keep parent/contributor observations separate from coach/admin workflows until reviewed.
+- Preserve accepted submission identity, team side, tactical metadata, location, score context, and supported player attribution.
+
+## Contributor Assignments
+
+As a coach, I can delegate focused observation tasks so volunteers can help without gaining broader club access.
+
+Built acceptance criteria:
+
+- Create player, unit, or team tracking tasks.
+- Assign direct, self, or group-offer contributor assignments.
+- Contributors can record submitted observations from `/my-assignments`.
+- Coaches can review, accept, ignore, or detect repeated acceptance without duplicate official observations.
 
 ## Completed Match Report
 
@@ -117,6 +134,7 @@ As a coach, I can review a completed match so that I can analyse what happened.
 Built acceptance criteria:
 
 - Completed report shows final score, minutes, team event totals, player event counts, most involved players, timeline, and location maps where available.
+- Completed report includes tactical/professional sections and club observation provenance where applicable.
 - Completed matches are read-only.
 - Download summary CSV.
 - Download events CSV.
@@ -129,4 +147,5 @@ Built acceptance criteria:
 
 - Reports index links to Team Event Trends and Fitness Progress.
 - Team Event Trends filters by team, date range, event, and match type.
+- Team Event Trends supports tactical side filtering where tactical observations exist.
 - Fitness Progress shows historical test results and charts.

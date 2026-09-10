@@ -33,11 +33,11 @@ Key fields include:
 - `onboardingCompletedAt`
 - `onboardingRole`
 
-Relations include clubs, memberships, spectator access, invitations, fitness test types, and submitted/accepted parent match events.
+Relations include clubs, memberships, spectator access, invitations, fitness test types, notifications, submitted/accepted parent or contributor match events, reviewed pattern observations, club tracking definitions, and match tracking assignments.
 
 ## Club, Memberships, And Access
 
-`Club` stores club details, report email preferences, teams, memberships, invitations, and spectator links.
+`Club` stores club details, report email preferences, teams, memberships, invitations, spectator links, tracking setup templates, and club tracking definitions.
 
 `ClubMembership` stores user role per club:
 
@@ -168,7 +168,7 @@ Squad statuses:
 
 `MatchPlayerStint` tracks when a match squad player is on the pitch and stores timing for minutes reporting.
 
-## EventDefinition
+## EventDefinition And Tactical Library
 
 Purpose: global and club-specific match event library.
 
@@ -193,7 +193,26 @@ Important fields:
 - `requiresLocation`
 - `isActive`
 
-Legacy enum-backed events keep compatibility with older event paths and parent submissions. DB-only events support coach recording and reporting through `eventDefinitionId`.
+Legacy enum-backed events keep compatibility with older event paths. DB-only events support coach and contributor recording and reporting through `eventDefinitionId`.
+
+The current global library includes legacy-backed events, professional DB-only events, 53 synced tactical definitions, and the standard `Ball recovery` prerequisite used by tactical presets.
+
+Tactical definitions use the same `EventDefinition` model and carry tactical metadata through phase, category, subcategory, group, description, and detail options in code. Six tactical presets are verified by `prisma/verify-tactical-presets.mjs`.
+
+## Club Tracking Definitions
+
+`ClubTrackingDefinition` stores club-scoped observation definitions and mappings.
+
+Important concepts:
+
+- definition kind: event alias, event mapped, event custom, pattern alias, or pattern mapped
+- status: draft, pending review, approved, rejected, or retired
+- visibility scope: team or club
+- mapping status: none, proposed, club approved, standard approved, or rejected
+- mapping revision and recorded standard identity snapshots
+- creator, updater, approver, and standard-mapping reviewer relations
+
+Club tracking definitions preserve club-level language while allowing reports to distinguish native standard observations, aliases, approved mappings, rejected/local mappings, and club-only custom observations.
 
 ## MatchDayEventType
 
@@ -205,6 +224,8 @@ Key fields:
 - `eventType` legacy fallback
 - `category`
 - `eventDefinitionId`
+
+Selected match events can represent legacy events, standard event definitions, tactical event definitions, and club-scoped definitions surfaced through setup flows.
 
 Unique rules prevent duplicate event selections per match.
 
@@ -218,21 +239,46 @@ Key fields:
 - `playerId`
 - `eventType` legacy fallback
 - `eventDefinitionId`
+- `clubTrackingDefinitionId`
+- recorded club mapping snapshot fields
+- `teamSide` (`OUR_TEAM` or `OPPOSITION`)
+- optional `detailCode`
+- optional `tacticalSequenceId`
 - `half`
 - `matchSecond`
 - score at time
 - optional pitch location `x` / `y`
 
-Rule: events require an involved, tracked player who is currently on the pitch.
+Rule: player-attributed live coach events require an involved, tracked player who is currently on the pitch. Team, unit, contributor, and opposition-supported flows can create playerless or opposition-side observations where the workflow allows it.
 
 ## SubmittedMatchEvent
 
-Purpose: parent/spectator submitted live observations.
+Purpose: parent/spectator or contributor submitted live observations.
 
-Current limitation: submitted events use legacy `MatchEventType` values, not arbitrary DB-only event definitions.
+Submitted observations can preserve legacy event type, standard event definition, club tracking definition, recorded mapping snapshot fields, `teamSide`, tactical `detailCode`, optional `tacticalSequenceId`, location, score context, and supported player attribution. Accepted submissions create official `MatchEvent` rows with a `submittedMatchEventId` source link.
 
 Statuses:
 
 - `PENDING`
 - `ACCEPTED`
 - `IGNORED`
+
+## Match Tracking Tasks And Contributor Assignments
+
+`MatchTrackingTask` describes a player, unit, or team observation task for a match.
+
+`MatchContributorAssignment` and `MatchContributorAssignmentRecipient` support direct, self, and group-offer assignment flows. Group-offer claiming is protected so only one eligible recipient can claim a given offer.
+
+Submitted observations remain separate from official observations until reviewed and accepted by an authorized coach/owner.
+
+## Pattern Observations
+
+`MatchTrackingPatternObservation` and `SubmittedTrackingPatternObservation` store official and submitted tracking-pattern observations, including outcome, scope, target, location, review status, and club mapping provenance.
+
+Pattern observations are separate from `MatchEvent` rows and have dedicated report/export handling.
+
+## Tactical Sequences
+
+`TacticalSequence` exists so reports can consume valid links between tactical start and outcome observations.
+
+Current limitation: there is no app UI/action that creates or maintains tactical sequence links. Causal tactical metrics must remain treated as unfinished/unavailable unless valid sequence links exist.

@@ -45,6 +45,8 @@ Use an existing manageable match with:
 8. Create assignment-linked observations only after an assignment is started.
 9. Copy previous tracking tasks into the selected match.
 
+Accepted event submissions should preserve source identity, club provenance, team side, tactical detail metadata, optional tactical sequence ID, location, score context, and supported player attribution.
+
 The harness intentionally does not simulate another authenticated browser user. Use separate test accounts for contributor actions, or use the explicit integration test below.
 
 ## Atomic Group-Claim Check
@@ -77,3 +79,4 @@ Delete test tasks and assignments created through the harness when finished. The
 - No notifications, emails or contributor live screen are included.
 - The route displays internal IDs for development diagnostics.
 - Do not enable this tool publicly.
+- Tactical sequence linking is not created by this harness unless explicitly added to test data; causal tactical metrics remain unfinished without valid sequence links.

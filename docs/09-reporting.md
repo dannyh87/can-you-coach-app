@@ -64,6 +64,9 @@ Completed matches show a read-only report.
 - Match timeline.
 - Location maps where location data exists.
 - Parent submission review history where relevant.
+- Tactical observation totals and coverage labels where tactical observations exist.
+- Professional metric sections where event identities support the metric catalogue.
+- Club observation sections and provenance where club tracking definitions are used.
 
 ### Minutes Reporting
 
@@ -73,7 +76,11 @@ Minutes are based on `MatchPlayerStint` records and include all involved players
 
 Event counts come from `MatchEvent` records and can be backed by either legacy enum event types or `EventDefinition` records.
 
-Current event library includes legacy events, DB-only seeded global events, and optional club custom events.
+Current event library includes legacy events, DB-only seeded global events, synced tactical events, and optional club tracking definitions.
+
+Tactical reports distinguish our-team and opposition observations through `teamSide`. Detail metadata, such as route or zone values, is preserved where the tactical definition supports it.
+
+Causal tactical measures remain unavailable unless valid `TacticalSequence` links exist. The schema/reporting logic can consume links, but the app does not currently expose a UI/action to create them.
 
 ### Team Event Trends
 
@@ -86,8 +93,9 @@ Filters include:
 - date to
 - event
 - match type
+- tactical side where relevant
 
-The report uses both selected match event types and recorded match events so trends can include global and club-defined event definitions.
+The report uses both selected match event types and recorded match events so trends can include global, tactical, and club-defined event definitions.
 
 ### Match Summary CSV Export
 
@@ -97,7 +105,7 @@ Button:
 
 - `Download summary CSV`
 
-Columns include match metadata, player, squad status, tracked-for-events flag, minutes played, total events, and legacy event summary counts.
+Columns include match metadata, player, squad status, tracked-for-events flag, minutes played, total events, standard event summary counts, tactical counts where relevant, and provenance fields where available.
 
 ### Match Events CSV Export
 
@@ -107,7 +115,13 @@ Button:
 
 - `Download events CSV`
 
-Columns include match metadata, half, match time, player, event label, and score at time.
+Columns include match metadata, half, match time, player, event label, event identity, club provenance, team side, tactical detail metadata, optional tactical sequence ID, location, and score at time where available.
+
+### Pattern And Club Observation Exports
+
+Pattern exports preserve outcome, scope, target, player/unit context, location, review status, and mapping provenance.
+
+Club-only/custom observations remain visible in club/provenance sections and exports but are not collapsed into standard totals unless their mapping is standard-approved.
 
 ## Not Yet Built
 
@@ -117,3 +131,4 @@ Columns include match metadata, half, match time, player, event label, and score
 - Season-plan reporting.
 - Position comparison reports.
 - Benchmark datasets.
+- Tactical sequence-linking UI and causal tactical metrics without valid sequence links.

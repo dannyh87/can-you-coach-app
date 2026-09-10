@@ -11,7 +11,7 @@ This document reflects default data and standard values currently used by the ap
 - Brereton Social demo team
 - demo players
 - default fitness test types
-- global match event definitions
+- global match event definitions, tactical definitions, and tactical preset prerequisites
 
 Production should only be seeded deliberately.
 
@@ -109,12 +109,28 @@ Seeded DB-only global events include:
 - Cutback
 - Shot blocked
 
+Synced tactical global definitions include 53 tactical coaching observations across playing out, progression, final-third entries, penalty-area entries, wide attacks, pressing, counter-pressing, counter-attacking, defensive transition, defending the box, set pieces, and throw-ins. The full canonical list lives in `src/lib/teamTacticalCatalogue.mjs`.
+
+The standard tactical prerequisite definition is:
+
+- Ball recovery
+
+Verified tactical presets:
+
+- Playing out
+- Pressing
+- Counter-attacking
+- Wide attacks
+- Defending the box
+- Set pieces
+
 Notes:
 
-- DB-only events work for coach event recording and reporting.
-- Parent submissions currently use legacy enum-backed event types only.
-- Club owners can add club-specific events in Club Setup.
-- Super Admin users can manage global event definitions.
+- DB-only events work for coach/contributor event recording and reporting.
+- Accepted parent/contributor submissions preserve standard/custom identity, club provenance, team side, tactical metadata, location, score context, and supported player attribution.
+- Club owners can add club-specific tracking definitions in Club Setup.
+- Super Admin users can manage global event definitions and review tracking mappings.
+- Tactical preset sync is production-safe and dry-run-first through `npm run db:sync:tactical-events -- --dry-run`, `npm run db:sync:tactical-prerequisites -- --dry-run`, and `npm run db:verify:tactical-presets`.
 
 ## Curriculum Recommendation Defaults
 
@@ -141,10 +157,13 @@ Examples:
 - `match-summary-brereton-social-vs-uttoxeter-2026-06-09.csv`
 - `match-events-brereton-social-vs-uttoxeter-2026-06-09.csv`
 
+Match event CSVs include standard event identity, club provenance, team side, tactical detail metadata, location and score context where present.
+
 ## Not Seeded Yet
 
 - Benchmark datasets.
 - Age-group standards.
 - Persisted coaching templates.
 - Season plans or training blocks.
-- Advanced tactical event templates beyond the current global event library.
+- Tactical sequence links created through the app UI.
+- Fully operational causal tactical metrics without valid `TacticalSequence` links.

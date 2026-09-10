@@ -24,10 +24,13 @@ It supports:
 - topic search and aliases
 - recommended topic event sets
 - advanced-compatible standard event inspection
+- tactical/professional standard event inspection when definitions are present
 - no-result diagnostics
 
 ## Safety
 
-Topics are setup context only. `EventDefinition` remains the recorded and reportable identity for match events.
+Topics are setup context only. `EventDefinition`, `ClubTrackingDefinition`, and explicit submitted/accepted observation rows remain the recorded and reportable identities for match events and pattern observations.
+
+The explorer does not create tactical sequence links. Sequence-linked causal tactical analytics remain unfinished unless valid `TacticalSequence` links exist.
 
 Do not expose this route publicly.
