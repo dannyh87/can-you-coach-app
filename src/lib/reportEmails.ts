@@ -22,7 +22,7 @@ import {
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
-const reportEmailLogoPath = '/brand/logo-full-cropped.png'
+const reportEmailLogoPath = '/brand/logo-full-light-transparent.png'
 
 const formatStatus = (status: string) =>
   status

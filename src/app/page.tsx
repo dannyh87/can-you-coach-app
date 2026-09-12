@@ -122,9 +122,7 @@ function LandingPage() {
 
         <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
           <div>
-            <div className="mb-8 inline-flex rounded-[1.75rem] border border-white/15 bg-white/95 p-3 shadow-2xl shadow-slate-950/25">
-              <BrandLogo size="lg" priority />
-            </div>
+            <BrandLogo theme="dark" size="xl" priority className="mb-8" />
             <p className="inline-flex rounded-full border border-[rgba(6,186,169,0.35)] bg-[rgba(6,186,169,0.12)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-white">
               Better information for better grassroots coaching
             </p>
@@ -227,7 +225,7 @@ function LandingPage() {
       <footer className="border-t border-white/10 bg-[var(--brand-navy)] px-4 py-8 text-white sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <BrandLogo theme="dark" size="sm" />
+            <BrandLogo theme="dark" size="lg" />
             <p className="mt-1 text-sm text-slate-400">Simple football data for better grassroots coaching.</p>
           </div>
           <div className="flex flex-wrap gap-4 text-sm font-semibold text-slate-300">

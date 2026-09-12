@@ -71,7 +71,9 @@ export default function BrandLogo({
   }
 
   const dimensions = wordmarkSizes[size]
-  const src = theme === 'dark' ? '/brand/logoNoBackgroundv2.png' : '/brand/logo-full-cropped.png'
+  const src = theme === 'dark'
+    ? '/brand/logo-full-dark-transparent.png'
+    : '/brand/logo-full-light-transparent.png'
 
   return (
     <Image
