@@ -31,7 +31,7 @@ export default function ParentDashboardPanel({ data }: ParentDashboardPanelProps
               {data.assignmentNeedsResponseCount} assignment{data.assignmentNeedsResponseCount === 1 ? '' : 's'} need response
             </Link>
           )}
-          <Link href="/my-player" className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
+          <Link href="/my-player" className="rounded-xl bg-[var(--brand-navy)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-900">
             View linked player
           </Link>
           <Link href="/my-player/matches" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800 shadow-sm hover:bg-slate-50">

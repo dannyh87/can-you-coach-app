@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import MatchSummaryCsvButtons from '@/app/match-day/[id]/MatchSummaryCsvButtons'
+import BrandLogo from '@/components/BrandLogo'
 import type {
   MatchCsvMetadata,
   MatchEventCsvRow,
@@ -110,12 +111,13 @@ export default function MatchSummaryReport({
   const clubSpecificObservations = clubEventAggregates.reduce((total, row) => row.identityTypes.includes('CLUB_SPECIFIC') ? total + row.count : total, 0)
 
   return (
-    <section className="rounded-2xl bg-gray-50 p-5 sm:p-6">
+    <section className="rounded-2xl bg-stone-50 p-5 sm:p-6">
       <div className="rounded-2xl bg-white p-5 shadow-sm">
-        <p className="text-sm font-bold uppercase tracking-wide text-green-700">Match report</p>
+        <BrandLogo size="sm" />
+        <p className="mt-4 text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Match report</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold">{headline}</h2>
+            <h2 className="text-2xl font-bold text-[var(--brand-navy)]">{headline}</h2>
             <p className="mt-1 text-sm text-gray-500">
               {matchDate} · {statusLabel}
             </p>
@@ -123,7 +125,7 @@ export default function MatchSummaryReport({
           <div className="space-y-3 text-left sm:text-right">
             <div>
               <p className="text-sm font-medium text-gray-500">Final score</p>
-              <p className="text-5xl font-bold tabular-nums">{finalScore}</p>
+              <p className="text-5xl font-bold tabular-nums text-[var(--brand-navy)]">{finalScore}</p>
             </div>
             <MatchSummaryCsvButtons
               metadata={csvMetadata}
@@ -268,13 +270,13 @@ export default function MatchSummaryReport({
             )}
           </div>
           {tacticalObservationReport.causalMeasures.length > 0 && (
-            <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3">
-              <p className="text-sm font-bold text-emerald-950">Validated linked measures</p>
+            <div className="mt-4 rounded-lg border border-[rgba(6,186,169,0.24)] bg-[var(--brand-teal-soft)] p-3">
+              <p className="text-sm font-bold text-[var(--brand-navy)]">Validated linked measures</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 {tacticalObservationReport.causalMeasures.map((measure) => (
                   <div key={measure.key} className="rounded-lg bg-white p-3 text-sm">
                     <p className="font-bold text-slate-950">{measure.label}</p>
-                    <p className="mt-1 font-black tabular-nums text-emerald-800">{measure.numerator}/{measure.denominator}{measure.rate === null ? '' : ` · ${Math.round(measure.rate * 100)}%`}</p>
+                    <p className="mt-1 font-black tabular-nums text-[var(--brand-teal-dark)]">{measure.numerator}/{measure.denominator}{measure.rate === null ? '' : ` · ${Math.round(measure.rate * 100)}%`}</p>
                     <p className="mt-1 text-xs font-semibold text-slate-500">{measure.coverageLabel}</p>
                   </div>
                 ))}
@@ -357,7 +359,7 @@ export default function MatchSummaryReport({
               <EmptyText>No club tracking observations were accepted for this match.</EmptyText>
             ) : (
               <div className="space-y-5">
-                <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold leading-6 text-emerald-950">
+                <p className="rounded-lg bg-[var(--brand-teal-soft)] p-3 text-sm font-semibold leading-6 text-[var(--brand-navy)]">
                   Club tracking is an additional breakdown of observations recorded using your club&apos;s terminology. Some aliases and approved mappings also appear in the standard totals above.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">

@@ -16,9 +16,9 @@ export default function EmptyState({
   eyebrow,
 }: EmptyStateProps) {
   return (
-    <div className={`rounded-3xl border border-dashed border-emerald-200 bg-gradient-to-br from-white to-emerald-50/50 p-5 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:p-6 ${className}`}>
+    <div className={`rounded-3xl border border-dashed border-[rgba(6,186,169,0.32)] bg-gradient-to-br from-white to-[rgba(230,248,246,0.55)] p-5 shadow-[0_14px_35px_rgba(7,42,72,0.05)] sm:p-6 ${className}`}>
       {eyebrow && (
-        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-emerald-700">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">
           {eyebrow}
         </p>
       )}

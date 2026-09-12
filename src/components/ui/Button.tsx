@@ -13,10 +13,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 active:bg-emerald-900 focus-visible:ring-emerald-700',
-  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 active:border-slate-400 active:bg-slate-100 focus-visible:ring-emerald-700',
+  primary: 'bg-[var(--brand-navy)] text-white shadow-sm hover:bg-slate-900 active:bg-slate-950 focus-visible:ring-[var(--brand-teal)]',
+  secondary: 'border border-slate-200 bg-white text-[var(--brand-navy)] shadow-sm hover:border-[rgba(6,186,169,0.4)] hover:bg-[var(--brand-teal-soft)] active:border-[var(--brand-teal)] active:bg-[rgba(6,186,169,0.15)] focus-visible:ring-[var(--brand-teal)]',
   danger: 'bg-red-700 text-white hover:bg-red-800 active:bg-red-900 focus-visible:ring-red-700',
-  ghost: 'text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100 focus-visible:ring-emerald-700',
+  ghost: 'text-[var(--brand-teal-dark)] hover:bg-[var(--brand-teal-soft)] active:bg-[rgba(6,186,169,0.15)] focus-visible:ring-[var(--brand-teal)]',
   success: 'bg-green-700 text-white hover:bg-green-800 active:bg-green-900 focus-visible:ring-green-700',
 }
 

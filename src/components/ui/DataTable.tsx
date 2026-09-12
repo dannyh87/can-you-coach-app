@@ -47,5 +47,5 @@ export function DataTableCell({
 }
 
 export function dataTableRowClassName(clickable = false) {
-  return clickable ? 'cursor-pointer hover:bg-emerald-50/60' : ''
+  return clickable ? 'cursor-pointer hover:bg-[var(--brand-teal-soft)]' : ''
 }

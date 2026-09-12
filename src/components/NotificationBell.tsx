@@ -11,7 +11,7 @@ export default async function NotificationBell({ userId }: { userId: string | nu
     <Link
       href="/notifications"
       aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
-      className="relative inline-flex h-11 min-w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-slate-800 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+      className="relative inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white px-2 text-[var(--brand-navy)] shadow-sm transition hover:border-[rgba(6,186,169,0.3)] hover:bg-[var(--brand-teal-soft)] hover:text-[var(--brand-teal-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)] sm:h-11 sm:min-w-11 sm:px-3"
     >
       <svg aria-hidden="true" viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" />

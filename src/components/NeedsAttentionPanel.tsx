@@ -30,7 +30,7 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
       </div>
 
       {!hasAttention ? (
-        <p className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">
+        <p className="rounded-2xl border border-[rgba(6,186,169,0.24)] bg-[var(--brand-teal-soft)] p-4 text-sm font-semibold text-[var(--brand-teal-dark)]">
           Nothing needs attention right now.
         </p>
       ) : (
@@ -66,10 +66,10 @@ export default function NeedsAttentionPanel({ data }: NeedsAttentionPanelProps) 
 
 function AssignmentNotificationItem({ item }: { item: CoachDashboardData['attention']['assignmentNotifications'][number] }) {
   return (
-    <Link href={item.href} className="block rounded-xl border border-emerald-100 bg-emerald-50 p-3 transition hover:border-emerald-300">
-      <p className="font-bold text-emerald-950">{item.title}</p>
-      <p className="mt-1 text-sm text-emerald-900">{item.subtitle}</p>
-      <p className="mt-2 text-xs font-semibold text-emerald-800">{formatDateTime(item.createdAt)}</p>
+    <Link href={item.href} className="block rounded-xl border border-[rgba(6,186,169,0.24)] bg-[var(--brand-teal-soft)] p-3 transition hover:border-[var(--brand-teal)]">
+      <p className="font-bold text-[var(--brand-navy)]">{item.title}</p>
+      <p className="mt-1 text-sm text-slate-700">{item.subtitle}</p>
+      <p className="mt-2 text-xs font-semibold text-[var(--brand-teal-dark)]">{formatDateTime(item.createdAt)}</p>
     </Link>
   )
 }
@@ -113,7 +113,7 @@ function ParentSubmissionItem({ submission }: { submission: DashboardParentSubmi
 
 function WorkItem({ item }: { item: DashboardWorkItem }) {
   return (
-    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/70">
+    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-[rgba(6,186,169,0.35)] hover:bg-[var(--brand-teal-soft)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-950">{item.title}</p>

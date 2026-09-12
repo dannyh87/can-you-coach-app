@@ -113,14 +113,13 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      {
-        url: '/brand/logo_noWordsOrBackground.png',
-        type: 'image/png',
-      },
+      { url: '/brand/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/brand/favicon-32.png', sizes: '32x32', type: 'image/png' },
     ],
     apple: [
       {
-        url: '/brand/logo_noWordsOrBackground.png',
+        url: '/brand/apple-touch-icon.png',
+        sizes: '180x180',
         type: 'image/png',
       },
     ],
@@ -128,7 +127,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Can You Coach',
     description: 'Track. Learn. Improve.',
-    images: [{ url: '/brand/cyc_logo.png', width: 2172, height: 724, alt: 'Can You Coach' }],
+    images: [{ url: '/brand/social-preview.png', width: 1200, height: 630, alt: 'Can You Coach' }],
   },
 }
 
@@ -162,13 +161,13 @@ export default async function RootLayout({
   const body = (
     <html lang="en">
       <body className={`${inter.className} min-h-screen overflow-x-hidden text-slate-950 antialiased`}>
-        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 shadow-[0_10px_30px_rgba(15,23,42,0.06)] backdrop-blur">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-            <Link href="/" className="inline-flex shrink-0 items-center gap-2 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700" aria-label="Can You Coach home">
-              <BrandLogo size="sm" priority />
+        <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white shadow-[0_10px_30px_rgba(7,42,72,0.06)]">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
+            <Link href="/" className="inline-flex min-w-0 shrink-0 items-center rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)] focus-visible:ring-offset-2" aria-label="Can You Coach home">
+              <BrandLogo variant="lockup" priority />
             </Link>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-1 sm:gap-2">
               <NotificationBell userId={user?.id ?? null} />
               <MobileNav
                 groups={navigationGroups}

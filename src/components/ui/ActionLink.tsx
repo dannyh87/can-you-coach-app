@@ -14,10 +14,10 @@ type ActionLinkProps = {
 }
 
 const variantClasses: Record<ActionLinkVariant, string> = {
-  primary: 'bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 focus-visible:ring-emerald-700',
-  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-emerald-700',
+  primary: 'bg-[var(--brand-navy)] text-white shadow-sm hover:bg-slate-900 focus-visible:ring-[var(--brand-teal)]',
+  secondary: 'border border-slate-200 bg-white text-[var(--brand-navy)] shadow-sm hover:border-[rgba(6,186,169,0.4)] hover:bg-[var(--brand-teal-soft)] focus-visible:ring-[var(--brand-teal)]',
   danger: 'bg-red-700 text-white hover:bg-red-800 focus-visible:ring-red-700',
-  ghost: 'text-emerald-700 hover:bg-emerald-50 focus-visible:ring-emerald-700',
+  ghost: 'text-[var(--brand-teal-dark)] hover:bg-[var(--brand-teal-soft)] focus-visible:ring-[var(--brand-teal)]',
 }
 
 const sizeClasses: Record<ActionLinkSize, string> = {

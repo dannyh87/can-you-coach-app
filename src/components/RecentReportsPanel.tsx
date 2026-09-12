@@ -19,7 +19,7 @@ export default function RecentReportsPanel({ data }: RecentReportsPanelProps) {
           <h2 className="text-xl font-bold text-slate-950">Recent reports</h2>
           <p className="mt-1 text-sm text-slate-600">Completed match and fitness records ready to review.</p>
         </div>
-        <Link href="/fitness/progress" className="text-sm font-bold text-emerald-700 hover:underline">
+        <Link href="/fitness/progress" className="text-sm font-bold text-[var(--brand-teal-dark)] hover:underline">
           View fitness progress
         </Link>
       </div>
@@ -70,7 +70,7 @@ function ReportGroup({
 
 function ReportItem({ item }: { item: DashboardWorkItem }) {
   return (
-    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/70">
+    <Link href={item.href} className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-3 transition hover:border-[rgba(6,186,169,0.35)] hover:bg-[var(--brand-teal-soft)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-bold text-slate-950">{item.title}</p>

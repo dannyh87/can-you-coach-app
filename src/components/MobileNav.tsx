@@ -30,7 +30,7 @@ type MobileNavProps = {
 const accessBadgeClasses: Record<AccessSummary['tone'], string> = {
   slate: 'border-slate-200 bg-white text-slate-700',
   blue: 'border-blue-200 bg-blue-50 text-blue-800',
-  green: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  green: 'border-[rgba(6,186,169,0.25)] bg-[var(--brand-teal-soft)] text-[var(--brand-teal-dark)]',
   amber: 'border-amber-200 bg-amber-50 text-amber-900',
   purple: 'border-purple-200 bg-purple-50 text-purple-800',
 }
@@ -113,7 +113,7 @@ export default function MobileNav({
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="inline-flex h-11 min-w-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-800 active:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+        className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 text-sm font-bold text-[var(--brand-navy)] shadow-sm transition hover:border-[rgba(6,186,169,0.3)] hover:bg-[var(--brand-teal-soft)] hover:text-[var(--brand-teal-dark)] active:bg-[rgba(6,186,169,0.15)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)] sm:h-11 sm:min-w-11 sm:px-3"
         aria-expanded={isOpen}
         aria-controls={menuId}
         aria-label={isOpen ? 'Close navigation menu' : (ariaLabel ?? 'Open navigation menu')}
@@ -141,7 +141,7 @@ export default function MobileNav({
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
               <div className="flex items-center gap-3">
-                <BrandLogo variant="mark" size="sm" />
+                <BrandLogo variant="symbol" size="sm" decorative />
                 <div>
                   <p className="text-sm font-extrabold text-slate-950">Can You Coach</p>
                   <p className="text-xs font-medium text-slate-500">Navigation</p>
@@ -150,7 +150,7 @@ export default function MobileNav({
               <button
                 type="button"
                 onClick={closeMenu}
-                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)]"
               >
                 Close
               </button>
@@ -179,7 +179,7 @@ export default function MobileNav({
                         onClick={closeMenu}
                         className={`rounded-2xl px-4 py-3 text-base font-bold transition focus-visible:outline-none focus-visible:ring-2 ${link.label === 'Dev Tools'
                           ? 'border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 focus-visible:ring-amber-600'
-                          : 'text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 focus-visible:ring-emerald-700'
+                          : 'text-slate-800 hover:bg-[var(--brand-teal-soft)] hover:text-[var(--brand-teal-dark)] focus-visible:ring-[var(--brand-teal)]'
                         }`}
                       >
                         {link.label}
@@ -191,7 +191,7 @@ export default function MobileNav({
                         <Link
                           href="/sign-in"
                           onClick={closeMenu}
-                          className="rounded-2xl bg-emerald-700 px-4 py-3 text-center text-base font-bold text-white shadow-sm transition hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+                          className="rounded-2xl bg-[var(--brand-navy)] px-4 py-3 text-center text-base font-bold text-white shadow-sm transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)]"
                         >
                           Account
                         </Link>

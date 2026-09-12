@@ -29,7 +29,7 @@ export default function SectionCard({
   return (
     <section className={`overflow-hidden ${variantClasses[variant]} ${className}`}>
       {hasHeader && (
-        <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-br from-white to-slate-50/70 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+        <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-br from-white to-[rgba(230,248,246,0.45)] p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
           <div className="min-w-0">
             {title && <h2 className="text-xl font-bold text-slate-950">{title}</h2>}
             {description && <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>}

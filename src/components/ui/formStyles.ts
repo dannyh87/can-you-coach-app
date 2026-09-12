@@ -1,5 +1,5 @@
 export const fieldClassName =
-  'mt-1 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-base text-slate-950 shadow-sm focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/20 disabled:bg-slate-100 disabled:text-slate-500'
+  'mt-1 w-full rounded-xl border border-slate-300 bg-white p-2.5 text-base text-slate-950 shadow-sm focus:border-[var(--brand-teal)] focus:outline-none focus:ring-2 focus:ring-[rgba(6,186,169,0.2)] disabled:bg-slate-100 disabled:text-slate-500'
 
 export const labelClassName = 'text-sm font-semibold text-slate-800'
 

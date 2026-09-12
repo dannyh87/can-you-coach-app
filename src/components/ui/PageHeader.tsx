@@ -13,7 +13,7 @@ export default function PageHeader({ eyebrow, title, description, actions }: Pag
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="mb-2 text-sm font-bold uppercase tracking-wide text-emerald-700">
+            <p className="mb-2 text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">
               {eyebrow}
             </p>
           )}

@@ -9,12 +9,12 @@ type GettingStartedChecklistProps = {
 export default function GettingStartedChecklist({ state }: GettingStartedChecklistProps) {
   if (state.kind === 'complete') {
     return (
-      <section className="mt-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:p-5">
+      <section className="mt-6 rounded-3xl border border-[rgba(6,186,169,0.24)] bg-white p-4 shadow-[0_14px_35px_rgba(7,42,72,0.05)] sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Setup ready</p>
-            <h2 className="mt-1 text-xl font-extrabold text-emerald-950">Your coaching workspace is ready.</h2>
-            <p className="mt-1 text-sm text-emerald-800">
+            <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Setup ready</p>
+            <h2 className="mt-1 text-xl font-extrabold text-[var(--brand-navy)]">Your coaching workspace is ready.</h2>
+            <p className="mt-1 text-sm text-slate-600">
               Keep going with fitness testing, match day or squad updates when you need them.
             </p>
           </div>
@@ -31,12 +31,12 @@ export default function GettingStartedChecklist({ state }: GettingStartedCheckli
 
   if (state.kind === 'assistant') {
     return (
-      <section className="mt-6 rounded-3xl border border-emerald-100 bg-emerald-50 p-4 shadow-[0_14px_35px_rgba(15,23,42,0.05)] sm:p-5">
-        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Assistant Coach</p>
+      <section className="mt-6 rounded-3xl border border-[rgba(6,186,169,0.24)] bg-white p-4 shadow-[0_14px_35px_rgba(7,42,72,0.05)] sm:p-5">
+        <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Assistant Coach</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-extrabold text-emerald-950">You are ready to help record sessions and matches.</h2>
-            <p className="mt-2 text-sm text-emerald-900">
+            <h2 className="text-2xl font-extrabold text-[var(--brand-navy)]">You are ready to help record sessions and matches.</h2>
+            <p className="mt-2 text-sm text-slate-600">
               You have recording access for {state.assignedTeamCount} assigned team{state.assignedTeamCount === 1 ? '' : 's'}. Club admins and coaches handle setup.
             </p>
           </div>
@@ -89,10 +89,10 @@ export default function GettingStartedChecklist({ state }: GettingStartedCheckli
   }
 
   return (
-    <section className="mt-6 overflow-hidden rounded-3xl border border-emerald-100 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.055)]">
-      <div className="grid gap-4 bg-gradient-to-br from-white to-emerald-50 p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+    <section className="mt-6 overflow-hidden rounded-3xl border border-[rgba(6,186,169,0.18)] bg-white shadow-[0_14px_35px_rgba(7,42,72,0.055)]">
+      <div className="grid gap-4 bg-gradient-to-br from-white to-[rgba(230,248,246,0.45)] p-4 sm:p-5 lg:grid-cols-[1fr_auto] lg:items-center">
         <div>
-          <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Getting started</p>
+          <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Getting started</p>
           <h2 className="mt-1 text-2xl font-extrabold text-slate-950">Get ready for your first session</h2>
           <p className="mt-2 text-sm text-slate-600">
             Progress: {state.completedCount} of {state.totalCount} complete. Follow the next step, then come back when you are ready.
@@ -111,10 +111,10 @@ export default function GettingStartedChecklist({ state }: GettingStartedCheckli
           <Link
             key={item.key}
             href={item.href}
-            className={`rounded-2xl border p-3 transition hover:border-emerald-300 hover:bg-emerald-50/60 ${item.complete ? 'border-emerald-100 bg-emerald-50' : 'border-slate-200 bg-white'}`}
+            className={`rounded-2xl border p-3 transition hover:border-[var(--brand-teal)] hover:bg-[var(--brand-teal-soft)] ${item.complete ? 'border-[rgba(6,186,169,0.24)] bg-[var(--brand-teal-soft)]' : 'border-slate-200 bg-white'}`}
           >
             <div className="flex items-center gap-2">
-              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-sm font-extrabold ${item.complete ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-sm font-extrabold ${item.complete ? 'bg-[var(--brand-navy)] text-white' : 'bg-slate-100 text-slate-500'}`}>
                 {item.complete ? '✓' : '·'}
               </span>
               <h3 className="font-bold text-slate-950">{item.label}</h3>
@@ -129,7 +129,7 @@ export default function GettingStartedChecklist({ state }: GettingStartedCheckli
 
 function PrimaryLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="inline-flex rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-800">
+    <Link href={href} className="inline-flex rounded-xl bg-[var(--brand-navy)] px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-slate-900">
       {children}
     </Link>
   )

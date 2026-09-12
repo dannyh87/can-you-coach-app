@@ -115,43 +115,43 @@ export default async function Home() {
 
 function LandingPage() {
   return (
-    <main className="overflow-hidden bg-slate-950 text-white">
+    <main className="overflow-hidden bg-[var(--brand-navy)] text-white">
       <section className="relative isolate px-4 py-12 sm:px-6 sm:py-16 lg:py-20">
-        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.32),transparent_34%),radial-gradient(circle_at_80%_10%,rgba(132,204,22,0.18),transparent_28%),linear-gradient(135deg,#020617_0%,#064e3b_48%,#111827_100%)]" />
-        <div className="absolute inset-x-4 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-emerald-300/50 to-transparent" />
+        <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(6,186,169,0.28),transparent_34%),radial-gradient(circle_at_80%_10%,rgba(255,255,255,0.10),transparent_28%),linear-gradient(135deg,#072a48_0%,#0b3d5f_48%,#061f35_100%)]" />
+        <div className="absolute inset-x-4 bottom-0 -z-10 h-px bg-gradient-to-r from-transparent via-[rgba(6,186,169,0.6)] to-transparent" />
 
         <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-center">
           <div>
-            <div className="mb-8 inline-flex rounded-[1.75rem] border border-white/15 bg-white/95 p-3 shadow-2xl shadow-emerald-950/25">
+            <div className="mb-8 inline-flex rounded-[1.75rem] border border-white/15 bg-white/95 p-3 shadow-2xl shadow-slate-950/25">
               <BrandLogo size="lg" priority />
             </div>
-            <p className="inline-flex rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-emerald-100">
+            <p className="inline-flex rounded-full border border-[rgba(6,186,169,0.35)] bg-[rgba(6,186,169,0.12)] px-4 py-2 text-xs font-extrabold uppercase tracking-[0.22em] text-white">
               Better information for better grassroots coaching
             </p>
             <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl">
               See progress beyond the scoreline
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-emerald-50/85 sm:text-xl">
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/85 sm:text-xl">
               Track match events, fitness results and player development in one simple place.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
+              <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-[var(--brand-teal)] text-[var(--brand-navy)] shadow-lg shadow-slate-950/25 hover:bg-[#35d8ca] focus-visible:ring-white">
                 Start tracking what matters
               </ActionLink>
-              <ActionLink href="/sign-in" variant="secondary" size="lg" className="!border-emerald-200/60 !bg-slate-950/70 !text-white shadow-lg shadow-slate-950/20 hover:!border-emerald-100 hover:!bg-slate-950 focus-visible:!ring-white">
+              <ActionLink href="/sign-in" variant="secondary" size="lg" className="!border-white/40 !bg-white/10 !text-white shadow-lg shadow-slate-950/20 hover:!border-white hover:!bg-white/15 focus-visible:!ring-white">
                 Log in
               </ActionLink>
             </div>
           </div>
 
-          <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-2xl shadow-emerald-950/40 backdrop-blur sm:p-5">
+          <div className="rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-2xl shadow-slate-950/40 backdrop-blur sm:p-5">
             <div className="rounded-[1.5rem] bg-white p-5 text-slate-950 shadow-xl">
               <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
-                  <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-700">Development view</p>
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[var(--brand-teal-dark)]">Development view</p>
                   <h2 className="mt-1 text-2xl font-black">Evidence you can use</h2>
                 </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">Live</span>
+                <span className="rounded-full bg-[var(--brand-teal-soft)] px-3 py-1 text-xs font-bold text-[var(--brand-teal-dark)]">Live</span>
               </div>
               <div className="mt-5 grid gap-3">
                 {['Match events', 'Fitness results', 'Player trends'].map((item, index) => (
@@ -160,7 +160,7 @@ function LandingPage() {
                       <p className="font-bold text-slate-950">{item}</p>
                       <p className="mt-1 text-sm text-slate-500">Simple evidence over time.</p>
                     </div>
-                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-emerald-700 text-sm font-black text-white">
+                    <span className="grid h-10 w-10 place-items-center rounded-2xl bg-[var(--brand-navy)] text-sm font-black text-white">
                       {index + 1}
                     </span>
                   </div>
@@ -174,16 +174,16 @@ function LandingPage() {
       <section className="bg-white px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
         <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div className="rounded-[2rem] bg-slate-950 p-6 text-white shadow-xl shadow-slate-950/15">
-            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-200">The problem</p>
+            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-[var(--brand-teal)]">The problem</p>
             <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Memory and results are not enough.</h2>
             <p className="mt-4 text-base leading-7 text-slate-200">
               Coaches know development matters, but it is difficult to measure progress using memory and results alone.
             </p>
           </div>
-          <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-6 shadow-sm">
-            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-700">The solution</p>
+          <div className="rounded-[2rem] border border-[rgba(6,186,169,0.18)] bg-[var(--brand-teal-soft)] p-6 shadow-sm">
+            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-[var(--brand-teal-dark)]">The solution</p>
             <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Simple evidence for better decisions.</h2>
-            <p className="mt-4 text-base leading-7 text-emerald-950">
+            <p className="mt-4 text-base leading-7 text-[var(--brand-navy)]">
               Can You Coach helps clubs collect simple evidence, spot trends and make better-informed coaching decisions.
             </p>
           </div>
@@ -193,12 +193,12 @@ function LandingPage() {
       <section className="bg-stone-50 px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
         <div className="mx-auto w-full max-w-6xl">
           <div className="max-w-3xl">
-            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-emerald-700">What it helps with</p>
+            <p className="text-sm font-extrabold uppercase tracking-[0.2em] text-[var(--brand-teal-dark)]">What it helps with</p>
             <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">Coach from clearer information.</h2>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {benefitCards.map((card) => (
-              <article key={card.title} className="rounded-[1.75rem] border border-emerald-100 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+              <article key={card.title} className="rounded-[1.75rem] border border-[rgba(6,186,169,0.16)] bg-white p-5 shadow-[0_18px_45px_rgba(7,42,72,0.07)]">
                 <h3 className="text-xl font-extrabold text-slate-950">{card.title}</h3>
                 <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
               </article>
@@ -208,23 +208,23 @@ function LandingPage() {
       </section>
 
       <section className="bg-white px-4 py-12 text-slate-950 sm:px-6 sm:py-16">
-        <div className="mx-auto max-w-4xl rounded-[2rem] bg-gradient-to-br from-emerald-700 to-slate-950 p-6 text-center text-white shadow-2xl shadow-emerald-950/20 sm:p-10">
+        <div className="mx-auto max-w-4xl rounded-[2rem] bg-gradient-to-br from-[var(--brand-navy)] to-[#061f35] p-6 text-center text-white shadow-2xl shadow-slate-950/20 sm:p-10">
           <h2 className="text-4xl font-black tracking-tight sm:text-5xl">Start tracking what matters.</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-emerald-50/85">
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/85">
             Use Can You Coach to support development beyond the final score.
           </p>
           <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-950/25 hover:bg-emerald-300 focus-visible:ring-white">
+            <ActionLink href="/sign-up" variant="primary" size="lg" className="bg-[var(--brand-teal)] text-[var(--brand-navy)] shadow-lg shadow-slate-950/25 hover:bg-[#35d8ca] focus-visible:ring-white">
               Start tracking what matters
             </ActionLink>
-            <ActionLink href="/how-to-use" variant="secondary" size="lg" className="!border-emerald-200/60 !bg-slate-950/70 !text-white shadow-lg shadow-slate-950/20 hover:!border-emerald-100 hover:!bg-slate-950 focus-visible:!ring-white">
+            <ActionLink href="/how-to-use" variant="secondary" size="lg" className="!border-white/40 !bg-white/10 !text-white shadow-lg shadow-slate-950/20 hover:!border-white hover:!bg-white/15 focus-visible:!ring-white">
               How it works
             </ActionLink>
           </div>
         </div>
       </section>
 
-      <footer className="border-t border-white/10 bg-slate-950 px-4 py-8 text-white sm:px-6">
+      <footer className="border-t border-white/10 bg-[var(--brand-navy)] px-4 py-8 text-white sm:px-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <BrandLogo theme="dark" size="sm" />
@@ -340,8 +340,8 @@ async function AuthenticatedHome({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:p-6">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-stone-50 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] sm:p-7">
-        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Can You Coach</p>
+      <section className="overflow-hidden rounded-[2rem] border border-[rgba(6,186,169,0.18)] bg-gradient-to-br from-white via-[rgba(230,248,246,0.55)] to-stone-50 p-5 shadow-[0_24px_70px_rgba(7,42,72,0.08)] sm:p-7">
+        <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Can You Coach</p>
         <div className="mt-4 grid gap-6 lg:grid-cols-[1.4fr_0.8fr] lg:items-end">
           <div>
             <h1 className="max-w-3xl text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl">
@@ -351,7 +351,7 @@ async function AuthenticatedHome({
               Pick the coaching job in front of you. Start a test, get ready for match day, manage the squad, or review what happened last time.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 rounded-3xl border border-white bg-white/75 p-3 text-center shadow-sm backdrop-blur">
+          <div className="grid gap-2 rounded-3xl border border-white bg-white/75 p-3 text-center shadow-sm backdrop-blur sm:grid-cols-3">
             <DashboardStat label="Teams" value={teamCount} />
             <DashboardStat label="Players" value={activePlayerCount} />
             <DashboardStat label="Live" value={activeFitnessSessions.length + activeMatches.length} />
@@ -361,16 +361,16 @@ async function AuthenticatedHome({
 
       <Link
         href="/how-to-use"
-        className="mt-4 block rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100/70 sm:p-5"
+        className="mt-4 block rounded-2xl border border-[rgba(6,186,169,0.28)] bg-white p-4 shadow-sm transition hover:border-[var(--brand-teal)] hover:bg-[var(--brand-teal-soft)] sm:p-5"
       >
-        <p className="text-sm font-bold uppercase tracking-wide text-emerald-700">Quick guide</p>
+        <p className="text-sm font-bold uppercase tracking-wide text-[var(--brand-teal-dark)]">Quick guide</p>
         <h2 className="mt-1 text-xl font-extrabold text-slate-950">
           New to Can You Coach?
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           Read the quick guide to choosing what to track, using match data well, and focusing on player development rather than just the score.
         </p>
-        <span className="mt-3 inline-flex rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white">
+        <span className="mt-3 inline-flex rounded-lg bg-[var(--brand-navy)] px-4 py-2 text-sm font-bold text-white">
           Read the quick guide
         </span>
       </Link>
@@ -483,7 +483,7 @@ async function AuthenticatedHome({
               <Link
                 key={activity.id}
                 href={activity.href}
-                className="flex flex-col gap-2 p-4 transition hover:bg-emerald-50/60 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 p-4 transition hover:bg-[var(--brand-teal-soft)] sm:flex-row sm:items-center sm:justify-between"
               >
                 <div>
                   <p className="font-bold text-slate-950">{activity.label}</p>
@@ -511,15 +511,15 @@ function NoAccessDashboard({
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:p-6">
-      <section className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-slate-950 via-emerald-950 to-emerald-700 text-white shadow-[0_24px_70px_rgba(15,23,42,0.16)]">
+      <section className="overflow-hidden rounded-[2rem] border border-[rgba(6,186,169,0.24)] bg-gradient-to-br from-[var(--brand-navy)] via-[#0b3d5f] to-[#04786f] text-white shadow-[0_24px_70px_rgba(7,42,72,0.16)]">
         <div className="p-5 sm:p-8">
-          <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-emerald-50">
+          <p className="inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.18em] text-white">
             Next step
           </p>
           <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">
             {content.heading}
           </h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-emerald-50/85 sm:text-lg">
+          <p className="mt-4 max-w-2xl text-base leading-7 text-white/85 sm:text-lg">
             {content.copy}
           </p>
           {content.actions.length > 0 && (
@@ -531,7 +531,7 @@ function NoAccessDashboard({
                   variant={index === 0 ? 'primary' : 'secondary'}
                   size="lg"
                   className={index === 0
-                    ? 'bg-white text-slate-950 hover:bg-emerald-50 focus-visible:ring-white'
+                    ? 'bg-white text-[var(--brand-navy)] hover:bg-[var(--brand-teal-soft)] focus-visible:ring-white'
                     : 'border-white/20 bg-white/10 text-white hover:border-white/40 hover:bg-white/15 focus-visible:ring-white'}
                 >
                   {action.label}
@@ -547,7 +547,7 @@ function NoAccessDashboard({
       <section className="mt-5 grid gap-4 sm:grid-cols-3">
         {content.steps.map((step) => (
           <article key={step.title} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-700">{step.eyebrow}</p>
+            <p className="text-xs font-extrabold uppercase tracking-wide text-[var(--brand-teal-dark)]">{step.eyebrow}</p>
             <h2 className="mt-2 text-lg font-black text-slate-950">{step.title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{step.description}</p>
           </article>
@@ -652,8 +652,8 @@ function ActionCard({
   tone: string
 }) {
   const toneClasses: Record<string, string> = {
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-950',
-    teal: 'border-teal-200 bg-teal-50 text-teal-950',
+    emerald: 'border-[rgba(6,186,169,0.24)] bg-white text-[var(--brand-navy)]',
+    teal: 'border-[rgba(6,186,169,0.32)] bg-[var(--brand-teal-soft)] text-[var(--brand-navy)]',
     amber: 'border-amber-200 bg-amber-50 text-amber-900',
     slate: 'border-slate-200 bg-white text-slate-900',
   }
@@ -661,7 +661,7 @@ function ActionCard({
   return (
     <Link
       href={href}
-      className={`rounded-3xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 ${toneClasses[tone]}`}
+      className={`rounded-3xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--brand-teal)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-teal)] ${toneClasses[tone]}`}
     >
       <p className="text-xs font-bold uppercase tracking-wide opacity-75">{eyebrow}</p>
       <h3 className="mt-2 text-lg font-extrabold">{title}</h3>
@@ -711,7 +711,7 @@ function CompactWorkCard({
   return (
     <Link
       href={href}
-      className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/70"
+      className="block rounded-2xl border border-slate-200 bg-stone-50/80 p-4 transition hover:border-[rgba(6,186,169,0.35)] hover:bg-[var(--brand-teal-soft)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div>

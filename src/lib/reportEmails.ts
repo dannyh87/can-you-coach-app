@@ -22,6 +22,7 @@ import {
 
 const formatDate = (date: Date) => new Intl.DateTimeFormat('en-GB').format(date)
 const formatDateForFilename = (date: Date) => date.toISOString().slice(0, 10)
+const reportEmailLogoPath = '/brand/logo-full-cropped.png'
 
 const formatStatus = (status: string) =>
   status
@@ -55,6 +56,14 @@ const escapeHtml = (value: string) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+
+const getPublicAssetUrl = (path: string) => {
+  const baseUrl = process.env.APP_URL || 'https://canyoucoach.app'
+  return new URL(path, baseUrl).toString()
+}
+
+const buildEmailHeaderHtml = () =>
+  `<div style="margin:0 0 20px 0"><img src="${escapeHtml(getPublicAssetUrl(reportEmailLogoPath))}" width="220" alt="Can You Coach" style="display:block;height:auto;max-width:220px" /></div>`
 
 const getReportEmailConfig = () => {
   const apiKey = process.env.RESEND_API_KEY
@@ -257,7 +266,7 @@ export async function sendCompletedMatchReportEmail(matchDayId: string): Promise
     if (!match.team.club.sendMatchReportEmails) return
 
     const { headline, finalScore, metadata, attachments } = buildCompletedMatchReportEmailAttachments(match)
-    const html = `<p>${escapeHtml(match.team.club.name)} match report completed.</p><ul><li>Match: ${escapeHtml(headline)}</li><li>Date: ${escapeHtml(metadata.dateLabel)}</li><li>Final score: ${escapeHtml(finalScore)}</li><li>Events recorded: ${match.matchEvents.length}</li></ul>`
+    const html = `${buildEmailHeaderHtml()}<p>${escapeHtml(match.team.club.name)} match report completed.</p><ul><li>Match: ${escapeHtml(headline)}</li><li>Date: ${escapeHtml(metadata.dateLabel)}</li><li>Final score: ${escapeHtml(finalScore)}</li><li>Events recorded: ${match.matchEvents.length}</li></ul>`
     const text = `${match.team.club.name} match report completed.\nMatch: ${headline}\nDate: ${metadata.dateLabel}\nFinal score: ${finalScore}\nEvents recorded: ${match.matchEvents.length}`
 
     await sendOwnerReportEmail({
@@ -326,7 +335,7 @@ export async function sendCompletedFitnessReportEmail(sessionId: string): Promis
       testTypeName: session.fitnessTestType.name,
       sessionStatusLabel: 'Completed session',
     }
-    const html = `<p>${escapeHtml(session.team.club.name)} fitness report completed.</p><ul><li>Test: ${escapeHtml(session.fitnessTestType.name)}</li><li>Team: ${escapeHtml(session.team.name)}</li><li>Date: ${escapeHtml(metadata.dateLabel)}</li><li>Results saved: ${session.results.length}</li></ul>`
+    const html = `${buildEmailHeaderHtml()}<p>${escapeHtml(session.team.club.name)} fitness report completed.</p><ul><li>Test: ${escapeHtml(session.fitnessTestType.name)}</li><li>Team: ${escapeHtml(session.team.name)}</li><li>Date: ${escapeHtml(metadata.dateLabel)}</li><li>Results saved: ${session.results.length}</li></ul>`
     const text = `${session.team.club.name} fitness report completed.\nTest: ${session.fitnessTestType.name}\nTeam: ${session.team.name}\nDate: ${metadata.dateLabel}\nResults saved: ${session.results.length}`
 
     await sendOwnerReportEmail({

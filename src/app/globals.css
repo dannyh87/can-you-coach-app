@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
 :root {
+  --brand-navy: #072a48;
+  --brand-teal: #06baa9;
+  --brand-teal-dark: #04786f;
+  --brand-teal-soft: #e6f8f6;
   --background: #f7f7f2;
-  --foreground: #0f172a;
+  --foreground: #072a48;
   color-scheme: light;
 }
 
@@ -15,8 +19,8 @@
 
 body {
   background:
-    radial-gradient(circle at top left, rgba(209, 250, 229, 0.45), transparent 34rem),
-    radial-gradient(circle at top right, rgba(219, 234, 254, 0.38), transparent 30rem),
+    radial-gradient(circle at top left, rgba(6, 186, 169, 0.12), transparent 34rem),
+    radial-gradient(circle at top right, rgba(7, 42, 72, 0.08), transparent 30rem),
     var(--background);
   color: var(--foreground);
 }
@@ -26,8 +30,8 @@ main {
 }
 
 ::selection {
-  background: #a7f3d0;
-  color: #0f172a;
+  background: var(--brand-teal);
+  color: var(--brand-navy);
 }
 
 button,

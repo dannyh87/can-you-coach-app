@@ -1,5 +1,7 @@
 import Link from 'next/link'
 
+import BrandLogo from '@/components/BrandLogo'
+
 type SummaryPlayer = {
   id: string
   firstName: string
@@ -87,7 +89,8 @@ export default function FitnessTestCompleteSummary({
   ]
 
   return (
-    <section className="space-y-5 rounded-xl border border-green-200 bg-green-50/40 p-5">
+    <section className="space-y-5 rounded-xl border border-[rgba(6,186,169,0.24)] bg-white p-5">
+      <BrandLogo size="sm" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2">
