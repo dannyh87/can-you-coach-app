@@ -154,3 +154,7 @@ Do not use `prisma migrate dev` against production. Seed production only deliber
 - Video upload/analysis: not implemented.
 - Multi-coach live sync: not implemented.
 - XLSX/PDF exports: not implemented.
+
+### Realistic dashboard demo data
+
+For an isolated local dataset with three squads, six months of matches, fitness progression and tactical observations, see [the demo-data guide](docs/demo-data.md). Start with `npm run db:demo:dry-run`; use a fresh local `cyc_demo` database rather than the older MVP seed.

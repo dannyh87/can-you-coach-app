@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import { PrismaClient } from '@prisma/client'
 import { teamTacticalEventDefinitions } from '../src/lib/teamTacticalCatalogue.mjs'
 
@@ -51,7 +52,7 @@ const demoPlayers = [
 
 const targetScoreCaveat = 'Use these as broad coaching benchmarks only. Scores vary by age, sex, position, training age, injury history and level of football. For grassroots players, the most useful comparison is often the player\'s own progress over time.'
 
-const fitnessTestTypes = [
+export const fitnessTestTypes = [
   {
     name: 'Yo-Yo Test',
     description: 'Intermittent fitness test used to assess endurance and recovery ability.',
@@ -154,7 +155,7 @@ const createEventDefinitionSlug = (name) => {
 
 const normalizeTrackingSearch = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
 
-const matchEventDefinitions = [
+export const matchEventDefinitions = [
   {
     legacyEventType: 'GOAL',
     name: 'Goal',
@@ -851,7 +852,7 @@ async function main() {
   if (missingPatternTopics.size > 0) console.warn('Tracking pattern seed skipped missing topics:', Array.from(missingPatternTopics).join(', '))
 }
 
-main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
   .then(async () => {
     await prisma.$disconnect()
   })
