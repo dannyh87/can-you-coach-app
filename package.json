@@ -20,6 +20,9 @@
     "db:demo": "node --import tsx scripts/demo-data.mjs",
     "db:demo:dry-run": "node --import tsx scripts/demo-data.mjs --dry-run",
     "db:demo:reset": "node --import tsx scripts/demo-data.mjs --reset",
+    "db:demo:live": "node --import tsx scripts/demo-data-live.mjs",
+    "db:demo:live:dry-run": "node --import tsx scripts/demo-data-live.mjs --dry-run",
+    "db:demo:live:cleanup": "node --import tsx scripts/demo-data-live.mjs --cleanup",
     "test:demo": "node --import tsx --test scripts/demo-data.test.mjs",
     "db:demo:verify": "node --import tsx scripts/verify-demo.mjs"
   },
