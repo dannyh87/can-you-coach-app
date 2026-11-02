@@ -1,0 +1,1136 @@
+From d009c362e42fe0316cb7a18503dbf4254efca864 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Thu, 1 Oct 2026 11:16:37 +0200
+Subject: [PATCH] Add isolated realistic dashboard demo data generator
+
+---
+ README.md                  |   4 +
+ docs/demo-data.md          | 115 +++++++++
+ package-lock.json          | 504 +++++++++++++++++++++++++++++++++++++
+ package.json               |   8 +-
+ prisma/seed.mjs            |   7 +-
+ scripts/demo-data.mjs      | 241 ++++++++++++++++++
+ scripts/demo-data.test.mjs |  47 ++++
+ scripts/verify-demo.mjs    |  69 +++++
+ 8 files changed, 991 insertions(+), 4 deletions(-)
+ create mode 100644 docs/demo-data.md
+ create mode 100644 scripts/demo-data.mjs
+ create mode 100644 scripts/demo-data.test.mjs
+ create mode 100644 scripts/verify-demo.mjs
+
+diff --git a/README.md b/README.md
+index 989a75e..3df0d00 100644
+--- a/README.md
++++ b/README.md
+@@ -154,3 +154,7 @@ Do not use `prisma migrate dev` against production. Seed production only deliber
+ - Video upload/analysis: not implemented.
+ - Multi-coach live sync: not implemented.
+ - XLSX/PDF exports: not implemented.
++
++### Realistic dashboard demo data
++
++For an isolated local dataset with three squads, six months of matches, fitness progression and tactical observations, see [the demo-data guide](docs/demo-data.md). Start with `npm run db:demo:dry-run`; use a fresh local `cyc_demo` database rather than the older MVP seed.
+diff --git a/docs/demo-data.md b/docs/demo-data.md
+new file mode 100644
+index 0000000..31a5f37
+--- /dev/null
++++ b/docs/demo-data.md
+@@ -0,0 +1,115 @@
++# Dashboard demonstration dataset
++
++This generator writes fictional records through Prisma into a dedicated local PostgreSQL database. It never invokes actions that send email, invitations, notifications or webhooks, and disables both club report-email preferences. It changes no schema, migrations, authentication or dashboard code.
++
++## Setup and access
++
++Use Node 20.19+ and PostgreSQL. Create an empty database called `cyc_demo` (for example `createdb cyc_demo`). Do not run the older `db:seed` in this database: that creates a separate local-coach account which this generator deliberately refuses to take over.
++
++Set these in your local `.env` (use your own local database credentials):
++
++```dotenv
++DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/cyc_demo?schema=public"
++MATCH_DAY_CUSTOM_OBSERVATIONS=true
++```
++
++Leave Clerk keys unset and `ENABLE_ROLE_TESTER` unset. Do not use production mode. The existing local auth fallback signs you in as `local-coach@can-you-coach.local`, which owns only the fictional demo club in this fresh database. No real credentials, passwords or invitations are created. The parent fixture is `demo-parent@example.com`; its access is verified through the existing parent permission queries, but it is not added to the role-tester login menu.
++
++```bash
++npm ci
++npx prisma generate
++npm run db:migrate:deploy
++npm run db:demo:dry-run -- --seed 2026 --as-of 2026-10-01
++npm run db:demo -- --seed 2026 --as-of 2026-10-01
++npm run db:demo:verify
++npm run dev
++```
++
++Open `http://localhost:3000`. The club is **DEMO — Meadow Vale FC (fictional)**. Visit `/`, `/match-day`, `/fitness`, and `/reports/team-trends`.
++
++For six months of senior-team trends, use:
++
++```text
++/reports/team-trends?teamId=cycdemo_v1_team_0&from=2026-04-01&to=2026-10-01
++```
++
++The existing team-trends page otherwise defaults to the most recent ten matches. Its team, date, match-type and tactical-side filters remain unchanged. Player details are available at `/players/cycdemo_v1_player_0_2`; fitness reports are in the existing fitness/report routes. Not every requested dashboard has a dedicated UI.
++
++Omit `--as-of` for a newly generated dataset ending today. For reproducible runs, keep the date, seed and feature flag pinned. The homepage snapshot uses the actual current date and a 30-day window, so an old pinned dataset eventually stops appearing in its recent counts.
++
++## Dataset
++
++For seed `2026`, date `2026-10-01`, custom observations enabled:
++
++| Records | Count |
++|---|---:|
++| Fictional club / teams / players | 1 / 3 / 60 |
++| Completed / upcoming matches | 66 / 6 |
++| Match squad records | 1,440 |
++| Player half/substitution stints | 1,559 |
++| Match observations | 9,435 |
++| Tactical sequences | 192 |
++| Match event selections | 2,484 |
++| Completed / upcoming fitness sessions | 18 / 3 |
++| Fitness results, including explicit absences | 330 |
++| Parent submissions | 3: pending, accepted, ignored |
++
++The three squads are senior, U16 and U12, with synthetic dates of birth, positional variety and 20 players each. Fixtures use 90, 80 and 60 minutes respectively, with 11, 11 and 9 players on the pitch. Substitutions preserve pitch occupancy and half-relative clocks. Fitness results use the existing Yo-Yo Test definition and metres, with null results for absences. Dates of joining prevent results or appearances before a player joins.
++
++## Five things to inspect
++
++1. **Seniors:** early fixtures concede more goals; the last six show a stronger defence and better results.
++2. **Charlie Meadows:** six fitness assessments show improving repeat-running scores, alongside more starting involvement later in the dataset.
++3. **Jamie Meadows:** consistent selection and effort, compared with low-minute substitutes and new arrivals Noah and Quinn Meadows.
++4. **Riley Meadows:** missing match involvement during the middle period, followed by substitute appearances and a return to starting. No health condition is invented.
++5. **U16 compared with seniors:** less consistent squad involvement and mixed results; on team-tracked fixtures compare playing out, pressing, wide attacks, defending and set pieces. Tactical reports also contain valid regain-to-shot and corner-to-shot sequences.
++
++Do not interpret match squad involvement as training attendance or a recorded reason for unavailability.
++
++## Repeat, reset and verification
++
++```bash
++# No duplicates; reports already-exists for a matching dataset.
++npm run db:demo -- --seed 2026 --as-of 2026-10-01
++
++# Inspect a reset without writing.
++npm run db:demo:reset -- --dry-run --seed 2026 --as-of 2026-10-01
++
++# Delete only this generator's fixtures; keep shared catalogue definitions.
++npm run db:demo:reset -- --seed 2026 --as-of 2026-10-01
++
++npm run test:demo
++npm run db:demo:verify
++```
++
++Reset requires the original date, seed and feature flag to match the club ownership marker. It checks every Prisma relation for non-demo rows pointing into the demo namespace, including cascade, restrict and set-null relationships. If you attach unrelated records, it refuses to reset. Seeding refuses to adopt an existing local fallback account and never updates existing global definitions. Missing catalogue entries are created from the repository's existing definitions, without making a second catalogue. Inactive prerequisites cause a failure. Existing demo record-count changes cause a refusal instead of silently overwriting edits.
++
++Creation and reset use a serializable transaction plus advisory lock. Failures roll back the entire operation. IDs are deterministic and namespaced. Remote hosts, production mode, unexpected database names and connection host/socket overrides are rejected. Dry run checks the database and ownership without inserting or deleting data.
++
++For destructive reset/rollback integration checks, use a separate seeded database whose URL ends in `cyc_demo_test` and run:
++
++```bash
++DEMO_RESET_TEST=true npm run db:demo:verify
++```
++
++This creates a temporary unrelated sentinel club, checks reset refusal for an external membership, verifies dry-run and reset preservation, deliberately tests a failed seed rollback, then recreates the dataset. Do not run it while manually editing fixtures.
++
++## Scope and limitations
++
++- The schema has no training session/attendance, explicit availability, cancelled-event or general player coaching-note models. No substitutes for those models are invented. Coach notes use supported fitness fields; contributor notes use submission fields.
++- Classic PLAYER tracking requires an eligible on-pitch player; TEAM tracking requires null player attribution. Tactical sequences and opposition events are therefore generated on TEAM fixtures. PLAYER fixtures record our team's events only; their opposition score remains in the match result, so those fixtures do not claim complete opposition goal logging.
++- Match and fitness timestamps, not arbitrary creation timestamps, drive the historical comparisons. Counts, minutes and success rates are derived from records rather than prewritten dashboard totals.
++- Custom observations are included only when `MATCH_DAY_CUSTOM_OBSERVATIONS=true`. Classic-only mode remains supported. The generator does not change application flags. No v2 tracking tasks, custom club definitions, pattern submissions or assignment notifications are fabricated.
++- Linked sequences exercise existing report functions. No tactical sequence-linking UI or analytics rollout is added.
++- Sample pass/shot observations are a coaching dataset, not full professional match coding. Existing metric coverage caveats still apply.
++- The local verification environment used PostgreSQL 18.3 through PGlite 0.5.8 with the project's 33 migrations and real Prisma queries. PGlite reports its internal database as `postgres`; the generator explicitly identifies that embedded case. This is not a production Postgres concurrency/load test. A conventional local PostgreSQL database is the normal setup above.
++
++## Verification performed for this change
++
++- Existing suite: 232 tests passed, one existing integration test skipped.
++- New generator checks: three tests cover reproducibility, production/remote refusal, timing, scoring, scope, eligibility, pitch occupancy and missing fitness values.
++- PostgreSQL/Prisma integration: migrations, dry run, insertion, repeat-run idempotency, permissions, demo-only reset, unrelated-row preservation, foreign-reference refusal and failed-seed rollback passed.
++- Existing dashboard returned 60 players, nine recently completed matches, three recently completed fitness sessions and one pending parent submission for the verification date.
++- Existing trend and tactical functions returned valid results; Charlie Meadows improved from 1,200m to 2,000m in the seeded assessments.
++- Development HTTP checks returned 200 and expected content for the dashboard, six-month team trends, a completed match report, a player page and a fitness session.
++- ESLint, TypeScript and production build passed. HTTP checks did not visually inspect charts; Recharts emitted a server-render sizing warning, so responsive chart layout remains unverified.
+diff --git a/package-lock.json b/package-lock.json
+index 300b965..68dc935 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -26,6 +26,7 @@
+         "jsdom": "^24.1.3",
+         "prisma": "^6.19.3",
+         "tailwindcss": "^4",
++        "tsx": "^4.23.15",
+         "typescript": "^5",
+         "vitest": "^2.1.9"
+       }
+@@ -820,6 +821,23 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/@esbuild/netbsd-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/netbsd-arm64/-/netbsd-arm64-0.28.2.tgz",
++      "integrity": "sha512-sSATRjPeDBg3pdgHoQfoYBob11Kk1FGa9lui5RIHZCoCkJa9QKlvl3/vKz2usCmYYjs7ymJR/2Nnsqe+Hjt5nw==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "netbsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/@esbuild/netbsd-x64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.21.5.tgz",
+@@ -837,6 +855,23 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/@esbuild/openbsd-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/openbsd-arm64/-/openbsd-arm64-0.28.2.tgz",
++      "integrity": "sha512-AL2qJILH7lNjrDmCQDvdxMfAUIv8KMNZOvrwAQ8i8//ntL9FflhOyMJ8OZSMBb8/AWXe3/5v5S20y3zCoZWKoQ==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "openbsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/@esbuild/openbsd-x64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.21.5.tgz",
+@@ -854,6 +889,23 @@
+         "node": ">=12"
+       }
+     },
++    "node_modules/@esbuild/openharmony-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/openharmony-arm64/-/openharmony-arm64-0.28.2.tgz",
++      "integrity": "sha512-WkhYDmpTjLvGlScA1rwjRUmhl4k8oXR3cIbtqWmELgU/dFeHHlEllxDvdWcNJV9rbzCexB5vz8gtNewWLgCT7Q==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "openharmony"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
+     "node_modules/@esbuild/sunos-x64": {
+       "version": "0.21.5",
+       "resolved": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.21.5.tgz",
+@@ -8872,6 +8924,458 @@
+       "integrity": "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==",
+       "license": "0BSD"
+     },
++    "node_modules/tsx": {
++      "version": "4.23.15",
++      "resolved": "https://registry.npmjs.org/tsx/-/tsx-4.23.15.tgz",
++      "integrity": "sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "esbuild": "~0.28.0"
++      },
++      "bin": {
++        "tsx": "dist/cli.mjs"
++      },
++      "engines": {
++        "node": ">=18.0.0"
++      },
++      "optionalDependencies": {
++        "fsevents": "~2.3.3"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/aix-ppc64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/aix-ppc64/-/aix-ppc64-0.28.2.tgz",
++      "integrity": "sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==",
++      "cpu": [
++        "ppc64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "aix"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/android-arm": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-arm/-/android-arm-0.28.2.tgz",
++      "integrity": "sha512-kXXoiPVVGQcnIYGOeaovwOURpniDBpSq4A03qkQ+BMQqtGG6HYap3xne9C1O1yo4TR3qxlCX5IqqmX6fFo2Lqg==",
++      "cpu": [
++        "arm"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/android-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-arm64/-/android-arm64-0.28.2.tgz",
++      "integrity": "sha512-5YfKeeI8qWfBZIX+u2xZC3Zlb3Os/gLS2sbEKM+I4ZOcsWmHS2WLysCcQZDAFRslDUU5Oiq44gf6PYN1vGwG5A==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/android-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/android-x64/-/android-x64-0.28.2.tgz",
++      "integrity": "sha512-O387ite7SzUyCcy3JQX4P4bLtEA7bLLkx+esve5JHnyYfNTxcVpXZo9jhdB0lTKN44gztELTdU7nS8Nr16Fs1Q==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "android"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/darwin-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/darwin-arm64/-/darwin-arm64-0.28.2.tgz",
++      "integrity": "sha512-n4KqkOQrraxHJcgjM1RvwbigfQKIKJVpM7xp+KsxiyUSrRdIXnt73VhrPAx0fV44hgfmIVKjxMN9J1t5jySVkw==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/darwin-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/darwin-x64/-/darwin-x64-0.28.2.tgz",
++      "integrity": "sha512-uq6suIWYP37qzGddBKPw5QEQPi6HiLGsO7UmkpfyaYNQ3D+rN6w6WfwH+nuqcGXWvawGwxOEroO4YGnFh95azw==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "darwin"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/freebsd-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/freebsd-arm64/-/freebsd-arm64-0.28.2.tgz",
++      "integrity": "sha512-n+I0BTSRIoy+d6RPKnEVwql5UwBJolytvY4mAOIEJorKlqgPII8ix6slVVrfZ5Tnj7glIZvloylbB/EJPMWEXw==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/freebsd-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/freebsd-x64/-/freebsd-x64-0.28.2.tgz",
++      "integrity": "sha512-78XJTJkvPs0kz2w61301PJjXl4g7q3JqiYMZ/M/yVI73EHBrCRTgkhu9oqG7vPqq+a/yadEW8aD+agKlk5xrmg==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "freebsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-arm": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-arm/-/linux-arm-0.28.2.tgz",
++      "integrity": "sha512-XlDnu2q5yoqems+xay6wSAcg9DDD7K9RLKZEBOMZm3ckNpJBvOX20tSfby8KfrrhINDyv9V2YVZKY/SpoGJI8w==",
++      "cpu": [
++        "arm"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-arm64/-/linux-arm64-0.28.2.tgz",
++      "integrity": "sha512-pW4AC0P3it8c7do9MVM4p51FzHzdM/TZrerurgRcHJ2WTa1VQ1CIq18xncfpBJw4ojkiZZrKW2yIBWBP92j6Ug==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-ia32": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-ia32/-/linux-ia32-0.28.2.tgz",
++      "integrity": "sha512-CYbnj78HsIeA+DhgUKgFCfvNsTHFhMMrinUrMZpDXJXKN8T3XViTZ/+wtHeVxEWY8ewSzTFN+nRmSwO2tZaLUQ==",
++      "cpu": [
++        "ia32"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-loong64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-loong64/-/linux-loong64-0.28.2.tgz",
++      "integrity": "sha512-buwkd8nsph4R+ajRvw0qM5Hja/TXQow3ptzWO2EbG/cqcIkHloRrdlBtQlshyYGTNFvfkfJ5tpPLVkY4DtsPfQ==",
++      "cpu": [
++        "loong64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-mips64el": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-mips64el/-/linux-mips64el-0.28.2.tgz",
++      "integrity": "sha512-ZVykbDyk7519VwiNb9Lcj9m8XM6v5V9uKPvrEMkkEedVewf+0itkhahp4HDpgERXhwLRpWFypsGbG/J8s0QjJA==",
++      "cpu": [
++        "mips64el"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-ppc64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-ppc64/-/linux-ppc64-0.28.2.tgz",
++      "integrity": "sha512-CAXl+Dtd9UUuJd8pKKdwh6MLm3MUMiqMPmhZ3tTSXPqfyQ3vDl6R5hZdZ/kYojK4ofXtdfSv1tFq8XzWx3heNQ==",
++      "cpu": [
++        "ppc64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-riscv64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-riscv64/-/linux-riscv64-0.28.2.tgz",
++      "integrity": "sha512-GeXCej4IQtU1B+QlDV8W/RRvbzI3O/Stss+/bCXv4lZls5WGRtu2a+3JkA3i4qIUlMXpcHebWpF8AkJhATowuA==",
++      "cpu": [
++        "riscv64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-s390x": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-s390x/-/linux-s390x-0.28.2.tgz",
++      "integrity": "sha512-3H1weTYZPxt/WOhByszQZybS9w5lKzUn1FDMsgEChbHWQwHYQQRfBxgCcZvPhjHfKyJjIievvMmEUawJrdY9Dg==",
++      "cpu": [
++        "s390x"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/linux-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.28.2.tgz",
++      "integrity": "sha512-4xTZr1FUmSoQW4XIWmit3tzQrUTZM+N3P0XV8xROKYF50XfI7xeO90+1bZvNwxIufQ9hDQVRJH5YhgPVF8A/HQ==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "linux"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/netbsd-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.28.2.tgz",
++      "integrity": "sha512-lqnzCV+mM0gIADaKihiCg6ifgfU2L3h5E33rNQBN1Y4MaVGnzryzmvvf7UHxprpQdE8hpqLolJ9Rl+SkIRDpyw==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "netbsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/openbsd-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.28.2.tgz",
++      "integrity": "sha512-QtiuPytchRyC4rwUKhexJdQKvDuZ6hWloi3igqPQNUJCS1/v9EiO3UTOXR6A3FoMo4fnAKbWJdqaIwhOzh8qEw==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "openbsd"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/sunos-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.28.2.tgz",
++      "integrity": "sha512-GPMSkTOtMnv2U2F8gxe4Io6qmVs+YKyp832Etqqxr0hFngmXQ3rzwytelm3GIn7T4VviRUlf3sOgBOiTdvaf7g==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "sunos"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/win32-arm64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-arm64/-/win32-arm64-0.28.2.tgz",
++      "integrity": "sha512-PIhhEkE9uPBleRBrQEJpUn7MBnibZzbGzYWPmY3x+YoVg/95zbjB4CxPPOQ8l5tYYM4mMaCthF8/1DIfBQQyWQ==",
++      "cpu": [
++        "arm64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/win32-ia32": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-ia32/-/win32-ia32-0.28.2.tgz",
++      "integrity": "sha512-YmJbfTlvU7Sdn9BB+4PRES4oB6pxgS37MAONj+hBr/cpXS1aBPKXxNnDbu+QCWPj0o9dgyxeq79g6c5P8KeuYA==",
++      "cpu": [
++        "ia32"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/@esbuild/win32-x64": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.28.2.tgz",
++      "integrity": "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g==",
++      "cpu": [
++        "x64"
++      ],
++      "dev": true,
++      "license": "MIT",
++      "optional": true,
++      "os": [
++        "win32"
++      ],
++      "engines": {
++        "node": ">=18"
++      }
++    },
++    "node_modules/tsx/node_modules/esbuild": {
++      "version": "0.28.2",
++      "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.28.2.tgz",
++      "integrity": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==",
++      "dev": true,
++      "hasInstallScript": true,
++      "license": "MIT",
++      "bin": {
++        "esbuild": "bin/esbuild"
++      },
++      "engines": {
++        "node": ">=18"
++      },
++      "optionalDependencies": {
++        "@esbuild/aix-ppc64": "0.28.2",
++        "@esbuild/android-arm": "0.28.2",
++        "@esbuild/android-arm64": "0.28.2",
++        "@esbuild/android-x64": "0.28.2",
++        "@esbuild/darwin-arm64": "0.28.2",
++        "@esbuild/darwin-x64": "0.28.2",
++        "@esbuild/freebsd-arm64": "0.28.2",
++        "@esbuild/freebsd-x64": "0.28.2",
++        "@esbuild/linux-arm": "0.28.2",
++        "@esbuild/linux-arm64": "0.28.2",
++        "@esbuild/linux-ia32": "0.28.2",
++        "@esbuild/linux-loong64": "0.28.2",
++        "@esbuild/linux-mips64el": "0.28.2",
++        "@esbuild/linux-ppc64": "0.28.2",
++        "@esbuild/linux-riscv64": "0.28.2",
++        "@esbuild/linux-s390x": "0.28.2",
++        "@esbuild/linux-x64": "0.28.2",
++        "@esbuild/netbsd-arm64": "0.28.2",
++        "@esbuild/netbsd-x64": "0.28.2",
++        "@esbuild/openbsd-arm64": "0.28.2",
++        "@esbuild/openbsd-x64": "0.28.2",
++        "@esbuild/openharmony-arm64": "0.28.2",
++        "@esbuild/sunos-x64": "0.28.2",
++        "@esbuild/win32-arm64": "0.28.2",
++        "@esbuild/win32-ia32": "0.28.2",
++        "@esbuild/win32-x64": "0.28.2"
++      }
++    },
+     "node_modules/type-check": {
+       "version": "0.4.0",
+       "resolved": "https://registry.npmjs.org/type-check/-/type-check-0.4.0.tgz",
+diff --git a/package.json b/package.json
+index 695392d..5d22103 100644
+--- a/package.json
++++ b/package.json
+@@ -16,7 +16,12 @@
+     "db:seed": "prisma db seed",
+     "db:sync:tactical-events": "node prisma/sync-tactical-event-definitions.mjs",
+     "db:sync:tactical-prerequisites": "node prisma/sync-tactical-standard-prerequisites.mjs",
+-    "db:verify:tactical-presets": "node prisma/verify-tactical-presets.mjs"
++    "db:verify:tactical-presets": "node prisma/verify-tactical-presets.mjs",
++    "db:demo": "node --import tsx scripts/demo-data.mjs",
++    "db:demo:dry-run": "node --import tsx scripts/demo-data.mjs --dry-run",
++    "db:demo:reset": "node --import tsx scripts/demo-data.mjs --reset",
++    "test:demo": "node --import tsx --test scripts/demo-data.test.mjs",
++    "db:demo:verify": "node --import tsx scripts/verify-demo.mjs"
+   },
+   "dependencies": {
+     "@clerk/nextjs": "^7.5.7",
+@@ -37,6 +42,7 @@
+     "jsdom": "^24.1.3",
+     "prisma": "^6.19.3",
+     "tailwindcss": "^4",
++    "tsx": "^4.23.15",
+     "typescript": "^5",
+     "vitest": "^2.1.9"
+   }
+diff --git a/prisma/seed.mjs b/prisma/seed.mjs
+index b622041..8046b99 100644
+--- a/prisma/seed.mjs
++++ b/prisma/seed.mjs
+@@ -1,3 +1,4 @@
++import { pathToFileURL } from 'node:url'
+ import { PrismaClient } from '@prisma/client'
+ import { teamTacticalEventDefinitions } from '../src/lib/teamTacticalCatalogue.mjs'
+ 
+@@ -51,7 +52,7 @@ const demoPlayers = [
+ 
+ const targetScoreCaveat = 'Use these as broad coaching benchmarks only. Scores vary by age, sex, position, training age, injury history and level of football. For grassroots players, the most useful comparison is often the player\'s own progress over time.'
+ 
+-const fitnessTestTypes = [
++export const fitnessTestTypes = [
+   {
+     name: 'Yo-Yo Test',
+     description: 'Intermittent fitness test used to assess endurance and recovery ability.',
+@@ -154,7 +155,7 @@ const createEventDefinitionSlug = (name) => {
+ 
+ const normalizeTrackingSearch = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
+ 
+-const matchEventDefinitions = [
++export const matchEventDefinitions = [
+   {
+     legacyEventType: 'GOAL',
+     name: 'Goal',
+@@ -851,7 +852,7 @@ async function main() {
+   if (missingPatternTopics.size > 0) console.warn('Tracking pattern seed skipped missing topics:', Array.from(missingPatternTopics).join(', '))
+ }
+ 
+-main()
++if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main()
+   .then(async () => {
+     await prisma.$disconnect()
+   })
+diff --git a/scripts/demo-data.mjs b/scripts/demo-data.mjs
+new file mode 100644
+index 0000000..d47bb34
+--- /dev/null
++++ b/scripts/demo-data.mjs
+@@ -0,0 +1,241 @@
++import 'dotenv/config'
++import { PrismaClient, Prisma } from '@prisma/client'
++import { pathToFileURL } from 'node:url'
++import { createHash } from 'node:crypto'
++import { parseArgs } from 'node:util'
++import { fitnessTestTypes, matchEventDefinitions } from '../prisma/seed.mjs'
++import { teamTacticalEventDefinitions, tacticalPresets } from '../src/lib/teamTacticalCatalogue.mjs'
++import { getTacticalDetailOptions } from '../src/lib/teamTacticalObservations.ts'
++import { getMatchEventPrismaCategory } from '../src/lib/matchEventTaxonomy.ts'
++
++export const PREFIX = 'cycdemo_v1_'
++export const CLUB_ID = `${PREFIX}club`
++export const OWNER_ID = `${PREFIX}owner`
++const EMAIL = 'local-coach@can-you-coach.local' // Existing development-only auth fallback.
++const DAY = 86400000
++const id = (...parts) => PREFIX + parts.join('_')
++const slug = value => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
++const normalized = value => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
++export function assertLocalTarget(url, env = process.env) {
++  if (env.NODE_ENV === 'production' || env.VERCEL_ENV === 'production') throw new Error('Production is not supported.')
++  const target = new URL(url)
++  if (!['postgres:', 'postgresql:'].includes(target.protocol) || !['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)) throw new Error('Only loopback PostgreSQL is supported; remote databases are refused.')
++  if (!/^\/cyc_demo(?:_[a-z0-9_]+)?$/.test(target.pathname)) throw new Error('Use a dedicated database named cyc_demo or cyc_demo_<suffix>.')
++  if ([...target.searchParams.keys()].some(key => !['schema', 'connection_limit', 'pool_timeout', 'connect_timeout', 'sslmode'].includes(key))) throw new Error('Unsupported connection parameters; socket/host overrides are refused.')
++  if (target.searchParams.has('schema') && target.searchParams.get('schema') !== 'public') throw new Error('Use the public schema in the dedicated demo database.')
++  return `${target.hostname}:${target.port || 5432}${target.pathname}`
++}
++function random(seed) {
++  let state = createHash('sha256').update(String(seed)).digest().readUInt32LE()
++  return () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296 }
++}
++export function makePlan({ seed = '2026', asOf = new Date().toISOString().slice(0, 10), tactical = false } = {}) {
++  const anchor = new Date(`${asOf}T12:00:00Z`)
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(asOf) || !Number.isFinite(+anchor) || anchor.toISOString().slice(0, 10) !== asOf) throw new Error('Invalid --as-of date; use YYYY-MM-DD.')
++  const rand = random(seed)
++  const rows = {}
++  const add = (model, row) => { (rows[model] ??= []).push(row); return row }
++  const at = (days, seconds = 0) => new Date(+anchor + days * DAY + seconds * 1000)
++  const marker = JSON.stringify({ generator: PREFIX, seed: String(seed), asOf, tactical })
++  add('user', { id: OWNER_ID, email: EMAIL, passwordHash: 'local-mvp-user', onboardingRole: 'CLUB_OFFICIAL', onboardingCompletedAt: at(-182) })
++  add('user', { id: id('parent'), email: 'demo-parent@example.com', onboardingRole: 'PARENT_SPECTATOR', onboardingCompletedAt: at(-182) })
++  add('club', { id: CLUB_ID, userId: OWNER_ID, name: 'DEMO — Meadow Vale FC (fictional)', location: 'Fictional development club', notes: marker, sendMatchReportEmails: false, sendFitnessReportEmails: false })
++  add('clubMembership', { id: id('membership'), userId: OWNER_ID, clubId: CLUB_ID, role: 'OWNER' })
++  const first = ['Alex', 'Jamie', 'Charlie', 'Riley', 'Morgan', 'Sam', 'Taylor', 'Casey', 'Jordan', 'Robin', 'Avery', 'Drew', 'Finley', 'Ellis', 'Cameron', 'Blake', 'Reece', 'Jesse', 'Noah', 'Quinn']
++  const surnames = ['Meadows', 'Brookfield', 'Ashford']
++  const positions = ['Goalkeeper', 'Right Back', 'Centre Back', 'Centre Back', 'Left Back', 'Defensive Midfielder', 'Central Midfielder', 'Attacking Midfielder', 'Right Wing', 'Left Wing', 'Striker', 'Striker', 'Central Midfielder', 'Centre Back', 'Right Wing', 'Left Back', 'Forward', 'Goalkeeper', 'Midfielder', 'Striker']
++  const definitions = [...matchEventDefinitions.filter(d => d.legacyEventType), ...(tactical ? [...matchEventDefinitions.filter(d => !d.legacyEventType && d.isActive !== false && !d.archivedAt), ...teamTacticalEventDefinitions] : [])]
++  const byName = new Map(definitions.map(d => [d.name, d]))
++  const definitionKey = name => `catalogue_${slug(name)}`
++  const fitnessKey = 'fitness_yoyo'
++  const goals = []
++  for (const [t, [name, ageGroup, minutes, onPitch, age]] of [['Seniors', 'Open Age', 90, 11, 25], ['Under 16', 'U16', 80, 11, 15], ['Under 12', 'U12', 60, 9, 11]].entries()) {
++    const teamId = id('team', t)
++    add('team', { id: teamId, clubId: CLUB_ID, name: `DEMO ${name}`, ageGroup, season: `${anchor.getUTCFullYear()}`, league: 'Fictional Demo League' })
++    const players = first.map((firstName, p) => add('player', { id: id('player', t, p), teamId, firstName, surname: surnames[t], squadNumber: p + 1, preferredPosition: positions[p], dateOfBirth: new Date(Date.UTC(anchor.getUTCFullYear() - age, 0, 15)), joinedClubDate: at(p >= 18 ? -35 : -182), isActive: true }))
++    if (t === 1) add('spectatorAccess', { id: id('spectator'), userId: id('parent'), clubId: CLUB_ID, playerId: players[1].id })
++    for (let m = 0; m < 24; m++) {
++      const future = m >= 22
++      const day = future ? 7 * (m - 21) : -175 + m * 8
++      const kickoffAt = at(day)
++      const halfSec = minutes * 30
++      const halfStart = h => new Date(+kickoffAt + h * (halfSec + 900) * 1000)
++      const moment = (h, s) => new Date(+halfStart(h) + s * 1000)
++      const matchId = id('match', t, m)
++      const playerMode = m % 2 === 1 || (t === 1 && m >= 19)
++      const scoreOnly = []
++      const ownScore = future ? 0 : t === 0 ? Math.floor(m / 8) + (m % 2) : Math.floor(rand() * 5)
++      const oppositionScore = future ? 0 : t === 0 ? Math.max(0, 3 - Math.floor(m / 6)) : Math.floor(rand() * 5)
++      add('matchDay', { id: matchId, teamId, kickoffAt, opposition: `DEMO ${['Oakfield', 'Riverbank', 'Hillcrest', 'Willow Park', 'Westfield', 'Stonebridge'][m % 6]} ${name}`, matchType: m % 7 === 0 ? 'FRIENDLY' : 'LEAGUE', venue: m % 2 ? 'AWAY' : 'HOME', status: future ? 'DRAFT' : 'COMPLETED', eventTrackingScope: playerMode ? 'PLAYER' : 'TEAM', trackPlayerMinutes: true, ownScore, oppositionScore, ...(!future ? { firstHalfStartedAt: halfStart(0), firstHalfEndedAt: moment(0, halfSec), secondHalfStartedAt: halfStart(1), secondHalfEndedAt: moment(1, halfSec), completedAt: moment(1, halfSec) } : {}) })
++      // Players 0 and 1 are reliable; 2 improves; 3 returns gradually; 18/19 join late.
++      const available = players.map((p, index) => ({ p, index })).filter(({ p, index }) => +p.joinedClubDate <= +kickoffAt && !(index === 3 && m >= 7 && m <= 12) && !(t === 1 && index > 3 && (m + index) % 5 === 0))
++      const ranked = [...available].sort((a,b) => {
++        const priority = x => x.index <= 1 ? -100 + x.index : x.index === 2 ? (m < 8 ? 30 : -90) : x.index === 3 && m > 12 && m < 17 ? 30 : x.index >= 18 && m >= 18 ? 5 + (x.index+m)%12 : x.index >= 16 ? 40 + x.index : (x.index + m) % 16
++        return priority(a) - priority(b)
++      })
++      const starters = ranked.slice(0, onPitch)
++      const subs = ranked.slice(onPitch).filter(x => x.index !== 17).slice(0, 3)
++      const subSec = Math.floor(halfSec * 0.55)
++      const intervals = new Map()
++      for (const [p, player] of players.entries()) {
++        const starterIndex = starters.findIndex(x => x.index === p)
++        const subIndex = subs.findIndex(x => x.index === p)
++        const squadStatus = starterIndex >= 0 ? 'STARTER' : subIndex >= 0 ? 'SUBSTITUTE' : 'NOT_INVOLVED'
++        const mdp = add('matchDayPlayer', { id: id('squad', t,m,p), matchDayId: matchId, playerId: player.id, squadStatus, startingPosition: squadStatus === 'STARTER' ? player.preferredPosition : null, shirtNumberSnapshot: p + 1, isTracked: squadStatus !== 'NOT_INVOLVED' })
++        if (future || squadStatus === 'NOT_INVOLVED') continue
++        const stint = (h, start, end) => {
++          add('matchPlayerStint', { id: id('stint',t,m,p,h), matchDayId: matchId, matchDayPlayerId: mdp.id, playerId: player.id, half: h ? 'SECOND_HALF' : 'FIRST_HALF', startedAt: moment(h,start), endedAt: moment(h,end), startMatchSecond: start, endMatchSecond: end })
++          const key = `${h}:${player.id}`; intervals.set(key, [start,end])
++        }
++        if (starterIndex >= 0) { stint(0,0,halfSec); stint(1,0,starterIndex >= onPitch - subs.length ? subSec : halfSec) }
++        else stint(1,subSec,halfSec)
++      }
++      const selectedNames = new Set(matchEventDefinitions.filter(d => d.legacyEventType).map(d => d.name))
++      if (tactical && !playerMode) for (const preset of tacticalPresets) for (const name of preset.eventNames) { if (!byName.has(name)) throw new Error(`Missing tactical prerequisite: ${name}`); selectedNames.add(name) }
++      if (tactical && !playerMode) for (const d of teamTacticalEventDefinitions) selectedNames.add(d.name)
++      for (const name of selectedNames) {
++        const d = byName.get(name)
++        add('matchDayEventType', { id: id('selection',t,m,slug(name)), matchDayId: matchId, eventDefinitionId: definitionKey(name), eventType: d.legacyEventType ?? null, category: d.legacyEventType ? getMatchEventPrismaCategory(d.legacyEventType) : ['IN_POSSESSION', 'OUT_OF_POSSESSION', 'TRANSITION'].includes(d.matchPhase) ? d.matchPhase : 'ATTACKING' })
++      }
++      if (future) continue
++      const events = []
++      const event = (name, h, second, side = 'OUR_TEAM', sequenceId = null, forcePlayer = null) => {
++        const d = byName.get(name)
++        if (!d) throw new Error(`Missing definition: ${name}`)
++        const eligible = players.filter(p => { const range = intervals.get(`${h}:${p.id}`); return range && second >= range[0] && second < range[1] })
++        const detail = getTacticalDetailOptions(name)
++        const playerId = !playerMode || side === 'OPPOSITION' || !d.legacyEventType ? null : forcePlayer ?? eligible[Math.floor(rand() * eligible.length)].id
++        const row = { id: id('event',t,m,events.length), matchDayId: matchId, playerId, eventType: d.legacyEventType ?? null, eventDefinitionId: definitionKey(name), half: h ? 'SECOND_HALF' : 'FIRST_HALF', matchSecond: second, ownScoreAtTime: 0, oppositionScoreAtTime: 0, teamSide: side, detailCode: detail.length ? detail[Math.floor(rand() * detail.length)].code : null, tacticalSequenceId: sequenceId, x: d.requiresLocation ? Math.round(rand() * 100) : null, y: d.requiresLocation ? Math.round(rand() * 100) : null, createdAt: moment(h,second) }
++        events.push(row); return row
++      }
++      for (const [side, total] of [['OUR_TEAM', ownScore], ['OPPOSITION', oppositionScore]]) for (let g = 0; g < total; g++) {
++        const h = g % 2; const second = 120 + Math.floor(rand() * (halfSec - 240))
++        if (playerMode && side === 'OPPOSITION') { scoreOnly.push({half:h ? 'SECOND_HALF' : 'FIRST_HALF',matchSecond:second,eventType:'GOAL',teamSide:side,scoreOnly:true}); continue }
++        event('Shot on target',h,second - 1,side)
++        const goal = event('Goal',h,second,side); goals.push(goal.id)
++      }
++      for (let e = 0; e < 90; e++) {
++        const h = e % 2; const second = 10 + Math.floor(rand() * (halfSec - 20))
++        const name = e % 5 === 0 ? 'Shot off target' : rand() < 0.55 + m / 100 ? 'Pass complete' : 'Pass incomplete'
++        event(name,h,second)
++      }
++      if (tactical && !playerMode) {
++        const pairs = [
++          ['Build-up from goalkeeper controlled exit', 'Build-up from goalkeeper possession lost'],
++          ['Press triggered regain', 'Press triggered opponent escapes'],
++          ['Cutback reaches teammate', 'Cutback intercepted'],
++          ['Defending corner or free kick first contact won', 'Defending corner or free kick first contact lost'],
++        ].filter(pair => pair.every(name => byName.has(name)))
++        for (const pair of pairs) for (let e = 0; e < 12; e++) event(pair[rand() < 0.35 + m / 40 ? 0 : 1], e % 2, 60 + e * 75, e % 4 === 0 ? 'OPPOSITION' : 'OUR_TEAM')
++        // Representative observations across the catalogue, plus valid causal chains.
++        for (const [i,d] of teamTacticalEventDefinitions.entries()) {
++          if (/goal|shot|corner routine|first contact|following regain|following our loss/i.test(d.name)) continue
++          event(d.name,i % 2, 100 + i * 15)
++        }
++        for (let q = 0; q < 6; q++) {
++          const h = q % 2, second = 200 + q * 150, sequenceId = id('sequence',t,m,q)
++          const corner = q >= 3
++          add('tacticalSequence', { id: sequenceId, matchDayId: matchId, teamSide: 'OUR_TEAM', sequenceType: corner ? 'ATTACKING_SET_PIECE' : 'ATTACK_AFTER_REGAIN', startHalf: h ? 'SECOND_HALF' : 'FIRST_HALF', startMatchSecond: second, endHalf: h ? 'SECOND_HALF' : 'FIRST_HALF', endMatchSecond: second + 12, timeWindowSeconds: 15 })
++          event(corner ? 'Attacking corner routine' : 'Ball recovery',h,second,'OUR_TEAM',sequenceId)
++          if (q % 3 !== 2) { event(corner ? 'Attacking set-piece shot' : 'Attack following regain shot',h,second+10,'OUR_TEAM',sequenceId); event('Shot off target',h,second+10) }
++          else if (!corner) event('Attack following regain possession lost',h,second+10,'OUR_TEAM',sequenceId)
++        }
++      }
++      if (t === 1 && m >= 19) {
++        const status = ['PENDING','ACCEPTED','IGNORED'][m-19]
++        const official = event('Pass complete',0,30,'OUR_TEAM',null,players[1].id)
++        const { id: eventId, ...shared } = official
++        const submission = add('submittedMatchEvent', { ...shared, id: id('submission',m), submittedByUserId: id('parent'), status, note: 'Fictional parent observation: composed pass to a teammate.', ...(status === 'ACCEPTED' ? { acceptedAt: moment(0,40), acceptedByUserId: OWNER_ID } : {}) })
++        if (status === 'ACCEPTED') official.submittedMatchEventId = submission.id
++        else events.splice(events.findIndex(e => e.id === eventId),1)
++      }
++      const timeline = [...events,...scoreOnly].sort((a,b) => a.half.localeCompare(b.half) || a.matchSecond - b.matchSecond)
++      let own = 0, opposition = 0
++      for (const e of timeline) { e.ownScoreAtTime = own; e.oppositionScoreAtTime = opposition; if (e.eventType === 'GOAL') { if (e.teamSide === 'OUR_TEAM') own++; else opposition++ } if(!e.scoreOnly) add('matchEvent',e) }
++      for (const submission of rows.submittedMatchEvent ?? []) if (submission.matchDayId === matchId) { submission.ownScoreAtTime = events.filter(e => e.eventType === 'GOAL' && e.teamSide === 'OUR_TEAM' && e.half === 'FIRST_HALF' && e.matchSecond < 30).length; submission.oppositionScoreAtTime = 0 }
++    }
++    for (let s = 0; s < 7; s++) {
++      const future = s === 6
++      const date = at(future ? 10 : -165 + s * 32)
++      const sessionId = id('fitness',t,s)
++      add('fitnessTestSession', { id: sessionId, teamId, fitnessTestTypeId: fitnessKey, date, status: future ? 'DRAFT' : 'COMPLETED', notes: 'DEMO: repeat assessment under consistent conditions. Focus on individual progress.', ...(!future ? { startedAt: date, completedAt: new Date(+date + 3600000) } : {}) })
++      if (future) continue
++      for (const [p,player] of players.entries()) {
++        if (+player.joinedClubDate > +date) continue
++        const absent = (p > 3 && (s+p+t)%7 === 0) || (p === 3 && (s === 2 || s === 3))
++        const base = [1040,800,400][t] + (p % 6)*80
++        const value = Math.round((base + (p === 2 ? s*160 : s*40) + (rand()-0.5)*80)/40)*40
++        add('fitnessTestResult', { id:id('result',t,s,p), fitnessTestSessionId:sessionId, playerId:player.id, status: absent ? 'ABSENT' : 'COMPLETED', resultValue: absent ? null : value, notes: absent ? 'Not available for this assessment.' : p === 2 ? 'More consistent pacing and turning.' : p === 1 ? 'Reliable effort throughout.' : null })
++      }
++    }
++  }
++  return { seed: String(seed), asOf, tactical, marker, rows, definitions, fitnessDefinition: fitnessTestTypes.find(d => d.name === 'Yo-Yo Test'), goals }
++}
++export const counts = plan => Object.fromEntries(Object.entries(plan.rows).map(([name, rows]) => [name,rows.length]))
++export async function assertNoForeignReferences(db) {
++  // Inspect actual Prisma relations, including SetNull and Restrict edges, before cascades.
++  for (const model of Prisma.dmmf.datamodel.models) {
++    const delegate = model.name[0].toLowerCase() + model.name.slice(1)
++    for (const relation of model.fields.filter(f => f.kind === 'object' && f.relationFromFields?.length)) {
++      const fields = relation.relationFromFields.filter(f => model.fields.find(x => x.name === f)?.type === 'String')
++      if (!fields.length) continue
++      if (await db[delegate].count({ where: { NOT: { id: { startsWith: PREFIX } }, OR: fields.map(field => ({ [field]: { startsWith: PREFIX } })) } })) throw new Error(`Reset refused: non-demo ${model.name} references demo data.`)
++    }
++  }
++}
++export async function applyPlan(db, plan, { dryRun = false, reset = false } = {}) {
++  return db.$transaction(async tx => {
++    // A transaction-scoped lock serializes this generator and reset, even across processes.
++    await tx.$queryRaw`SELECT pg_advisory_xact_lock(76391426)::text`
++    const existing = await tx.club.findUnique({ where: { id: CLUB_ID } })
++    const owner = await tx.user.findUnique({ where: { email: EMAIL } })
++    if (owner && owner.id !== OWNER_ID) throw new Error('Local fallback account already exists outside this generator. Use a fresh dedicated demo database.')
++    if (existing && (existing.userId !== OWNER_ID || existing.notes !== plan.marker)) throw new Error('Dataset options differ, or ownership marker changed. Reset with the original seed/date/feature flags first.')
++    if (reset) {
++      if (!existing) return { action:'absent', counts:{} }
++      await assertNoForeignReferences(tx)
++      if (!dryRun) {
++        await tx.club.delete({ where: { id: CLUB_ID } })
++        await tx.user.deleteMany({ where: { id: { in: [OWNER_ID,id('parent')] } } })
++      }
++      return { action: dryRun ? 'would-reset' : 'reset', counts: counts(plan) }
++    }
++    if (existing) {
++      for (const [model, expected] of Object.entries(counts(plan))) {
++        if (await tx[model].count({where:{id:{startsWith:PREFIX}}}) !== expected) throw new Error(`Demo ${model} count has changed; reset explicitly rather than silently repairing user edits.`)
++      }
++      return { action:'already-exists', counts: counts(plan) }
++    }
++    if (dryRun) return { action:'would-create', counts: counts(plan) }
++    const replacements = new Map()
++    for (const definition of plan.definitions) {
++      const found = await tx.eventDefinition.findFirst({ where: { scope:'GLOBAL', clubId:null, normalizedName:normalized(definition.name) } })
++      if (found && (!found.isActive || found.archivedAt)) throw new Error(`Required definition is inactive: ${definition.name}`)
++      const data = Object.fromEntries(Object.entries(definition).filter(([key]) => key !== 'stableId'))
++      const saved = found ?? await tx.eventDefinition.create({ data: { ...data, id:`cyc_catalogue_${slug(data.name)}`, scope:'GLOBAL', slug:slug(data.name), normalizedName:normalized(data.name), enabledByDefault: data.enabledByDefault ?? true, benchmarkable:data.benchmarkable ?? true, requiresLocation:data.requiresLocation ?? false, isActive:data.isActive ?? true, archivedAt:data.archivedAt ?? null } })
++      replacements.set(`catalogue_${slug(data.name)}`,saved.id)
++    }
++    const fitness = await tx.fitnessTestType.findFirst({ where:{ userId:null, name:'Yo-Yo Test', isDefault:true } }) ?? await tx.fitnessTestType.create({ data:{ ...plan.fitnessDefinition, id:'cyc_catalogue_yoyo' } })
++    replacements.set('fitness_yoyo', fitness.id)
++    for (const model of ['user','club','clubMembership','team','player','spectatorAccess','matchDay','matchDayPlayer','matchPlayerStint','matchDayEventType','tacticalSequence','submittedMatchEvent','matchEvent','fitnessTestSession','fitnessTestResult']) {
++      const data = (plan.rows[model] ?? []).map(row => Object.fromEntries(Object.entries(row).map(([k,v]) => [k, typeof v === 'string' && (k.endsWith('Id')) ? replacements.get(v) ?? v : v])))
++      for (let start = 0; start < data.length; start += 200) await tx[model].createMany({ data:data.slice(start,start+200) })
++    }
++    return { action:'created', counts:counts(plan) }
++  }, { timeout:180000, maxWait:10000, isolationLevel:'Serializable' })
++}
++async function main() {
++  const { values } = parseArgs({ options: { seed:{type:'string',default:'2026'}, 'as-of':{type:'string'}, 'dry-run':{type:'boolean'}, reset:{type:'boolean'} } })
++  const target = assertLocalTarget(process.env.DATABASE_URL)
++  const plan = makePlan({ seed:values.seed, asOf:values['as-of'], tactical: process.env.MATCH_DAY_CUSTOM_OBSERVATIONS === 'true' })
++  const db = new PrismaClient()
++  try {
++    const identity = await db.$queryRaw`SELECT current_database() AS database, current_schema() AS schema, inet_server_addr()::text AS address, version() AS version`
++    const actual = identity[0]
++    const embedded = actual.version.includes('PGlite') && actual.database === 'postgres' && actual.address === null
++    if (!embedded && actual.database !== new URL(process.env.DATABASE_URL).pathname.slice(1)) throw new Error('Actual database name differs from the requested demo target.')
++    if (identity[0].schema !== 'public' || (identity[0].address && !['127.0.0.1','::1'].includes(identity[0].address))) throw new Error('Server identity is not local/public.')
++    console.log(JSON.stringify({ target, identity, options:{ seed:plan.seed, asOf:plan.asOf, tactical:plan.tactical }, ...await applyPlan(db,plan,{ dryRun:values['dry-run'], reset:values.reset }) },null,2))
++  } finally { await db.$disconnect() }
++}
++if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error(error.message); process.exitCode=1 })
+diff --git a/scripts/demo-data.test.mjs b/scripts/demo-data.test.mjs
+new file mode 100644
+index 0000000..a116ecf
+--- /dev/null
++++ b/scripts/demo-data.test.mjs
+@@ -0,0 +1,47 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import { assertLocalTarget, makePlan } from './demo-data.mjs'
++
++test('refuses production, remote hosts, alternate sockets and unsafe database names', () => {
++  for (const url of ['postgresql://host/cyc_demo','postgresql://127.0.0.1/production','postgresql://127.0.0.1/cyc_demo?host=remote','postgresql://127.0.0.1/cyc_demo?schema=live']) assert.throws(() => assertLocalTarget(url,{}))
++  assert.throws(() => assertLocalTarget('postgresql://127.0.0.1/cyc_demo',{NODE_ENV:'production'}))
++  assert.equal(assertLocalTarget('postgresql://127.0.0.1/cyc_demo',{}),'127.0.0.1:5432/cyc_demo')
++})
++test('reproducible dates, seed variation and disabled tactical feature', () => {
++  const options = {seed:'42',asOf:'2026-10-01',tactical:true}
++  assert.deepEqual(makePlan(options),makePlan(options))
++  assert.notDeepEqual(makePlan(options).rows.matchEvent,makePlan({...options,seed:'43'}).rows.matchEvent)
++  const classic = makePlan({...options,tactical:false})
++  assert.equal(classic.rows.tacticalSequence,undefined)
++  assert.ok(classic.rows.matchEvent.every(e=>e.eventType))
++  assert.throws(()=>makePlan({asOf:'2026-02-30'}))
++})
++test('scores, timing, squad eligibility, pitch occupancy and fitness consistency', () => {
++  const {rows} = makePlan({asOf:'2026-10-01',tactical:true})
++  for (const m of rows.matchDay) {
++    const events = rows.matchEvent.filter(e=>e.matchDayId===m.id)
++    assert.equal(events.filter(e=>e.eventType==='GOAL'&&e.teamSide==='OUR_TEAM').length,m.ownScore)
++    if(m.eventTrackingScope==='TEAM') assert.equal(events.filter(e=>e.eventType==='GOAL'&&e.teamSide==='OPPOSITION').length,m.oppositionScore)
++    if(m.status==='DRAFT') { assert.equal(events.length,0); continue }
++    const halfSec=(m.firstHalfEndedAt-m.firstHalfStartedAt)/1000
++    const stints=rows.matchPlayerStint.filter(s=>s.matchDayId===m.id)
++    const pitch = m.teamId.endsWith('_2') ? 9:11
++    assert.equal(stints.reduce((sum,s)=>sum+s.endMatchSecond-s.startMatchSecond,0),halfSec*2*pitch)
++    for (const half of ['FIRST_HALF','SECOND_HALF']) for(const second of [0,Math.floor(halfSec*0.55)-1,Math.floor(halfSec*0.55),halfSec-1]) assert.equal(stints.filter(s=>s.half===half&&s.startMatchSecond<=second&&s.endMatchSecond>second).length,pitch)
++    for(const e of events) {
++      assert.ok(e.matchSecond>=0&&e.matchSecond<halfSec)
++      assert.ok(e.ownScoreAtTime<=m.ownScore&&e.oppositionScoreAtTime<=m.oppositionScore)
++      if(m.eventTrackingScope==='TEAM') assert.equal(e.playerId,null)
++      if(m.eventTrackingScope==='PLAYER') assert.ok(e.playerId)
++      if(e.playerId) assert.ok(stints.some(s=>s.playerId===e.playerId&&s.half===e.half&&s.startMatchSecond<=e.matchSecond&&s.endMatchSecond>e.matchSecond))
++      if(e.teamSide==='OPPOSITION') assert.equal(e.playerId,null)
++      if(e.tacticalSequenceId) { const seq=rows.tacticalSequence.find(s=>s.id===e.tacticalSequenceId); assert.equal(seq.matchDayId,e.matchDayId); assert.equal(seq.startHalf,e.half); assert.ok(e.matchSecond>=seq.startMatchSecond&&e.matchSecond<=seq.endMatchSecond) }
++    }
++  }
++  for(const result of rows.fitnessTestResult) {
++    const player=rows.player.find(p=>p.id===result.playerId),session=rows.fitnessTestSession.find(s=>s.id===result.fitnessTestSessionId)
++    assert.equal(player.teamId,session.teamId)
++    assert.ok(player.joinedClubDate<=session.date)
++    assert.equal(result.resultValue===null,result.status==='ABSENT')
++  }
++})
+diff --git a/scripts/verify-demo.mjs b/scripts/verify-demo.mjs
+new file mode 100644
+index 0000000..c828c0e
+--- /dev/null
++++ b/scripts/verify-demo.mjs
+@@ -0,0 +1,69 @@
++import 'dotenv/config'
++import assert from 'node:assert/strict'
++import { prisma } from '../src/lib/prisma.ts'
++import { getDashboardData } from '../src/lib/dashboard.ts'
++import { getAccessibleTeamIds, accessibleMatchWhere, accessiblePlayerWhere } from '../src/lib/accessWhere.ts'
++import { buildTacticalObservationReport } from '../src/lib/teamTacticalObservations.ts'
++import { buildTeamTrendOptions, buildTeamTrendSeries } from '../src/lib/teamTrackingTrends.ts'
++import { assertLocalTarget, makePlan, applyPlan, counts, PREFIX, CLUB_ID, OWNER_ID } from './demo-data.mjs'
++
++async function main() {
++  assertLocalTarget(process.env.DATABASE_URL)
++  const club = await prisma.club.findUniqueOrThrow({where:{id:CLUB_ID}})
++  const options = JSON.parse(club.notes)
++  const plan = makePlan(options)
++  for(const [model,count] of Object.entries(counts(plan))) assert.equal(await prisma[model].count({where:{id:{startsWith:PREFIX}}}),count,model)
++  const ownerTeams = await getAccessibleTeamIds(OWNER_ID)
++  assert.equal(ownerTeams.length,3)
++  const dashboard = await getDashboardData(OWNER_ID)
++  assert.equal(dashboard.kind,'coach')
++  assert.equal(dashboard.snapshot.playersTracked,60)
++  assert.equal(dashboard.snapshot.pendingParentSubmissions,1)
++  const parent = await getDashboardData(`${PREFIX}parent`)
++  assert.equal(parent.kind,'parent')
++  assert.equal(parent.linkedPlayerCount,1)
++  assert.equal((await getDashboardData('unknown-demo-user')).kind,'no_access')
++  assert.equal(await prisma.player.count({where:await accessiblePlayerWhere(`${PREFIX}parent`)}),1)
++  const matches = await prisma.matchDay.findMany({where:{AND:[await accessibleMatchWhere(OWNER_ID),{status:'COMPLETED'}]},include:{matchDayEventTypes:{include:{eventDefinition:true}},matchEvents:{include:{eventDefinition:true,standardEventDefinitionAtRecording:true,clubTrackingDefinition:true,tacticalSequence:true}},patternObservations:{include:{pattern:true,outcome:true,trackingTask:true,clubTrackingDefinition:true,standardPatternDefinitionAtRecording:true}}},orderBy:{kickoffAt:'asc'}})
++  assert.equal(matches.length,66)
++  assert.equal(await prisma.matchDay.count({where:await accessibleMatchWhere('unknown-demo-user')}),0)
++  const senior=matches.filter(m=>m.teamId===`${PREFIX}team_0`)
++  assert.ok(senior.slice(0,6).reduce((s,m)=>s+m.oppositionScore,0)>senior.slice(-6).reduce((s,m)=>s+m.oppositionScore,0))
++  const optionsForTrends=buildTeamTrendOptions(senior)
++  assert.ok(optionsForTrends.length>0)
++  const trend=buildTeamTrendSeries(senior,optionsForTrends[0].identity)
++  assert.ok(trend.total>0)
++  const dateFiltered=await prisma.matchDay.findMany({where:{AND:[await accessibleMatchWhere(OWNER_ID),{teamId:senior[0].teamId,kickoffAt:{gte:senior[16].kickoffAt},status:'COMPLETED'}]}})
++  assert.equal(dateFiltered.length,6)
++  const playerFiltered=await prisma.matchEvent.count({where:{matchDay:{AND:[await accessibleMatchWhere(OWNER_ID),{teamId:senior[0].teamId}]},playerId:`${PREFIX}player_0_1`}})
++  assert.ok(playerFiltered>0)
++  const tactical=buildTacticalObservationReport({events:senior.flatMap(m=>m.matchEvents),selections:senior.flatMap(m=>m.matchDayEventTypes)})
++  if(plan.tactical) { assert.ok(tactical.causalMeasures.length>=2); for(const metric of tactical.metrics) if(metric.attempts!==null) assert.ok((metric.successes??0)<=metric.attempts) }
++  const fitness=await prisma.fitnessTestResult.findMany({where:{playerId:`${PREFIX}player_0_2`,status:'COMPLETED'},include:{fitnessTestSession:true},orderBy:{fitnessTestSession:{date:'asc'}}})
++  assert.ok(fitness.at(-1).resultValue>fitness[0].resultValue)
++  console.log(JSON.stringify({verified:'database counts, actual dashboard/access queries, team/date/player filters, trend and tactical report functions',counts:counts(plan),dashboard:dashboard.snapshot,trend:{name:trend.displayName,total:trend.total},tactical: tactical.causalMeasures,fitness:{player:'Charlie Meadows',first:fitness[0].resultValue,last:fitness.at(-1).resultValue}},null,2))
++  if(process.env.DEMO_RESET_TEST==='true') {
++    // Explicit destructive integration mode, confined to a dedicated test target.
++    assert.ok(new URL(process.env.DATABASE_URL).pathname.endsWith('_test'))
++    const outsider=await prisma.user.create({data:{id:'demo-verification-outsider',email:'outsider@example.com'}})
++    const otherClub=await prisma.club.create({data:{id:'demo-verification-other-club',userId:outsider.id,name:'Reset preservation sentinel'}})
++    const before=JSON.stringify(await prisma.club.findUnique({where:{id:otherClub.id}}))
++    assert.equal((await applyPlan(prisma,plan)).action,'already-exists')
++    const reference=await prisma.clubMembership.create({data:{userId:outsider.id,clubId:CLUB_ID,role:'VIEWER'}})
++    await assert.rejects(applyPlan(prisma,plan,{reset:true}),/non-demo ClubMembership/)
++    await prisma.clubMembership.delete({where:{id:reference.id}})
++    assert.equal((await applyPlan(prisma,plan,{reset:true,dryRun:true})).action,'would-reset')
++    assert.equal(await prisma.club.count({where:{id:CLUB_ID}}),1)
++    await applyPlan(prisma,plan,{reset:true})
++    for(const model of Object.keys(counts(plan))) assert.equal(await prisma[model].count({where:{id:{startsWith:PREFIX}}}),0)
++    assert.equal(JSON.stringify(await prisma.club.findUnique({where:{id:otherClub.id}})),before)
++    const invalid = structuredClone(plan)
++    invalid.rows.fitnessTestResult[0].playerId = 'nonexistent-player'
++    await assert.rejects(applyPlan(prisma,invalid))
++    assert.equal(await prisma.club.count({where:{id:CLUB_ID}}),0)
++    await applyPlan(prisma,plan)
++    await prisma.user.delete({where:{id:outsider.id}})
++    console.log('PASS: idempotency, foreign-reference reset refusal, dry-run reset, demo-only reset, unrelated club preservation, failed-seed rollback, reseed.')
++  }
++}
++main().catch(error=>{console.error(error);process.exitCode=1}).finally(()=>prisma.$disconnect())
+-- 
+2.51.1
+
